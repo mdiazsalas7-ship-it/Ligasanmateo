@@ -1,14 +1,14 @@
 {
-  "short_name": "Madera 15",
-  "name": "Liga de Baloncesto Madera 15",
+  "short_name": "LIBASAN",
+  "name": "Liga de Baloncesto San Mateo",
   "icons": [
     {
-      "src": "https://i.postimg.cc/Hx1t81vH/FORMA-21-MORICHAL.jpg",
+      "src": "https://i.postimg.cc/0QgYWZtg/image.png",
       "sizes": "192x192",
       "type": "image/jpeg"
     },
     {
-      "src": "https://i.postimg.cc/Hx1t81vH/FORMA-21-MORICHAL.jpg",
+      "src": "https://i.postimg.cc/0QgYWZtg/image.png",
       "sizes": "512x512",
       "type": "image/jpeg"
     }
