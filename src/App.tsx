@@ -114,7 +114,7 @@ function App() {
       try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-          const token = await getToken(messaging, { vapidKey: "BCIo9OadymsSrPl7ByiJ-MFXyunwbesFbKOw8ZTOaVRQInFVbTzQgfHSZaJx05vfdUZZZsv9XLdCKxtdvg3LNkg" });
+          const token = await getToken(messaging, { vapidKey: "BHY9PW9bojqdZi0RwMmvbPU2DAwJI3I9_2E5qY26aNauONFzxm3Ev0KpxryF1wR6FulsB5d0-syNz1hgCp51afQ" });
           if (token) await updateDoc(doc(db, 'usuarios', user.uid), { fcmToken: token });
         }
       } catch (error) { console.log("Error Token:", error); }
