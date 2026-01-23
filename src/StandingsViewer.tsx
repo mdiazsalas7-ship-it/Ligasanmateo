@@ -3,83 +3,87 @@ import React from 'react';
 interface Equipo {
     id: string;
     nombre: string;
-    grupo: string; // Campo crucial para la división
+    grupo: string; 
     victorias: number;
     derrotas: number;
-    puntos: number; // Puntos de tabla (2 por ganar, 1 por perder)
+    puntos: number; 
     puntos_favor: number;
     puntos_contra?: number;
     logoUrl?: string;
 }
 
-const StandingsViewer: React.FC<{ equipos: Equipo[], onClose: () => void }> = ({ equipos, onClose }) => {
+const StandingsViewer: React.FC<{ equipos?: Equipo[], onClose: () => void }> = ({ equipos = [], onClose }) => {
     
     const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/166/166344.png";
 
-    // FUNCIÓN DE ORDENAMIENTO (Puntos > DIF > PF)
+    // FUNCIÓN DE ORDENAMIENTO PROFESIONAL (Puntos > DIF > PF)
     const sortTeams = (a: Equipo, b: Equipo) => {
-        if (b.puntos !== a.puntos) return b.puntos - a.puntos;
-        const diffA = a.puntos_favor - (a.puntos_contra || 0);
-        const diffB = b.puntos_favor - (b.puntos_contra || 0);
-        if (diffB !== diffA) return diffB - diffA;
-        return b.puntos_favor - a.puntos_favor;
+        const ptsA = a.puntos ?? 0;
+        const ptsB = b.puntos ?? 0;
+        if (ptsB !== ptsA) return ptsB - ptsA;
+
+        const difA = (a.puntos_favor ?? 0) - (a.puntos_contra ?? 0);
+        const difB = (b.puntos_favor ?? 0) - (b.puntos_contra ?? 0);
+        if (difB !== difA) return difB - difA;
+
+        return (b.puntos_favor ?? 0) - (a.puntos_favor ?? 0);
     };
 
-    // Filtramos y ordenamos por grupos
-    const grupoA = equipos.filter(e => e.grupo === 'A').sort(sortTeams);
-    const grupoB = equipos.filter(e => e.grupo === 'B').sort(sortTeams);
+    // Filtramos y ordenamos con seguridad (evita errores si el prop es null)
+    const safeEquipos = equipos || [];
+    const grupoA = safeEquipos.filter(e => e.grupo === 'A').sort(sortTeams);
+    const grupoB = safeEquipos.filter(e => e.grupo === 'B').sort(sortTeams);
 
-    // Sub-componente para renderizar cada tabla
     const RenderTable = ({ teams, groupName, color }: { teams: Equipo[], groupName: string, color: string }) => (
-        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', marginBottom: '30px', overflow: 'hidden' }}>
-            <div style={{ background: color, color: 'white', padding: '10px 20px', fontWeight: 'bold', fontSize: '1rem', textAlign: 'center' }}>
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', marginBottom: '30px', overflow: 'hidden', borderTop: `5px solid ${color}` }}>
+            <div style={{ background: '#fff', color: color, padding: '15px 20px', fontWeight: '900', fontSize: '1.1rem', textAlign: 'left', borderBottom: '1px solid #eee' }}>
                 CLASIFICACIÓN {groupName}
             </div>
             <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.85rem' }}>
-                    <thead style={{ background: '#f8f9fa', color: '#64748b', textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                    <thead style={{ background: '#f8f9fa', color: '#64748b', textTransform: 'uppercase', fontSize: '0.65rem' }}>
                         <tr>
                             <th style={{ padding: '12px' }}>Pos</th>
                             <th style={{ padding: '12px', textAlign: 'left' }}>Equipo</th>
-                            <th>JJ</th>
-                            <th>G</th>
-                            <th>P</th>
-                            <th>DIF</th>
+                            <th>JJ</th><th>G</th><th>P</th><th>DIF</th>
                             <th style={{ background: '#eff6ff', color: '#1e40af' }}>PTS</th>
                         </tr>
                     </thead>
                     <tbody>
                         {teams.map((eq, index) => {
-                            const jugados = eq.victorias + eq.derrotas;
-                            const dif = eq.puntos_favor - (eq.puntos_contra || 0);
+                            const jj = (eq.victorias ?? 0) + (eq.derrotas ?? 0);
+                            const dif = (eq.puntos_favor ?? 0) - (eq.puntos_contra ?? 0);
                             return (
                                 <tr key={eq.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                    <td style={{ padding: '12px', fontWeight: 'bold', color: '#64748b' }}>{index + 1}</td>
+                                    <td style={{ padding: '12px', fontWeight: 'bold', color: '#94a3b8' }}>{index + 1}</td>
                                     <td style={{ padding: '12px', textAlign: 'left' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                             <img 
                                                 src={eq.logoUrl || DEFAULT_LOGO} 
-                                                style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }}
-                                                onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_LOGO; }}
+                                                style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', background: '#f1f5f9' }}
                                                 alt="logo"
                                             />
-                                            <span style={{ fontWeight: 'bold', color: '#1f2937' }}>{eq.nombre}</span>
+                                            <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.8rem' }}>{eq.nombre}</span>
                                         </div>
                                     </td>
-                                    <td>{jugados}</td>
-                                    <td style={{ color: '#10b981', fontWeight: 'bold' }}>{eq.victorias}</td>
-                                    <td style={{ color: '#ef4444', fontWeight: 'bold' }}>{eq.derrotas}</td>
+                                    <td style={{ fontWeight: '600' }}>{jj}</td>
+                                    <td style={{ color: '#10b981', fontWeight: 'bold' }}>{eq.victorias ?? 0}</td>
+                                    <td style={{ color: '#ef4444', fontWeight: 'bold' }}>{eq.derrotas ?? 0}</td>
                                     <td style={{ fontWeight: 'bold', color: dif >= 0 ? '#3b82f6' : '#ef4444' }}>
                                         {dif > 0 ? `+${dif}` : dif}
                                     </td>
-                                    <td style={{ background: '#eff6ff', fontWeight: '900', color: '#1e40af', fontSize: '1rem' }}>
-                                        {eq.puntos}
+                                    <td style={{ background: '#eff6ff', fontWeight: '900', color: '#1e40af', fontSize: '1.1rem' }}>
+                                        {eq.puntos ?? 0}
                                     </td>
                                 </tr>
                             );
                         })}
                         {teams.length === 0 && (
-                            <tr><td colSpan={7} style={{ padding: '20px', color: '#94a3b8' }}>No hay equipos en este grupo</td></tr>
+                            <tr>
+                                <td colSpan={7} style={{ padding: '30px', color: '#94a3b8', fontStyle: 'italic' }}>
+                                    No hay resultados registrados en este grupo.
+                                </td>
+                            </tr>
                         )}
                     </tbody>
                 </table>
@@ -88,38 +92,35 @@ const StandingsViewer: React.FC<{ equipos: Equipo[], onClose: () => void }> = ({
     );
 
     return (
-        <div className="animate-fade-in" style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(243, 244, 246, 0.98)', zIndex: 1500,
-            display: 'flex', flexDirection: 'column'
-        }}>
-            {/* HEADER AZUL FIJO */}
-            <header style={{
-                background: '#1e3a8a', color: 'white', padding: '15px 20px', 
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
-            }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: '#f1f5f9', zIndex: 1500, display: 'flex', flexDirection: 'column' }}>
+            {/* CABECERA AZUL */}
+            <header style={{ background: '#1e3a8a', color: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', flexShrink: 0 }}>
                 <div>
-                    <h2 style={{ margin: 0, fontSize: '1.3rem' }}>🏆 Tabla de Posiciones</h2>
-                    <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>Temporada Oficial • Liga San Mateo</span>
+                    <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, letterSpacing: '-0.5px' }}>🏆 TABLA DE POSICIONES</h2>
+                    <span style={{ fontSize: '0.7rem', opacity: 0.8, fontWeight: 'bold', textTransform: 'uppercase' }}>Liga San Mateo • Oficial</span>
                 </div>
-                <button onClick={onClose} style={{
-                    background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', 
-                    padding: '8px 15px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold'
-                }}>VOLVER</button>
+                <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', padding: '8px 20px', borderRadius: '25px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem' }}>VOLVER</button>
             </header>
 
-            {/* CONTENEDOR DE TABLAS */}
-            <main style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-                <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+            {/* CUERPO DE LA TABLA */}
+            <main style={{ flex: 1, overflowY: 'auto', padding: '15px' }}>
+                <div style={{ maxWidth: '850px', margin: '0 auto' }}>
                     
-                    {/* TABLA GRUPO A (Azul) */}
-                    <RenderTable teams={grupoA} groupName="GRUPO A" color="#3b82f6" />
+                    {/* INFO DE CARGA SOLO SI ES NULL (TOTALMENTE VACÍO) */}
+                    {!equipos ? (
+                        <div style={{ textAlign: 'center', padding: '50px', color: '#1e3a8a', fontWeight: 'bold' }}>
+                            Sincronizando con la liga...
+                        </div>
+                    ) : (
+                        <>
+                            <RenderTable teams={grupoA} groupName="GRUPO A" color="#2563eb" />
+                            <RenderTable teams={grupoB} groupName="GRUPO B" color="#dc2626" />
+                        </>
+                    )}
 
-                    {/* TABLA GRUPO B (Rojo) */}
-                    <RenderTable teams={grupoB} groupName="GRUPO B" color="#ef4444" />
-
-                    {/* LEYENDA */}
-                    <div style={{ padding: '15px', borderTop: '1px solid #ddd', fontSize: '0.75rem', color: '#64748b', textAlign: 'center' }}>
-                        JJ: Juegos Jugados | G: Ganados | P: Perdidos | DIF: Diferencia de Puntos | PTS: Puntos de Tabla
+                    <div style={{ padding: '20px', background: 'white', borderRadius: '10px', fontSize: '0.7rem', color: '#64748b', textAlign: 'center', border: '1px solid #e2e8f0', marginBottom: '30px' }}>
+                        <strong>REGLAMENTO FIBA:</strong> Ganado: 2 pts | Perdido: 1 pt | Forfait: 0 pts.<br/>
+                        Criterios de desempate: 1. Puntos de Tabla | 2. Diferencia de Puntos | 3. Puntos a Favor.
                     </div>
                 </div>
             </main>

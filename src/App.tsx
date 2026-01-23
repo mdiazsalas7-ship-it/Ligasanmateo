@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import './App.css'; 
 import { db, auth } from './firebase'; 
-import { doc, onSnapshot } from 'firebase/firestore'; 
+import { doc, onSnapshot, collection, query, orderBy, getDocs } from 'firebase/firestore'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth'; 
 
 // Componentes
@@ -15,9 +15,11 @@ import TeamsPublicViewer from './TeamsPublicViewer';
 
 function App() {
   const [user, setUser] = useState<{uid: string, email: string | null, rol: string} | null>(null);
+  const [equipos, setEquipos] = useState<any[]>([]); // ESTADO PARA LA TABLA
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<'dashboard' | 'equipos' | 'calendario' | 'mesa' | 'stats' | 'tabla' | 'login'>('dashboard');
 
+  // 1. MANEJO DE SESIÓN
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => {
       if (u) {
@@ -32,6 +34,21 @@ function App() {
       }
     });
   }, []);
+
+  // 2. CARGA DE DATOS PÚBLICOS (EQUIPOS PARA LA TABLA)
+  useEffect(() => {
+    const fetchEquipos = async () => {
+      try {
+        const q = query(collection(db, "equipos"), orderBy("puntos", "desc"));
+        const snap = await getDocs(q);
+        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setEquipos(data);
+      } catch (error) {
+        console.error("Error cargando equipos:", error);
+      }
+    };
+    fetchEquipos();
+  }, [activeView]); // Se refresca al cambiar de vista
 
   if (loading) return <div style={{background:'#0f172a', height:'100vh', color: 'white', display:'flex', alignItems:'center', justifyContent:'center'}}>Cargando Liga...</div>;
 
@@ -48,7 +65,7 @@ function App() {
         textAlign: 'center',
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
       }}>
-        <img src="https://i.postimg.cc/0QgYWZtg/image.png" alt="Logo" style={{ height: '60px', marginBottom: '10px' }} />
+        <img src="https://i.postimg.cc/qMsBxr6P/image.png" alt="Logo" style={{ height: '60px', marginBottom: '10px' }} />
         <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 900, letterSpacing:'-1px' }}>LIGA SAN MATEO</h1>
         <div style={{marginTop:'10px'}}>
           {user ? (
@@ -68,7 +85,6 @@ function App() {
         {activeView === 'dashboard' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '10px' }}>
             
-            {/* BOTONES PÚBLICOS */}
             <button className="menu-card" onClick={() => setActiveView('calendario')}>
               <span className="icon">📅</span>
               <span className="label">CALENDARIO</span>
@@ -89,7 +105,6 @@ function App() {
               <span className="label">EQUIPOS</span>
             </button>
 
-            {/* SECCIÓN ADMIN (SÓLO APARECE SI ESTÁ LOGUEADO COMO ADMIN) */}
             {isAdmin && (
               <div style={{ gridColumn: '1 / -1', marginTop: '20px', padding: '20px', background: '#fee2e2', borderRadius: '15px', border: '2px dashed #ef4444' }}>
                 <p style={{ textAlign: 'center', margin: '0 0 15px 0', fontWeight: 'bold', color: '#b91c1c' }}>PANEL DE CONTROL</p>
@@ -109,13 +124,15 @@ function App() {
         )}
         {activeView === 'calendario' && <CalendarViewer rol={isAdmin ? 'admin' : 'fan'} onClose={() => setActiveView('dashboard')} />}
         {activeView === 'stats' && <StatsViewer onClose={() => setActiveView('dashboard')} />}
-        {activeView === 'tabla' && <StandingsViewer onClose={() => setActiveView('dashboard')} />}
+        
+        {/* CORRECCIÓN: PASAMOS LOS EQUIPOS A LA TABLA */}
+        {activeView === 'tabla' && <StandingsViewer equipos={equipos} onClose={() => setActiveView('dashboard')} />}
+        
         {activeView === 'mesa' && isAdmin && (
           <MesaTecnica onClose={() => setActiveView('dashboard')} />
         )}
       </main>
 
-      {/* ESTILOS PERSONALIZADOS */}
       <style>{`
         .menu-card {
           background: white;
@@ -135,24 +152,9 @@ function App() {
           transform: scale(0.95);
           background: #f1f5f9;
         }
-        .menu-card .icon {
-          font-size: 2.5rem;
-        }
-        .menu-card .label {
-          font-weight: 800;
-          font-size: 0.8rem;
-          color: #1e3a8a;
-        }
-        .admin-btn {
-          background: #b91c1c;
-          color: white;
-          border: none;
-          padding: 15px;
-          border-radius: 12px;
-          font-weight: bold;
-          cursor: pointer;
-          font-size: 0.8rem;
-        }
+        .menu-card .icon { font-size: 2.5rem; }
+        .menu-card .label { font-weight: 800; font-size: 0.8rem; color: #1e3a8a; }
+        .admin-btn { background: #b91c1c; color: white; border: none; padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 0.8rem; }
       `}</style>
 
       <footer style={{textAlign:'center', padding:'30px', fontSize:'0.7rem', color:'#94a3b8'}}>

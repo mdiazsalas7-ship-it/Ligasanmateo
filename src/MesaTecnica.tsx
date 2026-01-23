@@ -2,7 +2,7 @@ import React, { useState, useEffect, memo } from 'react';
 import { db } from './firebase';
 import { doc, updateDoc, onSnapshot, collection, query, getDocs, setDoc, increment, where, writeBatch } from 'firebase/firestore';
 
-// --- FILA DE JUGADOR ---
+// --- FILA DE JUGADOR (Botones de acción rápida) ---
 const PlayerRow = memo(({ player, team, stats, onStat }: any) => {
     const s = stats || { puntos: 0, rebotes: 0, asistencias: 0, robos: 0, triples: 0, dobles: 0, tirosLibres: 0, faltas: 0 };
 
@@ -36,6 +36,7 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [statsCache, setStatsCache] = useState<Record<string, any>>({});
     const selectedDate = new Date().toISOString().split('T')[0];
 
+    // 1. CARGAR JUEGOS DEL DÍA (Solo programados)
     useEffect(() => {
         const q = query(
             collection(db, 'calendario'), 
@@ -45,6 +46,7 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         getDocs(q).then(snap => setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     }, [selectedMatchId, selectedDate]);
 
+    // 2. ESCUCHAR EL PARTIDO EN TIEMPO REAL
     useEffect(() => {
         if (!selectedMatchId) return;
         const unsub = onSnapshot(doc(db, 'calendario', selectedMatchId), (snap) => {
@@ -53,6 +55,7 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         return () => unsub();
     }, [selectedMatchId]);
 
+    // 3. CARGAR ROSTERS CUANDO SE SELECCIONA UN PARTIDO
     useEffect(() => {
         if (matchData?.id) {
             const fetchRosters = async () => {
@@ -69,29 +72,22 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const handleStat = async (player: any, team: 'local'|'visitante', field: string, val: number) => {
         if (!matchData) return;
 
-        let puntosParaMarcador = 0;
+        let puntosAccion = 0;
         if (['tirosLibres', 'dobles', 'triples'].includes(field)) {
-            puntosParaMarcador = field === 'tirosLibres' ? 1 : field === 'dobles' ? 2 : 3;
+            puntosAccion = field === 'tirosLibres' ? 1 : field === 'dobles' ? 2 : 3;
             const marcadorField = team === 'local' ? 'marcadorLocal' : 'marcadorVisitante';
-            await updateDoc(doc(db, 'calendario', matchData.id), { [marcadorField]: increment(puntosParaMarcador) });
+            await updateDoc(doc(db, 'calendario', matchData.id), { [marcadorField]: increment(puntosAccion) });
         }
 
         const statRef = doc(db, 'stats_partido', `${matchData.id}_${player.id}`);
-        
-        // Actualizamos el campo específico y TAMBIÉN el acumulado de puntos en el registro del partido
-        const updateData: any = {
+        await setDoc(statRef, {
             partidoId: matchData.id,
             jugadorId: player.id,
             nombre: player.nombre,
             equipo: team === 'local' ? matchData.equipoLocalNombre : matchData.equipoVisitanteNombre,
-            [field]: increment(val)
-        };
-
-        if (puntosParaMarcador > 0) {
-            updateData.puntos = increment(puntosParaMarcador);
-        }
-
-        await setDoc(statRef, updateData, { merge: true });
+            [field]: increment(val),
+            puntos: increment(puntosAccion)
+        }, { merge: true });
 
         setStatsCache(prev => ({
             ...prev,
@@ -99,6 +95,7 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         }));
     };
 
+    // --- FINALIZACIÓN Y ACTUALIZACIÓN DE LÍDERES ---
     const handleFinalize = async () => {
         if (!matchData || !window.confirm("¿Finalizar partido? Se actualizará la Tabla y los Líderes.")) return;
 
@@ -116,20 +113,20 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             batch.update(localRef, { derrotas: increment(1), puntos: increment(1), puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
         }
 
-        // 2. ACTUALIZACIÓN CRÍTICA DE LÍDERES (Puntos y Stats)
+        // 2. Procesar Líderes Individuales
         const statsSnap = await getDocs(query(collection(db, 'stats_partido'), where('partidoId', '==', matchData.id)));
         statsSnap.forEach(sDoc => {
             const s = sDoc.data();
             const jugRef = doc(db, 'jugadores', s.jugadorId);
             
-            // Cálculo manual para asegurar que los puntos lleguen a la colección 'jugadores'
-            const tl = Number(s.tirosLibres) || 0;
-            const d2 = Number(s.dobles) || 0;
-            const d3 = Number(s.triples) || 0;
-            const totalPuntosPartido = tl + (d2 * 2) + (d3 * 3);
+            // Cálculo estricto de puntos del juego para inyectar en el perfil
+            const ptsLibres = Number(s.tirosLibres) || 0;
+            const ptsDobles = (Number(s.dobles) || 0) * 2;
+            const ptsTriples = (Number(s.triples) || 0) * 3;
+            const totalJuego = ptsLibres + ptsDobles + ptsTriples;
 
             batch.update(jugRef, {
-                puntos: increment(totalPuntosPartido), // ¡ESTO ARREGLA EL CERO EN LOS LÍDERES!
+                puntos: increment(totalJuego),
                 rebotes: increment(Number(s.rebotes) || 0),
                 asistencias: increment(Number(s.asistencias) || 0),
                 robos: increment(Number(s.robos) || 0),
@@ -140,32 +137,29 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             });
         });
 
-        // 3. Marcar como finalizado
-        batch.update(doc(db, 'calendario', matchData.id), { 
-            estatus: 'finalizado',
-            marcadorLocal: matchData.marcadorLocal,
-            marcadorVisitante: matchData.marcadorVisitante 
-        });
+        // 3. Cerrar partido en el calendario
+        batch.update(doc(db, 'calendario', matchData.id), { estatus: 'finalizado' });
 
         try {
             await batch.commit();
-            alert("✅ Liga Actualizada. Los puntos ya están reflejados en Estadísticas.");
+            alert("✅ Liga Actualizada con éxito.");
             onClose();
         } catch (e) { alert("Error al guardar datos."); }
     };
 
+    // --- VISTA DE SELECCIÓN ---
     if (!selectedMatchId) return (
         <div style={{padding:'20px', color:'white', background:'#000', minHeight:'100vh'}}>
-            <h2 style={{color: '#60a5fa', marginBottom:'20px'}}>⏱️ Mesa Técnica</h2>
+            <h2 style={{color: '#60a5fa', marginBottom:'20px'}}>⏱️ Mesa Técnica: Activos</h2>
             <div style={{display:'grid', gap:'10px'}}>
                 {matches.length === 0 ? (
                     <div style={{padding:'40px', textAlign:'center', color:'#666', border:'2px dashed #333', borderRadius:'12px'}}>
-                        No hay juegos pendientes para hoy.
+                        No hay juegos programados para hoy.
                     </div>
                 ) : matches.map(m => (
                     <button key={m.id} onClick={()=>setSelectedMatchId(m.id)} style={{padding:'20px', background:'#1a1a1a', border:'1px solid #333', borderRadius:'8px', color:'white', textAlign:'left', cursor:'pointer'}}>
                         <div style={{fontWeight:'bold'}}>{m.equipoLocalNombre} vs {m.equipoVisitanteNombre}</div>
-                        <div style={{fontSize:'0.8rem', color:'#94a3b8', marginTop:'5px'}}>📍 {m.cancha}</div>
+                        <div style={{fontSize:'0.8rem', color:'#94a3b8', marginTop:'5px'}}>📍 {m.cancha} | ⏰ {m.hora}</div>
                     </button>
                 ))}
             </div>
@@ -173,21 +167,23 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         </div>
     );
 
+    // --- PROTECCIÓN CONTRA PANTALLA BLANCA ---
     if (!matchData) return <div style={{background:'#000', height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', color:'white'}}>Cargando tablero...</div>;
 
+    // --- VISTA DEL TABLERO ---
     return (
         <div style={{background:'#000', height:'100vh', display:'flex', flexDirection:'column', color:'white'}}>
-            <style>{`.btn-stat { flex:1; padding:12px 0; border:none; border-radius:6px; color:white; font-weight:bold; cursor:pointer; font-size:0.7rem; text-transform:uppercase; } .btn-stat:active { transform:scale(0.9); }`}</style>
+            <style>{`.btn-stat { flex:1; padding:12px 0; border:none; border-radius:6px; color:white; font-weight:bold; cursor:pointer; font-size:0.7rem; text-transform:uppercase; transition: 0.1s; } .btn-stat:active { transform: scale(0.9); }`}</style>
             
             <div style={{padding:'15px', background:'#111', borderBottom:'2px solid #333', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                 <div style={{textAlign:'center', flex:1}}>
-                    <div style={{fontSize:'0.8rem', color:'#60a5fa'}}>{matchData?.equipoLocalNombre}</div>
-                    <div style={{fontSize:'2.2rem', fontWeight:'900'}}>{matchData?.marcadorLocal}</div>
+                    <div style={{fontSize:'0.8rem', color:'#60a5fa'}}>{matchData.equipoLocalNombre}</div>
+                    <div style={{fontSize:'2.2rem', fontWeight:'900'}}>{matchData.marcadorLocal}</div>
                 </div>
                 <div style={{fontSize:'1.5rem', fontWeight:'900', color:'#f59e0b'}}>VS</div>
                 <div style={{textAlign:'center', flex:1}}>
-                    <div style={{fontSize:'0.8rem', color:'#facc15'}}>{matchData?.equipoVisitanteNombre}</div>
-                    <div style={{fontSize:'2.2rem', fontWeight:'900'}}>{matchData?.marcadorVisitante}</div>
+                    <div style={{fontSize:'0.8rem', color:'#facc15'}}>{matchData.equipoVisitanteNombre}</div>
+                    <div style={{fontSize:'2.2rem', fontWeight:'900'}}>{matchData.marcadorVisitante}</div>
                 </div>
             </div>
 
