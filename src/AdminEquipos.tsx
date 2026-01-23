@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { db } from './firebase';
+import { db, storage } from './firebase'; // Importamos storage
 import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc, query, where, orderBy, writeBatch } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; // Funciones de subida
 
 interface Player { id?: string; nombre: string; }
 interface Equipo { id: string; nombre: string; grupo: string; logoUrl?: string; victorias: number; derrotas: number; puntos: number; puntos_favor: number; puntos_contra: number; }
@@ -10,6 +11,7 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [equipos, setEquipos] = useState<Equipo[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingPlayers, setLoadingPlayers] = useState(false);
+    const [uploadingId, setUploadingId] = useState<string | null>(null); // Estado para feedback de carga
     
     const [editLogos, setEditLogos] = useState<Record<string, string>>({});
     
@@ -39,6 +41,43 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
     useEffect(() => { fetchEquipos(); }, []);
 
+    // --- FUNCIÓN PARA SUBIR IMAGEN ---
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, teamId?: string) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validar formato
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+        if (!allowedTypes.includes(file.type)) {
+            return alert("❌ Solo se permiten imágenes JPG o PNG.");
+        }
+
+        const targetId = teamId || 'new';
+        setUploadingId(targetId);
+
+        try {
+            const storageRef = ref(storage, `logos_equipos/${Date.now()}_${file.name}`);
+            await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(storageRef);
+
+            if (teamId) {
+                // Actualizar equipo existente
+                await updateDoc(doc(db, 'equipos', teamId), { logoUrl: downloadURL });
+                alert("✅ Logo actualizado correctamente.");
+                fetchEquipos();
+            } else {
+                // Guardar URL para nuevo equipo
+                setNewLogoUrl(downloadURL);
+                alert("✅ Imagen cargada. Ya puedes guardar el equipo.");
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error al subir la imagen.");
+        } finally {
+            setUploadingId(null);
+        }
+    };
+
     const fetchPlayers = async (teamId: string) => {
         setLoadingPlayers(true);
         try {
@@ -50,7 +89,6 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setLoadingPlayers(false);
     };
 
-    // --- FUNCIÓN NUCLEAR: ELIMINAR EQUIPO Y NÓMINA ---
     const handleDeleteTeam = async (teamId: string, nombre: string) => {
         const confirm1 = window.confirm(`⚠️ ¿ELIMINAR COMPLETAMENTE a "${nombre}"?`);
         if (!confirm1) return;
@@ -61,31 +99,15 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setLoading(true);
         try {
             const batch = writeBatch(db);
-
-            // 1. Buscamos a los jugadores de este equipo para borrarlos en cadena
             const qPlayers = query(collection(db, 'jugadores'), where('equipoId', '==', teamId));
             const snapPlayers = await getDocs(qPlayers);
             snapPlayers.docs.forEach(pDoc => batch.delete(pDoc.ref));
-
-            // 2. Borramos el documento del equipo
             batch.delete(doc(db, 'equipos', teamId));
-
             await batch.commit();
-            alert(`🗑️ "${nombre}" y su nómina han sido eliminados correctamente.`);
+            alert(`🗑️ "${nombre}" eliminado.`);
             fetchEquipos();
-        } catch (error) {
-            alert("Error al intentar eliminar el equipo.");
-        }
+        } catch (error) { alert("Error al eliminar."); }
         setLoading(false);
-    };
-
-    const handleUpdateLogo = async (teamId: string) => {
-        try {
-            const newUrl = editLogos[teamId] || DEFAULT_LOGO;
-            await updateDoc(doc(db, 'equipos', teamId), { logoUrl: newUrl });
-            alert("✅ Logo actualizado");
-            fetchEquipos();
-        } catch (error) { alert("Error al actualizar logo"); }
     };
 
     const handleOpenForma21 = (eq: Equipo) => {
@@ -103,7 +125,7 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 logoUrl: newLogoUrl || DEFAULT_LOGO,
                 victorias: 0, derrotas: 0, puntos: 0, puntos_favor: 0, puntos_contra: 0
             });
-            setTeamName(''); setView('list'); fetchEquipos();
+            setTeamName(''); setNewLogoUrl(''); setView('list'); fetchEquipos();
         } catch (error) { alert("Error al crear equipo"); }
     };
 
@@ -148,19 +170,15 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 {loading ? <p style={{textAlign:'center'}}>Cargando equipos...</p> : equipos.map(eq => (
                                     <div key={eq.id} style={{ padding:'15px', border:'1px solid #eee', borderRadius:'10px', background:'#f8fafc', position:'relative' }}>
                                         <div style={{ display:'flex', alignItems:'center', gap:'15px', marginBottom:'10px' }}>
-                                            <img src={eq.logoUrl || DEFAULT_LOGO} style={{ width:'50px', height:'50px', borderRadius:'50%', objectFit:'cover', border:'1px solid #ddd', background:'#fff' }} />
+                                            <div style={{ textAlign: 'center' }}>
+                                                <img src={eq.logoUrl || DEFAULT_LOGO} style={{ width:'55px', height:'55px', borderRadius:'50%', objectFit:'cover', border:'1px solid #ddd', background:'#fff' }} />
+                                                <label style={{ display: 'block', fontSize: '0.6rem', color: '#1e3a8a', cursor: 'pointer', fontWeight: 'bold', marginTop: '5px', textDecoration: 'underline' }}>
+                                                    {uploadingId === eq.id ? '...' : 'CAMBIAR'}
+                                                    <input type="file" accept="image/png, image/jpeg" style={{ display: 'none' }} onChange={(e) => handleFileUpload(e, eq.id)} />
+                                                </label>
+                                            </div>
                                             <div style={{ flex:1 }}>
                                                 <div style={{ fontWeight:'bold', fontSize:'1rem' }}>{eq.nombre} <span style={{fontSize:'0.7rem', color:'#3b82f6', background:'#dbeafe', padding:'2px 6px', borderRadius:'4px'}}>Grup {eq.grupo}</span></div>
-                                                <div style={{ display:'flex', gap:'5px', marginTop:'8px' }}>
-                                                    <input 
-                                                        type="text" 
-                                                        placeholder="URL logo..." 
-                                                        value={editLogos[eq.id] || ''} 
-                                                        onChange={(e) => setEditLogos({...editLogos, [eq.id]: e.target.value})}
-                                                        style={{ flex:1, fontSize:'0.7rem', padding:'6px', borderRadius:'4px', border:'1px solid #ccc' }}
-                                                    />
-                                                    <button onClick={() => handleUpdateLogo(eq.id)} title="Guardar Logo" style={{ background:'#3b82f6', color:'white', border:'none', padding:'0 10px', borderRadius:'4px', cursor:'pointer' }}>💾</button>
-                                                </div>
                                             </div>
                                             <div style={{display:'flex', flexDirection:'column', gap:'5px'}}>
                                                 <button onClick={() => handleOpenForma21(eq)} style={{ background:'#f59e0b', color:'white', border:'none', padding:'8px 12px', borderRadius:'6px', fontWeight:'bold', cursor:'pointer', fontSize:'0.75rem' }}>NÓMINA F21</button>
@@ -177,12 +195,23 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         <div style={{ display:'flex', flexDirection:'column', gap:'15px' }}>
                             <h4 style={{margin:0}}>🆕 Nuevo Equipo</h4>
                             <input type="text" placeholder="NOMBRE DEL EQUIPO" value={teamName} onChange={e => setTeamName(e.target.value.toUpperCase())} style={{ padding:'12px', borderRadius:'6px', border:'1px solid #ccc' }} />
+                            
+                            <div style={{ background: '#f1f5f9', padding: '15px', borderRadius: '10px', textAlign: 'center', border: '2px dashed #cbd5e1' }}>
+                                {newLogoUrl ? (
+                                    <img src={newLogoUrl} style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', marginBottom: '10px' }} />
+                                ) : <div style={{ fontSize: '2rem' }}>🖼️</div>}
+                                <label style={{ display: 'block', background: '#334155', color: 'white', padding: '8px', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                    {uploadingId === 'new' ? 'SUBIENDO...' : 'SUBIR LOGO (JPG/PNG)'}
+                                    <input type="file" accept="image/png, image/jpeg" style={{ display: 'none' }} onChange={(e) => handleFileUpload(e)} />
+                                </label>
+                            </div>
+
                             <select value={teamGroup} onChange={e => setTeamGroup(e.target.value)} style={{ padding:'12px', borderRadius:'6px', border:'1px solid #ccc' }}>
                                 <option value="A">GRUPO A</option>
                                 <option value="B">GRUPO B</option>
                             </select>
-                            <input type="text" placeholder="LINK DEL LOGO" value={newLogoUrl} onChange={e => setNewLogoUrl(e.target.value)} style={{ padding:'12px', borderRadius:'6px', border:'1px solid #ccc' }} />
-                            <button onClick={handleCreateTeam} style={{ padding:'12px', background:'#10b981', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer' }}>GUARDAR EQUIPO</button>
+                            
+                            <button onClick={handleCreateTeam} disabled={uploadingId === 'new'} style={{ padding:'15px', background: uploadingId === 'new' ? '#94a3b8' : '#10b981', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer' }}>GUARDAR EQUIPO</button>
                             <button onClick={() => setView('list')} style={{ background:'none', border:'none', color:'#666', cursor:'pointer' }}>Volver</button>
                         </div>
                     )}
