@@ -1,350 +1,232 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { collection, query, where, onSnapshot, orderBy, updateDoc, doc, getDocs, deleteDoc, addDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, deleteDoc, doc, getDocs, writeBatch, where } from 'firebase/firestore';
+import MatchForm from './MatchForm'; 
 
-// --- CONSTANTE PARA LOGO POR DEFECTO ---
-const DEFAULT_TEAM_LOGO = "https://cdn-icons-png.flaticon.com/512/451/451716.png";
+const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/451/451716.png";
 
-interface Match {
-    id: string;
-    equipoLocalNombre: string;
-    equipoVisitanteNombre: string;
-    // Agregamos los IDs para poder buscar el logo
-    equipoLocalId?: string;
-    equipoVisitanteId?: string;
-    fechaAsignada: string;
-    hora: string;
-    estatus: string; 
-    cancha: string;
-    marcadorLocal?: number;
-    marcadorVisitante?: number;
-    jornada?: number;
-    datosSuspension?: {
-        motivo: string;
-        tiempoRestante: string;
-        cuarto: number;
-    };
-}
-
-interface ApprovedTeam {
-    id: string;
-    nombreEquipo: string;
-    logoUrl?: string;
-}
-
-const CalendarViewer: React.FC<{ rol: string, onClose: () => void, onViewLive: (id: string) => void, onViewDetail: (id: string) => void }> = ({ rol, onClose, onViewLive, onViewDetail }) => {
-    
-    const [matches, setMatches] = useState<Match[]>([]);
-    const [approvedTeams, setApprovedTeams] = useState<ApprovedTeam[]>([]);
+// --- COMPONENTE INTERNO: BOX SCORE (Resumen del Partido) ---
+const BoxScoreModal = ({ match, onClose }: any) => {
+    const [stats, setStats] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [generating, setGenerating] = useState(false);
-    
-    // --- ESTADO PARA PESTAÑAS ---
-    const [viewMode, setViewMode] = useState<'upcoming' | 'finished'>('upcoming');
-
-    // Estado para Edición
-    const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
-    const [editDate, setEditDate] = useState('');
-    const [editTime, setEditTime] = useState('');
 
     useEffect(() => {
-        // 1. Cargar Partidos
-        const q = query(collection(db, 'calendario'), orderBy('fechaAsignada', 'asc'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
-            setMatches(list);
+        const fetchStats = async () => {
+            const q = query(collection(db, 'stats_partido'), where('partidoId', '==', match.id));
+            const snap = await getDocs(q);
+            setStats(snap.docs.map(d => d.data()));
             setLoading(false);
-        });
-
-        // 2. Cargar Lobby (Para obtener los logos)
-        const fetchLobby = async () => {
-            try {
-                const qTeams = query(collection(db, 'forma21s'), where('estatus', '==', 'aprobado'));
-                const snap = await getDocs(qTeams);
-                setApprovedTeams(snap.docs.map(d => ({ id: d.id, ...d.data() } as ApprovedTeam)));
-            } catch (e) { console.error(e); }
         };
-        fetchLobby();
+        fetchStats();
+    }, [match.id]);
 
-        return () => unsubscribe();
-    }, []);
-
-    // --- FILTRADO DE JUEGOS ---
-    const upcomingMatches = matches.filter(m => m.estatus !== 'finalizado');
-    const finishedMatches = matches.filter(m => m.estatus === 'finalizado');
-    
-    finishedMatches.sort((a,b) => b.fechaAsignada.localeCompare(a.fechaAsignada));
-
-    const showLobby = matches.length === 0;
-
-    // --- HELPER PARA BUSCAR LOGO ---
-    const getTeamLogo = (teamId?: string) => {
-        if (!teamId) return DEFAULT_TEAM_LOGO;
-        const team = approvedTeams.find(t => t.id === teamId);
-        return team?.logoUrl || DEFAULT_TEAM_LOGO;
-    };
-
-    // --- REINICIAR TEMPORADA ---
-    const handleResetSeason = async () => {
-        const confirm1 = window.confirm("⚠️ ¿ESTÁS SEGURO DE REINICIAR LA TEMPORADA?");
-        if (!confirm1) return;
-        const confirm2 = window.confirm("☢️ ESTO BORRARÁ TODOS LOS JUEGOS Y ESTADÍSTICAS.\n\nLos equipos permanecerán registrados, pero la tabla volverá a cero.\n\n¿Proceder?");
-        if (!confirm2) return;
-
-        setGenerating(true);
-        try {
-            const oldMatches = await getDocs(collection(db, 'calendario'));
-            const deletePromises = oldMatches.docs.map(d => deleteDoc(d.ref));
-            await Promise.all(deletePromises);
-
-            const oldStats = await getDocs(collection(db, 'stats_partido'));
-            const statsPromises = oldStats.docs.map(d => deleteDoc(d.ref));
-            await Promise.all(statsPromises);
-
-            const equiposSnap = await getDocs(collection(db, 'equipos'));
-            const resetPromises = equiposSnap.docs.map(d => updateDoc(d.ref, { 
-                victorias: 0, derrotas: 0, puntos: 0, 
-                puntos_favor: 0, puntos_contra: 0 
-            }));
-            await Promise.all(resetPromises);
-
-            alert("✅ Temporada reiniciada. El sistema está limpio para un nuevo torneo.");
-        } catch (e) {
-            console.error(e);
-            alert("Error al reiniciar temporada.");
-        } finally {
-            setGenerating(false);
-        }
-    };
-
-    const handleGenerateCalendar = async () => {
-        if (!window.confirm("¿Generar calendario automático Round Robin?")) return;
-        setGenerating(true);
-        try {
-            await handleResetSeason(); 
-
-            let equipos = approvedTeams.map(t => ({ id: t.id, nombre: t.nombreEquipo }));
-            if (equipos.length < 2) { alert("Mínimo 2 equipos aprobados."); setGenerating(false); return; }
-            if (equipos.length % 2 !== 0) equipos.push({ id: 'bye', nombre: 'DESCANSO' });
-
-            const totalRounds = equipos.length - 1;
-            const matchesPerRound = equipos.length / 2;
-            let fechaBase = new Date();
-            fechaBase.setDate(fechaBase.getDate() + (6 - fechaBase.getDay() + 7) % 7); 
-
-            for (let round = 0; round < totalRounds; round++) {
-                const fechaJornada = new Date(fechaBase);
-                fechaJornada.setDate(fechaBase.getDate() + (round * 7)); 
-                const fechaStr = fechaJornada.toISOString().split('T')[0];
-                for (let match = 0; match < matchesPerRound; match++) {
-                    const home = equipos[match];
-                    const away = equipos[equipos.length - 1 - match];
-                    if (home.id !== 'bye' && away.id !== 'bye') {
-                        await addDoc(collection(db, 'calendario'), {
-                            equipoLocalNombre: home.nombre, equipoLocalId: home.id,
-                            equipoVisitanteNombre: away.nombre, equipoVisitanteId: away.id,
-                            fechaAsignada: fechaStr, hora: '10:00', cancha: 'Cancha Principal',
-                            jornada: round + 1, estatus: 'programado', marcadorLocal: 0, marcadorVisitante: 0,
-                            faltasLocal: 0, faltasVisitante: 0, timeoutsLocal: 2, timeoutsVisitante: 2, cuarto: 1
-                        });
-                    }
-                }
-                equipos.splice(1, 0, equipos.pop()!); 
-            }
-            alert("✅ Torneo generado.");
-        } catch (e) { console.error(e); } finally { setGenerating(false); }
-    };
-
-    const saveEditing = async (id: string) => {
-        await updateDoc(doc(db, 'calendario', id), { fechaAsignada: editDate, hora: editTime });
-        setEditingMatchId(null);
-    };
-
-    const handleDelete = async (id: string) => {
-        if(window.confirm("¿Eliminar partido?")) await deleteDoc(doc(db, 'calendario', id));
+    const renderTable = (teamName: string) => {
+        const players = stats.filter(s => s.equipo === teamName);
+        return (
+            <div style={{ marginBottom: '20px' }}>
+                <div style={{ background: '#1e3a8a', color: 'white', padding: '10px', fontWeight: 'bold', fontSize: '0.9rem', borderRadius: '4px 4px 0 0' }}>{teamName}</div>
+                <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'center' }}>
+                        <thead style={{ background: '#f1f5f9' }}>
+                            <tr>
+                                <th style={{ textAlign: 'left', padding: '10px' }}>JUGADOR</th>
+                                <th>PTS</th><th>3P</th><th>REB</th><th>AST</th><th>ROB</th><th>F</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {players.map((p, i) => {
+                                const pts = (Number(p.tirosLibres)||0) + (Number(p.dobles)||0)*2 + (Number(p.triples)||0)*3;
+                                return (
+                                    <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                                        <td style={{ textAlign: 'left', padding: '10px', fontWeight: 'bold' }}>{p.nombre}</td>
+                                        <td style={{ background: '#fdf2f2', fontWeight: 'bold', fontSize: '1rem' }}>{pts}</td>
+                                        <td>{p.triples || 0}</td>
+                                        <td>{p.rebotes || 0}</td>
+                                        <td>{p.asistencias || 0}</td>
+                                        <td>{p.robos || 0}</td>
+                                        <td style={{ color: p.faltas >= 5 ? 'red' : 'black', fontWeight: p.faltas >= 5 ? 'bold' : 'normal' }}>{p.faltas || 0}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
     };
 
     return (
-        <div className="animate-fade-in" style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(243, 244, 246, 0.95)', display:'flex', flexDirection:'column', zIndex:1000, overflowY:'auto'}}>
-            <div style={{padding:'20px', background:'white', boxShadow:'0 2px 4px rgba(0,0,0,0.05)', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:1001}}>
-                <h2 style={{margin:0, color:'#1f2937'}}>📅 Calendario Oficial</h2>
-                <button onClick={onClose} className="btn btn-secondary">Cerrar</button>
-            </div>
-
-            <div style={{maxWidth:'1000px', margin:'20px auto', width:'95%'}}>
-                
-                {/* --- ZONA DE GESTIÓN (SOLO ADMIN) --- */}
-                {rol === 'admin' && (
-                    <div style={{background:'#fff7ed', padding:'20px', borderRadius:'12px', border:'1px solid #f59e0b', marginBottom:'20px', boxShadow:'0 4px 6px rgba(0,0,0,0.05)'}}>
-                        <h4 style={{margin:'0 0 15px 0', color:'#d97706', fontSize:'1.1rem'}}>🛠️ Gestión del Torneo</h4>
-                        
-                        <div style={{display:'flex', gap:'15px', flexWrap:'wrap'}}>
-                            {showLobby && (
-                                <button 
-                                    onClick={handleGenerateCalendar} 
-                                    disabled={generating} 
-                                    className="btn" 
-                                    style={{background: '#ea580c', color: 'white', fontWeight: 'bold', flex:1, padding:'12px'}}
-                                >
-                                    {generating ? 'Procesando...' : '🔄 Generar Calendario Automático'}
-                                </button>
-                            )}
-
-                            <button 
-                                onClick={handleResetSeason} 
-                                disabled={generating} 
-                                className="btn" 
-                                style={{background: '#dc2626', color: 'white', fontWeight: 'bold', flex:1, padding:'12px', border:'2px solid #991b1b'}}
-                            >
-                                ⚠️ REINICIAR TEMPORADA (Borrar Todo)
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* LOBBY */}
-                {showLobby && (
-                    <div style={{marginBottom:'30px', background:'white', padding:'20px', borderRadius:'12px', boxShadow:'0 2px 10px rgba(0,0,0,0.05)', borderLeft:'5px solid #10b981'}}>
-                        <h3 style={{marginTop:0, color:'#065f46', display:'flex', alignItems:'center', gap:'10px'}}>📋 Equipos Confirmados <span style={{fontSize:'0.8rem', background:'#d1fae5', padding:'2px 8px', borderRadius:'10px'}}>{approvedTeams.length}</span></h3>
-                        <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
-                            {approvedTeams.map(team => <div key={team.id} style={{padding:'8px 15px', background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:'20px', fontWeight:'bold', color:'#166534', fontSize:'0.9rem'}}>✅ {team.nombreEquipo}</div>)}
-                        </div>
-                    </div>
-                )}
-
-                {/* PESTAÑAS */}
-                {!showLobby && (
-                    <div style={{display:'flex', gap:'10px', marginBottom:'20px', borderBottom:'1px solid #ddd', paddingBottom:'10px'}}>
-                        <button 
-                            onClick={()=>setViewMode('upcoming')} 
-                            style={{
-                                padding:'10px 20px', background: viewMode==='upcoming'?'#3b82f6':'transparent', 
-                                color: viewMode==='upcoming'?'white':'#666', border:'none', borderRadius:'6px', 
-                                cursor:'pointer', fontWeight:'bold', transition:'all 0.2s'
-                            }}
-                        >
-                            📅 Activos / Programados ({upcomingMatches.length})
-                        </button>
-                        <button 
-                            onClick={()=>setViewMode('finished')} 
-                            style={{
-                                padding:'10px 20px', background: viewMode==='finished'?'#374151':'transparent', 
-                                color: viewMode==='finished'?'white':'#666', border:'none', borderRadius:'6px', 
-                                cursor:'pointer', fontWeight:'bold', transition:'all 0.2s'
-                            }}
-                        >
-                            🏁 Finalizados ({finishedMatches.length})
-                        </button>
-                    </div>
-                )}
-
-                <div style={{display:'grid', gap:'15px'}}>
-                    {(viewMode === 'upcoming' ? upcomingMatches : finishedMatches).map(m => {
-                        const isEditing = editingMatchId === m.id;
-                        const isLive = m.estatus === 'vivo';
-                        const isFinished = m.estatus === 'finalizado';
-                        const isSuspended = m.estatus === 'suspendido';
-
-                        let borderColor = '#3b82f6';
-                        if (isLive) borderColor = '#ef4444'; 
-                        if (isFinished) borderColor = '#6b7280'; 
-                        if (isSuspended) borderColor = '#f59e0b'; 
-
-                        // Buscamos los logos
-                        const localLogo = getTeamLogo(m.equipoLocalId);
-                        const visitorLogo = getTeamLogo(m.equipoVisitanteId);
-
-                        return (
-                            <div key={m.id} className="card" style={{display:'flex', flexDirection:'column', gap:'10px', borderLeft: `5px solid ${borderColor}`, position: 'relative'}}>
-                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:'10px'}}>
-                                    
-                                    {/* MODO EDICIÓN */}
-                                    {isEditing ? (
-                                        <div style={{display:'flex', gap:'10px', flexWrap:'wrap', background:'#eff6ff', padding:'10px', borderRadius:'8px', width:'100%'}}>
-                                            <span style={{width:'100%', fontSize:'0.8rem', color:'#666'}}>Reprogramar Partido:</span>
-                                            <input type="date" value={editDate} onChange={e=>setEditDate(e.target.value)} style={{padding:'5px'}} />
-                                            <input type="time" value={editTime} onChange={e=>setEditTime(e.target.value)} style={{padding:'5px'}} />
-                                            <button onClick={() => saveEditing(m.id)} className="btn btn-primary" style={{padding:'5px 10px', fontSize:'0.8rem'}}>💾 Guardar</button>
-                                            <button onClick={() => setEditingMatchId(null)} className="btn btn-secondary" style={{padding:'5px 10px', fontSize:'0.8rem'}}>❌</button>
-                                        </div>
-                                    ) : (
-                                        <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                                            <div style={{fontSize:'0.9rem', color:'#6b7280', fontWeight:'bold'}}>
-                                                📅 {m.fechaAsignada} &nbsp; ⏰ {m.hora}
-                                            </div>
-                                            {rol === 'admin' && !isFinished && !isLive && (
-                                                <button 
-                                                    onClick={() => {setEditingMatchId(m.id); setEditDate(m.fechaAsignada); setEditTime(m.hora);}} 
-                                                    style={{background:'none', border:'none', cursor:'pointer', fontSize:'1rem'}}
-                                                    title="Reprogramar fecha/hora"
-                                                >
-                                                    ✏️
-                                                </button>
-                                            )}
-                                            {rol === 'admin' && <button onClick={()=>handleDelete(m.id)} style={{background:'none', border:'none', cursor:'pointer', opacity:0.5}}>🗑️</button>}
-                                        </div>
-                                    )}
-
-                                    {/* ETIQUETAS DE ESTADO */}
-                                    <div>
-                                        {isLive && <span style={{background:'#ef4444', color:'white', padding:'4px 10px', borderRadius:'20px', fontSize:'0.8rem', fontWeight:'bold', animation:'pulse 1.5s infinite'}}>🔴 EN VIVO</span>}
-                                        {isFinished && <span style={{background:'#374151', color:'white', padding:'4px 10px', borderRadius:'20px', fontSize:'0.8rem', fontWeight:'bold'}}>FINALIZADO</span>}
-                                        {isSuspended && <span style={{background:'#f59e0b', color:'black', padding:'4px 10px', borderRadius:'20px', fontSize:'0.8rem', fontWeight:'bold', border:'1px solid #d97706'}}>⛔ SUSPENDIDO</span>}
-                                    </div>
-                                </div>
-
-                                {/* INFO SUSPENSIÓN */}
-                                {isSuspended && m.datosSuspension && (
-                                    <div style={{background:'#fff7ed', border:'1px solid #fdba74', padding:'8px', borderRadius:'6px', fontSize:'0.85rem', color:'#9a3412'}}>
-                                        <strong>Motivo:</strong> {m.datosSuspension.motivo} <br/>
-                                        <strong>Detenido en:</strong> Q{m.datosSuspension.cuarto} - {m.datosSuspension.tiempoRestante}
-                                    </div>
-                                )}
-
-                                {/* MARCADOR CON LOGOS */}
-                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px 0'}}>
-                                    {/* LOCAL */}
-                                    <div style={{textAlign:'center', flex:1, display:'flex', flexDirection:'column', alignItems:'center'}}>
-                                        <div style={{width:'50px', height:'50px', borderRadius:'50%', border:'2px solid #eee', overflow:'hidden', marginBottom:'5px', display:'flex', justifyContent:'center', alignItems:'center', background:'white'}}>
-                                            <img src={localLogo} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="Local" onError={(e:any)=>{e.target.src=DEFAULT_TEAM_LOGO}} />
-                                        </div>
-                                        <div style={{fontWeight:'bold', fontSize:'1.1rem', lineHeight:1.1}}>{m.equipoLocalNombre}</div>
-                                        {(isLive || isFinished || isSuspended) && <div style={{fontSize:'2rem', fontWeight:'bold', lineHeight:1, marginTop:'5px'}}>{m.marcadorLocal}</div>}
-                                    </div>
-
-                                    {/* VS */}
-                                    <div style={{fontWeight:'bold', color:'#9ca3af', fontSize:'1.2rem', padding:'0 10px'}}>VS</div>
-
-                                    {/* VISITANTE */}
-                                    <div style={{textAlign:'center', flex:1, display:'flex', flexDirection:'column', alignItems:'center'}}>
-                                        <div style={{width:'50px', height:'50px', borderRadius:'50%', border:'2px solid #eee', overflow:'hidden', marginBottom:'5px', display:'flex', justifyContent:'center', alignItems:'center', background:'white'}}>
-                                            <img src={visitorLogo} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="Visita" onError={(e:any)=>{e.target.src=DEFAULT_TEAM_LOGO}} />
-                                        </div>
-                                        <div style={{fontWeight:'bold', fontSize:'1.1rem', lineHeight:1.1}}>{m.equipoVisitanteNombre}</div>
-                                        {(isLive || isFinished || isSuspended) && <div style={{fontSize:'2rem', fontWeight:'bold', lineHeight:1, marginTop:'5px'}}>{m.marcadorVisitante}</div>}
-                                    </div>
-                                </div>
-
-                                {/* BOTONES DE ACCIÓN */}
-                                {isLive && <button onClick={() => onViewLive(m.id)} className="btn" style={{width:'100%', background:'#ef4444', color:'white', border:'none'}}>📺 Ver Partido en Vivo</button>}
-                                
-                                {isSuspended && (
-                                    <button 
-                                        onClick={() => onViewLive(m.id)} 
-                                        className="btn" 
-                                        style={{width:'100%', background:'#d97706', color:'white', border:'none', fontWeight:'bold'}}
-                                    >
-                                        ↪️ REANUDAR PARTIDO (Mesa Técnica)
-                                    </button>
-                                )}
-                                
-                                {isFinished && <button onClick={() => onViewDetail(m.id)} className="btn btn-secondary" style={{width:'100%'}}>📊 Ver Estadísticas Finales (Box Score)</button>}
-                            </div>
-                        );
-                    })}
-                    {(viewMode === 'upcoming' ? upcomingMatches : finishedMatches).length === 0 && <div style={{textAlign:'center', color:'#999', padding:'20px'}}>No hay partidos en esta lista.</div>}
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.95)', zIndex: 3000, display: 'flex', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}>
+            <div style={{ background: 'white', width: '100%', maxWidth: '700px', borderRadius: '12px', height: 'fit-content', overflow: 'hidden' }}>
+                <div style={{ padding: '15px', background: '#111', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem' }}>📊 Resumen Estadístico</h3>
+                    <button onClick={onClose} style={{ color: 'white', background: 'none', border: '1px solid white', borderRadius: '4px', padding: '5px 10px', cursor: 'pointer' }}>CERRAR</button>
+                </div>
+                <div style={{ padding: '15px' }}>
+                    {loading ? <p style={{textAlign:'center', padding:'20px'}}>Cargando estadísticas...</p> : (
+                        <>
+                            {renderTable(match.equipoLocalNombre)}
+                            {renderTable(match.equipoVisitanteNombre)}
+                        </>
+                    )}
                 </div>
             </div>
+        </div>
+    );
+};
+
+// --- COMPONENTE PRINCIPAL ---
+const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, onClose }) => {
+    const [matches, setMatches] = useState<Match[]>([]);
+    const [equipos, setEquipos] = useState<Equipo[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showMatchForm, setShowMatchForm] = useState(false); 
+    const [selectedBoxScore, setSelectedBoxScore] = useState<Match | null>(null);
+
+    useEffect(() => {
+        const qM = query(collection(db, 'calendario'), orderBy('fechaAsignada', 'asc'));
+        const unsubMatches = onSnapshot(qM, (snap) => {
+            setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() } as Match)));
+        });
+
+        const qE = query(collection(db, 'equipos'), orderBy('nombre', 'asc'));
+        const unsubEquipos = onSnapshot(qE, (snap) => {
+            setEquipos(snap.docs.map(d => ({ id: d.id, ...d.data() } as Equipo)));
+            setLoading(false);
+        });
+
+        return () => { unsubMatches(); unsubEquipos(); };
+    }, []);
+
+    const handleResetSeason = async () => {
+        if (!window.confirm("⚠️ ATENCIÓN: Se borrarán TODOS los juegos y se pondrán en CERO las estadísticas de jugadores y equipos. ¿Continuar?")) return;
+        if (!window.confirm("¿Estás REALMENTE seguro? No hay vuelta atrás.")) return;
+        
+        setLoading(true);
+        try {
+            const batch = writeBatch(db);
+            const snapC = await getDocs(collection(db, 'calendario'));
+            const snapS = await getDocs(collection(db, 'stats_partido'));
+            const snapE = await getDocs(collection(db, 'equipos'));
+            const snapJ = await getDocs(collection(db, 'jugadores'));
+
+            snapC.docs.forEach(d => batch.delete(d.ref));
+            snapS.docs.forEach(d => batch.delete(d.ref));
+            snapE.docs.forEach(d => batch.update(d.ref, { victorias: 0, derrotas: 0, puntos: 0, puntos_favor: 0, puntos_contra: 0 }));
+            snapJ.docs.forEach(d => batch.update(d.ref, { puntos: 0, triples: 0, dobles: 0, tirosLibres: 0, rebotes: 0, asistencias: 0, robos: 0, partidosJugados: 0 }));
+
+            await batch.commit();
+            alert("✅ Temporada reiniciada. Todo está en cero.");
+        } catch (e) { alert("Error al reiniciar."); }
+        setLoading(false);
+    };
+
+    const getLogo = (teamId: string) => equipos.find(e => e.id === teamId)?.logoUrl || DEFAULT_LOGO;
+
+    const handleDelete = async (id: string) => {
+        if(window.confirm("¿Eliminar este juego?")) await deleteDoc(doc(db, 'calendario', id));
+    };
+
+    const grupoA = equipos.filter(e => e.grupo === 'A');
+    const grupoB = equipos.filter(e => e.grupo === 'B');
+
+    if (loading) return <div style={{padding:'50px', color:'#1e3a8a', textAlign:'center', fontWeight:'bold'}}>PROCESANDO...</div>;
+
+    return (
+        <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, background:'#f3f4f6', zIndex:1000, display:'flex', flexDirection:'column' }}>
+            
+            {selectedBoxScore && <BoxScoreModal match={selectedBoxScore} onClose={() => setSelectedBoxScore(null)} />}
+
+            <div style={{background:'#1e3a8a', color:'white', padding:'15px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0}}>
+                <h2 style={{margin:0, fontSize:'1.2rem', fontWeight:'bold'}}>📅 Calendario Oficial</h2>
+                <div style={{display:'flex', gap:'10px'}}>
+                    {rol === 'admin' && (
+                        <button onClick={handleResetSeason} style={{background:'#ef4444', color:'white', border:'none', padding:'6px 12px', borderRadius:'4px', cursor:'pointer', fontSize:'0.7rem', fontWeight:'bold'}}>REINICIAR TORNEO</button>
+                    )}
+                    <button onClick={onClose} style={{background:'rgba(255,255,255,0.2)', border:'none', color:'white', padding:'6px 15px', borderRadius:'4px', cursor:'pointer'}}>CERRAR</button>
+                </div>
+            </div>
+
+            <div style={{flex:1, overflowY:'auto', padding:'20px'}}>
+                <div style={{maxWidth:'900px', margin:'0 auto'}}>
+
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px', marginBottom:'25px'}}>
+                        <div style={{background:'white', padding:'15px', borderRadius:'12px', boxShadow:'0 2px 8px rgba(0,0,0,0.05)', borderTop:'5px solid #3b82f6'}}>
+                            <h4 style={{marginTop:0, color:'#1e3a8a', textAlign:'center', fontSize:'0.9rem'}}>GRUPO A</h4>
+                            <div style={{display:'flex', gap:'10px', overflowX:'auto', padding:'10px 0'}}>
+                                {grupoA.map(eq => (
+                                    <div key={eq.id} style={{textAlign:'center', minWidth:'65px'}}>
+                                        <img src={eq.logoUrl || DEFAULT_LOGO} style={{width:'40px', height:'40px', borderRadius:'50%', objectFit:'cover', border:'1px solid #ddd'}} />
+                                        <div style={{fontSize:'0.6rem', fontWeight:'bold', marginTop:'4px'}}>{eq.nombre}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div style={{background:'white', padding:'15px', borderRadius:'12px', boxShadow:'0 2px 8px rgba(0,0,0,0.05)', borderTop:'5px solid #ef4444'}}>
+                            <h4 style={{marginTop:0, color:'#1e3a8a', textAlign:'center', fontSize:'0.9rem'}}>GRUPO B</h4>
+                            <div style={{display:'flex', gap:'10px', overflowX:'auto', padding:'10px 0'}}>
+                                {grupoB.map(eq => (
+                                    <div key={eq.id} style={{textAlign:'center', minWidth:'65px'}}>
+                                        <img src={eq.logoUrl || DEFAULT_LOGO} style={{width:'40px', height:'40px', borderRadius:'50%', objectFit:'cover', border:'1px solid #ddd'}} />
+                                        <div style={{fontSize:'0.6rem', fontWeight:'bold', marginTop:'4px'}}>{eq.nombre}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {rol === 'admin' && (
+                        <button onClick={() => setShowMatchForm(true)} style={{ width:'100%', padding:'15px', background:'#10b981', color:'white', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'1rem', cursor:'pointer', marginBottom:'20px' }}>
+                            ➕ AGENDAR NUEVO JUEGO
+                        </button>
+                    )}
+
+                    <h3 style={{color:'#1e3a8a', fontSize:'1rem', marginBottom:'15px', fontWeight:'bold'}}>🏀 CARTELERA DE JUEGOS</h3>
+                    
+                    <div style={{display:'flex', flexDirection:'column', gap:'12px', paddingBottom:'40px'}}>
+                        {matches.map(m => {
+                            const isFinished = m.estatus === 'finalizado';
+                            return (
+                                <div key={m.id} style={{
+                                    background:'white', padding:'15px', borderRadius:'10px', 
+                                    boxShadow:'0 2px 5px rgba(0,0,0,0.05)', display:'flex', 
+                                    alignItems:'center', borderLeft:`6px solid ${isFinished ? '#1f2937' : (m.grupo === 'A' ? '#3b82f6' : '#ef4444')}`
+                                }}>
+                                    <div style={{flex:1, textAlign:'center'}}>
+                                        <img src={getLogo(m.equipoLocalId)} style={{width:'40px', height:'40px', borderRadius:'50%', objectFit:'cover'}} />
+                                        <div style={{fontWeight:'bold', fontSize:'0.8rem'}}>{m.equipoLocalNombre}</div>
+                                        {isFinished && <div style={{fontSize:'1.8rem', fontWeight:'900', color:'#1e3a8a'}}>{m.marcadorLocal}</div>}
+                                    </div>
+
+                                    <div style={{flex:1.2, textAlign:'center', borderLeft:'1px solid #eee', borderRight:'1px solid #eee', padding:'0 10px'}}>
+                                        <span style={{background: isFinished ? '#1f2937' : '#f1f5f9', color: isFinished ? 'white' : '#475569', fontSize:'0.6rem', padding:'3px 10px', borderRadius:'20px', fontWeight:'bold', textTransform:'uppercase'}}>
+                                            {isFinished ? 'Finalizado' : `Grupo ${m.grupo}`}
+                                        </span>
+                                        <div style={{fontSize:'0.8rem', fontWeight:'bold', color:'#1e3a8a', marginTop:'6px'}}>{m.fechaAsignada}</div>
+                                        {isFinished ? (
+                                            <button onClick={() => setSelectedBoxScore(m)} style={{marginTop:'8px', background:'#1e3a8a', color:'white', border:'none', padding:'6px 12px', borderRadius:'4px', fontSize:'0.7rem', fontWeight:'bold', cursor:'pointer'}}>📊 BOX SCORE</button>
+                                        ) : (
+                                            rol === 'admin' && <button onClick={() => handleDelete(m.id)} style={{background:'none', border:'none', color:'#ef4444', cursor:'pointer', fontSize:'0.7rem', marginTop:'8px', textDecoration:'underline'}}>Eliminar</button>
+                                        )}
+                                    </div>
+
+                                    <div style={{flex:1, textAlign:'center'}}>
+                                        <img src={getLogo(m.equipoVisitanteId)} style={{width:'40px', height:'40px', borderRadius:'50%', objectFit:'cover'}} />
+                                        <div style={{fontWeight:'bold', fontSize:'0.8rem'}}>{m.equipoVisitanteNombre}</div>
+                                        {isFinished && <div style={{fontSize:'1.8rem', fontWeight:'900', color:'#1e3a8a'}}>{m.marcadorVisitante}</div>}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {showMatchForm && (
+                <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.85)', zIndex:2000, display:'flex', justifyContent:'center', alignItems:'center', padding:'20px'}}>
+                    <div style={{width:'100%', maxWidth:'500px'}}><MatchForm onSuccess={() => setShowMatchForm(false)} onClose={() => setShowMatchForm(false)} /></div>
+                </div>
+            )}
         </div>
     );
 };
