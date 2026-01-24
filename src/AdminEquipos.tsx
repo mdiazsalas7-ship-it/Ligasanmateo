@@ -21,7 +21,11 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [selectedTeam, setSelectedTeam] = useState<Equipo | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
     const [newPlayerName, setNewPlayerName] = useState('');
-    const [newPlayerNumber, setNewPlayerNumber] = useState(''); // ESTADO PARA EL DORSAL
+    const [newPlayerNumber, setNewPlayerNumber] = useState('');
+
+    // ESTADOS PARA EDICIÓN DE NÚMERO
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editNumberValue, setEditNumberValue] = useState('');
 
     const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/166/166344.png";
 
@@ -69,13 +73,25 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const fetchPlayers = async (teamId: string) => {
         setLoadingPlayers(true);
         try {
-            // Ordenamos por número para que la nómina se vea organizada
             const q = query(collection(db, 'jugadores'), where('equipoId', '==', teamId));
             const snap = await getDocs(q);
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Player));
             setPlayers(list.sort((a, b) => (a.numero || 0) - (b.numero || 0)));
         } catch (error) { console.error(error); }
         setLoadingPlayers(false);
+    };
+
+    // FUNCIÓN PARA GUARDAR LA EDICIÓN DEL NÚMERO
+    const handleSaveNumber = async (playerId: string) => {
+        if (!editNumberValue) return alert("Pon un número");
+        try {
+            await updateDoc(doc(db, 'jugadores', playerId), {
+                numero: parseInt(editNumberValue)
+            });
+            setPlayers(players.map(p => p.id === playerId ? { ...p, numero: parseInt(editNumberValue) } : p).sort((a, b) => (a.numero || 0) - (b.numero || 0)));
+            setEditingId(null);
+            setEditNumberValue('');
+        } catch (e) { alert("Error al actualizar número"); }
     };
 
     const handleDeleteTeam = async (teamId: string, nombre: string) => {
@@ -120,14 +136,13 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             return alert("Falta nombre o número de uniforme.");
         }
         
-        // Validar si el número ya existe en el equipo
         const numExistente = players.find(p => p.numero === parseInt(newPlayerNumber));
         if (numExistente) return alert(`El número ${newPlayerNumber} ya está asignado a ${numExistente.nombre}`);
 
         try {
             const playerDoc = {
                 nombre: newPlayerName.toUpperCase(),
-                numero: parseInt(newPlayerNumber), // Guardamos el número
+                numero: parseInt(newPlayerNumber),
                 equipoId: selectedTeam.id,
                 equipoNombre: selectedTeam.nombre,
                 grupo: selectedTeam.grupo,
@@ -137,7 +152,7 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             const newList = [...players, { id: docRef.id, nombre: playerDoc.nombre, numero: playerDoc.numero }];
             setPlayers(newList.sort((a, b) => (a.numero || 0) - (b.numero || 0)));
             setNewPlayerName('');
-            setNewPlayerNumber(''); // Limpiar número
+            setNewPlayerNumber('');
         } catch (error) { alert("Error al registrar"); }
     };
 
@@ -222,7 +237,6 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 </span>
                             </div>
 
-                            {/* FORMULARIO DE INCRIPCIÓN CON NÚMERO */}
                             <div style={{ display:'flex', gap:'8px', marginBottom:'15px' }}>
                                 <input 
                                     type="number" 
@@ -247,18 +261,37 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                     <table style={{ width:'100%', borderCollapse:'collapse' }}>
                                         <thead style={{ background:'#f1f5f9', position:'sticky', top:0 }}>
                                             <tr>
-                                                <th style={{padding:'10px', textAlign:'center', fontSize:'0.75rem', width:'40px'}}>N°</th>
+                                                <th style={{padding:'10px', textAlign:'center', fontSize:'0.75rem', width:'45px'}}>N°</th>
                                                 <th style={{padding:'10px', textAlign:'left', fontSize:'0.75rem'}}>JUGADOR</th>
-                                                <th style={{padding:'10px', textAlign:'center', fontSize:'0.75rem'}}>ELIMINAR</th>
+                                                <th style={{padding:'10px', textAlign:'center', fontSize:'0.75rem', width:'100px'}}>ACCIONES</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {players.map((p) => (
                                                 <tr key={p.id} style={{ borderBottom:'1px solid #eee' }}>
-                                                    <td style={{padding:'10px', textAlign:'center', fontWeight:'bold', color:'#1e3a8a'}}>{p.numero}</td>
+                                                    <td style={{padding:'10px', textAlign:'center'}}>
+                                                        {editingId === p.id ? (
+                                                            <input 
+                                                                type="number" 
+                                                                value={editNumberValue} 
+                                                                onChange={e => setEditNumberValue(e.target.value)}
+                                                                style={{ width:'40px', textAlign:'center', border:'1px solid #3b82f6', borderRadius:'4px' }}
+                                                                autoFocus
+                                                            />
+                                                        ) : (
+                                                            <b style={{color:'#1e3a8a'}}>{p.numero || '--'}</b>
+                                                        )}
+                                                    </td>
                                                     <td style={{padding:'10px', fontSize:'0.9rem'}}>{p.nombre}</td>
                                                     <td style={{padding:'10px', textAlign:'center'}}>
-                                                        <button onClick={() => handleDeletePlayer(p.id!, p.nombre)} style={{background:'none', border:'none', color:'#ef4444', cursor:'pointer', fontSize:'1.1rem'}}>🗑️</button>
+                                                        <div style={{display:'flex', gap:'5px', justifyContent:'center'}}>
+                                                            {editingId === p.id ? (
+                                                                <button onClick={() => handleSaveNumber(p.id!)} style={{ background:'#10b981', color:'white', border:'none', borderRadius:'4px', padding:'5px', cursor:'pointer' }}>✅</button>
+                                                            ) : (
+                                                                <button onClick={() => { setEditingId(p.id!); setEditNumberValue(p.numero?.toString() || ''); }} style={{ background:'#3b82f6', color:'white', border:'none', borderRadius:'4px', padding:'5px', cursor:'pointer' }}>✏️</button>
+                                                            )}
+                                                            <button onClick={() => handleDeletePlayer(p.id!, p.nombre)} style={{background:'none', border:'none', color:'#ef4444', cursor:'pointer', fontSize:'1.1rem'}}>🗑️</button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}
