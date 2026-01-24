@@ -62,12 +62,20 @@ function App() {
   const isAdmin = user?.rol === 'admin' || user?.email?.toLowerCase() === 'mdiazsalas7@gmail.com';
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', color: '#1e293b', fontFamily: 'sans-serif' }}>
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0.7)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed',
+      color: '#1e293b', 
+      fontFamily: 'sans-serif' 
+    }}>
       
       {/* HEADER */}
-      <header style={{ background: '#1e3a8a', color: 'white', padding: '20px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+      <header style={{ background: 'rgba(30, 58, 138, 0.9)', color: 'white', padding: '20px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', backdropFilter: 'blur(4px)' }}>
         <img src="https://i.postimg.cc/qMsBxr6P/image.png" alt="Logo" style={{ height: '60px', marginBottom: '10px' }} />
-        <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 900 }}>LIGA SAN MATEO</h1>
+        <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 900 }}>LIGA SAN MATEO MASTER 40</h1>
         
         <div style={{marginTop:'10px'}}>
           {user ? (
@@ -115,7 +123,7 @@ function App() {
             </button>
 
             {isAdmin && (
-              <div style={{ gridColumn: '1 / -1', marginTop: '20px', padding: '20px', background: '#fee2e2', borderRadius: '20px', border: '2px dashed #ef4444' }}>
+              <div style={{ gridColumn: '1 / -1', marginTop: '20px', padding: '20px', background: 'rgba(254, 226, 226, 0.9)', borderRadius: '20px', border: '2px dashed #ef4444', backdropFilter: 'blur(4px)' }}>
                 <p style={{ textAlign: 'center', margin: '0 0 15px 0', fontWeight: '900', color: '#b91c1c', fontSize:'0.8rem' }}>⚙️ PANEL DE CONTROL</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <button className="admin-btn" onClick={() => setActiveView('mesa')}>⏱️ MESA TÉCNICA</button>
@@ -152,7 +160,20 @@ function App() {
       </main>
 
       <style>{`
-        .menu-card { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 30px 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+        .menu-card { 
+          background: rgba(255, 255, 255, 0.95); 
+          border: 1px solid #e2e8f0; 
+          border-radius: 20px; 
+          padding: 30px 10px; 
+          display: flex; 
+          flex-direction: column; 
+          align-items: center; 
+          justify-content: center; 
+          gap: 10px; 
+          cursor: pointer; 
+          transition: 0.2s; 
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+        }
         .menu-card:active { transform: scale(0.95); background: #f1f5f9; }
         .menu-card .icon { font-size: 2.5rem; }
         .menu-card .label { font-weight: 800; font-size: 0.8rem; color: #1e3a8a; }
