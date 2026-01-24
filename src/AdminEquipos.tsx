@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { db, storage } from './firebase'; // Importamos storage
+import { db, storage } from './firebase'; 
 import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc, query, where, orderBy, writeBatch } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; // Funciones de subida
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; 
 
-interface Player { id?: string; nombre: string; }
+// Actualizamos la interfaz para incluir el número
+interface Player { id?: string; nombre: string; numero?: number; }
 interface Equipo { id: string; nombre: string; grupo: string; logoUrl?: string; victorias: number; derrotas: number; puntos: number; puntos_favor: number; puntos_contra: number; }
 
 const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -11,9 +12,7 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [equipos, setEquipos] = useState<Equipo[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingPlayers, setLoadingPlayers] = useState(false);
-    const [uploadingId, setUploadingId] = useState<string | null>(null); // Estado para feedback de carga
-    
-    const [editLogos, setEditLogos] = useState<Record<string, string>>({});
+    const [uploadingId, setUploadingId] = useState<string | null>(null); 
     
     const [teamName, setTeamName] = useState('');
     const [teamGroup, setTeamGroup] = useState('A'); 
@@ -22,6 +21,7 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [selectedTeam, setSelectedTeam] = useState<Equipo | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
     const [newPlayerName, setNewPlayerName] = useState('');
+    const [newPlayerNumber, setNewPlayerNumber] = useState(''); // ESTADO PARA EL DORSAL
 
     const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/166/166344.png";
 
@@ -31,26 +31,16 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         const snap = await getDocs(q);
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Equipo));
         setEquipos(list);
-        
-        const initialLogos: Record<string, string> = {};
-        list.forEach(eq => { initialLogos[eq.id] = eq.logoUrl || ''; });
-        setEditLogos(initialLogos);
-        
         setLoading(false);
     };
 
     useEffect(() => { fetchEquipos(); }, []);
 
-    // --- FUNCIÓN PARA SUBIR IMAGEN ---
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, teamId?: string) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
-        // Validar formato
         const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-        if (!allowedTypes.includes(file.type)) {
-            return alert("❌ Solo se permiten imágenes JPG o PNG.");
-        }
+        if (!allowedTypes.includes(file.type)) return alert("❌ Solo se permiten imágenes JPG o PNG.");
 
         const targetId = teamId || 'new';
         setUploadingId(targetId);
@@ -61,14 +51,12 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             const downloadURL = await getDownloadURL(storageRef);
 
             if (teamId) {
-                // Actualizar equipo existente
                 await updateDoc(doc(db, 'equipos', teamId), { logoUrl: downloadURL });
                 alert("✅ Logo actualizado correctamente.");
                 fetchEquipos();
             } else {
-                // Guardar URL para nuevo equipo
                 setNewLogoUrl(downloadURL);
-                alert("✅ Imagen cargada. Ya puedes guardar el equipo.");
+                alert("✅ Imagen cargada.");
             }
         } catch (error) {
             console.error(error);
@@ -81,20 +69,18 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const fetchPlayers = async (teamId: string) => {
         setLoadingPlayers(true);
         try {
+            // Ordenamos por número para que la nómina se vea organizada
             const q = query(collection(db, 'jugadores'), where('equipoId', '==', teamId));
             const snap = await getDocs(q);
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Player));
-            setPlayers(list);
+            setPlayers(list.sort((a, b) => (a.numero || 0) - (b.numero || 0)));
         } catch (error) { console.error(error); }
         setLoadingPlayers(false);
     };
 
     const handleDeleteTeam = async (teamId: string, nombre: string) => {
-        const confirm1 = window.confirm(`⚠️ ¿ELIMINAR COMPLETAMENTE a "${nombre}"?`);
-        if (!confirm1) return;
-
-        const confirm2 = window.confirm(`¡CUIDADO! Esto borrará también a todos los jugadores de este equipo. ¿Proceder?`);
-        if (!confirm2) return;
+        if (!window.confirm(`⚠️ ¿ELIMINAR COMPLETAMENTE a "${nombre}"?`)) return;
+        if (!window.confirm(`Esto borrará también a todos los jugadores. ¿Proceder?`)) return;
 
         setLoading(true);
         try {
@@ -130,18 +116,28 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     };
 
     const handleAddPlayer = async () => {
-        if (!newPlayerName.trim() || players.length >= 15 || !selectedTeam) return;
+        if (!newPlayerName.trim() || !newPlayerNumber || players.length >= 15 || !selectedTeam) {
+            return alert("Falta nombre o número de uniforme.");
+        }
+        
+        // Validar si el número ya existe en el equipo
+        const numExistente = players.find(p => p.numero === parseInt(newPlayerNumber));
+        if (numExistente) return alert(`El número ${newPlayerNumber} ya está asignado a ${numExistente.nombre}`);
+
         try {
             const playerDoc = {
                 nombre: newPlayerName.toUpperCase(),
+                numero: parseInt(newPlayerNumber), // Guardamos el número
                 equipoId: selectedTeam.id,
                 equipoNombre: selectedTeam.nombre,
                 grupo: selectedTeam.grupo,
-                puntos: 0, triples: 0, rebotes: 0, asistencias: 0, faltas: 0
+                puntos: 0, triples: 0, rebotes: 0, asistencias: 0, faltas: 0, robos: 0, bloqueos: 0
             };
             const docRef = await addDoc(collection(db, 'jugadores'), playerDoc);
-            setPlayers([...players, { id: docRef.id, nombre: newPlayerName.toUpperCase() }]);
+            const newList = [...players, { id: docRef.id, nombre: playerDoc.nombre, numero: playerDoc.numero }];
+            setPlayers(newList.sort((a, b) => (a.numero || 0) - (b.numero || 0)));
             setNewPlayerName('');
+            setNewPlayerNumber(''); // Limpiar número
         } catch (error) { alert("Error al registrar"); }
     };
 
@@ -168,8 +164,8 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             <button onClick={() => setView('addTeam')} style={{ width:'100%', padding:'12px', background:'#10b981', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', marginBottom:'20px', cursor:'pointer' }}>+ REGISTRAR NUEVO EQUIPO</button>
                             <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
                                 {loading ? <p style={{textAlign:'center'}}>Cargando equipos...</p> : equipos.map(eq => (
-                                    <div key={eq.id} style={{ padding:'15px', border:'1px solid #eee', borderRadius:'10px', background:'#f8fafc', position:'relative' }}>
-                                        <div style={{ display:'flex', alignItems:'center', gap:'15px', marginBottom:'10px' }}>
+                                    <div key={eq.id} style={{ padding:'15px', border:'1px solid #eee', borderRadius:'10px', background:'#f8fafc' }}>
+                                        <div style={{ display:'flex', alignItems:'center', gap:'15px' }}>
                                             <div style={{ textAlign: 'center' }}>
                                                 <img src={eq.logoUrl || DEFAULT_LOGO} style={{ width:'55px', height:'55px', borderRadius:'50%', objectFit:'cover', border:'1px solid #ddd', background:'#fff' }} />
                                                 <label style={{ display: 'block', fontSize: '0.6rem', color: '#1e3a8a', cursor: 'pointer', fontWeight: 'bold', marginTop: '5px', textDecoration: 'underline' }}>
@@ -178,11 +174,12 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                                 </label>
                                             </div>
                                             <div style={{ flex:1 }}>
-                                                <div style={{ fontWeight:'bold', fontSize:'1rem' }}>{eq.nombre} <span style={{fontSize:'0.7rem', color:'#3b82f6', background:'#dbeafe', padding:'2px 6px', borderRadius:'4px'}}>Grup {eq.grupo}</span></div>
+                                                <div style={{ fontWeight:'bold', fontSize:'1rem' }}>{eq.nombre}</div>
+                                                <span style={{fontSize:'0.7rem', color:'#3b82f6', background:'#dbeafe', padding:'2px 6px', borderRadius:'4px'}}>Grupo {eq.grupo}</span>
                                             </div>
                                             <div style={{display:'flex', flexDirection:'column', gap:'5px'}}>
                                                 <button onClick={() => handleOpenForma21(eq)} style={{ background:'#f59e0b', color:'white', border:'none', padding:'8px 12px', borderRadius:'6px', fontWeight:'bold', cursor:'pointer', fontSize:'0.75rem' }}>NÓMINA F21</button>
-                                                <button onClick={() => handleDeleteTeam(eq.id, eq.nombre)} title="Eliminar Equipo" style={{ background:'#ef4444', color:'white', border:'none', padding:'8px', borderRadius:'6px', cursor:'pointer', fontSize:'0.8rem' }}>🗑️ BORRAR</button>
+                                                <button onClick={() => handleDeleteTeam(eq.id, eq.nombre)} style={{ background:'#ef4444', color:'white', border:'none', padding:'8px', borderRadius:'6px', cursor:'pointer', fontSize:'0.8rem' }}>🗑️</button>
                                             </div>
                                         </div>
                                     </div>
@@ -201,7 +198,7 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                     <img src={newLogoUrl} style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', marginBottom: '10px' }} />
                                 ) : <div style={{ fontSize: '2rem' }}>🖼️</div>}
                                 <label style={{ display: 'block', background: '#334155', color: 'white', padding: '8px', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer' }}>
-                                    {uploadingId === 'new' ? 'SUBIENDO...' : 'SUBIR LOGO (JPG/PNG)'}
+                                    {uploadingId === 'new' ? 'SUBIENDO...' : 'SUBIR LOGO'}
                                     <input type="file" accept="image/png, image/jpeg" style={{ display: 'none' }} onChange={(e) => handleFileUpload(e)} />
                                 </label>
                             </div>
@@ -212,7 +209,7 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             </select>
                             
                             <button onClick={handleCreateTeam} disabled={uploadingId === 'new'} style={{ padding:'15px', background: uploadingId === 'new' ? '#94a3b8' : '#10b981', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer' }}>GUARDAR EQUIPO</button>
-                            <button onClick={() => setView('list')} style={{ background:'none', border:'none', color:'#666', cursor:'pointer' }}>Volver</button>
+                            <button onClick={() => setView('list')} style={{ background:'none', border:'none', color:'#666', cursor:'pointer' }}>Cancelar</button>
                         </div>
                     )}
 
@@ -225,8 +222,23 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 </span>
                             </div>
 
+                            {/* FORMULARIO DE INCRIPCIÓN CON NÚMERO */}
                             <div style={{ display:'flex', gap:'8px', marginBottom:'15px' }}>
-                                <input type="text" placeholder="NOMBRE Y APELLIDO" value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleAddPlayer()} style={{ flex:1, padding:'12px', borderRadius:'6px', border:'1px solid #ccc' }} />
+                                <input 
+                                    type="number" 
+                                    placeholder="N°" 
+                                    value={newPlayerNumber} 
+                                    onChange={e => setNewPlayerNumber(e.target.value)} 
+                                    style={{ width:'60px', padding:'12px', borderRadius:'6px', border:'1px solid #ccc', fontWeight:'bold', textAlign:'center' }} 
+                                />
+                                <input 
+                                    type="text" 
+                                    placeholder="NOMBRE Y APELLIDO" 
+                                    value={newPlayerName} 
+                                    onChange={e => setNewPlayerName(e.target.value)} 
+                                    onKeyPress={e => e.key === 'Enter' && handleAddPlayer()} 
+                                    style={{ flex:1, padding:'12px', borderRadius:'6px', border:'1px solid #ccc' }} 
+                                />
                                 <button onClick={handleAddPlayer} style={{ padding:'0 20px', background:'#1e3a8a', color:'white', border:'none', borderRadius:'6px', fontWeight:'bold', cursor:'pointer' }}>AÑADIR</button>
                             </div>
 
@@ -234,13 +246,20 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 {loadingPlayers ? <p style={{padding:'20px', textAlign:'center'}}>Cargando nómina...</p> : (
                                     <table style={{ width:'100%', borderCollapse:'collapse' }}>
                                         <thead style={{ background:'#f1f5f9', position:'sticky', top:0 }}>
-                                            <tr><th style={{padding:'10px', textAlign:'left', fontSize:'0.75rem'}}>JUGADORES</th><th style={{padding:'10px', textAlign:'center', fontSize:'0.75rem'}}>ELIMINAR</th></tr>
+                                            <tr>
+                                                <th style={{padding:'10px', textAlign:'center', fontSize:'0.75rem', width:'40px'}}>N°</th>
+                                                <th style={{padding:'10px', textAlign:'left', fontSize:'0.75rem'}}>JUGADOR</th>
+                                                <th style={{padding:'10px', textAlign:'center', fontSize:'0.75rem'}}>ELIMINAR</th>
+                                            </tr>
                                         </thead>
                                         <tbody>
-                                            {players.map((p, i) => (
+                                            {players.map((p) => (
                                                 <tr key={p.id} style={{ borderBottom:'1px solid #eee' }}>
-                                                    <td style={{padding:'10px', fontSize:'0.9rem'}}>{i + 1}. {p.nombre}</td>
-                                                    <td style={{padding:'10px', textAlign:'center'}}><button onClick={() => handleDeletePlayer(p.id!, p.nombre)} style={{background:'none', border:'none', color:'#ef4444', cursor:'pointer', fontSize:'1.1rem'}}>🗑️</button></td>
+                                                    <td style={{padding:'10px', textAlign:'center', fontWeight:'bold', color:'#1e3a8a'}}>{p.numero}</td>
+                                                    <td style={{padding:'10px', fontSize:'0.9rem'}}>{p.nombre}</td>
+                                                    <td style={{padding:'10px', textAlign:'center'}}>
+                                                        <button onClick={() => handleDeletePlayer(p.id!, p.nombre)} style={{background:'none', border:'none', color:'#ef4444', cursor:'pointer', fontSize:'1.1rem'}}>🗑️</button>
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>

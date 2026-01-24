@@ -2,14 +2,26 @@ import React, { useState, useEffect, memo } from 'react';
 import { db } from './firebase';
 import { doc, updateDoc, onSnapshot, collection, query, getDocs, setDoc, increment, where, writeBatch, limit, orderBy, addDoc, deleteDoc } from 'firebase/firestore';
 
-// --- FILA DE JUGADOR (Nombres claros y visibilidad de 5 en pantalla) ---
+// --- FILA DE JUGADOR (Ahora con Número Resaltado) ---
 const PlayerRow = memo(({ player, team, stats, onStat, onSub }: any) => {
     const s = stats || { puntos: 0, rebotes: 0, robos: 0, bloqueos: 0, triples: 0, dobles: 0, tirosLibres: 0 };
 
     return (
         <div style={{ marginBottom:'5px', padding:'6px 10px', borderRadius:'10px', background: '#1a1a1a', border: '1px solid #333', boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
             <div style={{display:'flex', justifyContent:'space-between', marginBottom:'4px', alignItems:'center'}}>
-                <div style={{fontWeight:'800', color:'white', fontSize:'0.85rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flex: 1, marginRight: '5px'}}>{player.nombre}</div>
+                <div style={{display:'flex', alignItems:'center', gap:'8px', flex: 1, overflow:'hidden'}}>
+                    {/* DORSAL: Indispensable para la mesa técnica */}
+                    <span style={{ 
+                        background: team === 'local' ? '#3b82f6' : '#ef4444', 
+                        color:'white', padding:'2px 6px', borderRadius:'4px', 
+                        fontWeight:'900', fontSize:'0.8rem', minWidth:'25px', textAlign:'center' 
+                    }}>
+                        {player.numero || '??'}
+                    </span>
+                    <div style={{fontWeight:'800', color:'white', fontSize:'0.8rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
+                        {player.nombre}
+                    </div>
+                </div>
                 <button onClick={() => onSub(player)} style={{background:'#334155', color:'#60a5fa', border:'none', borderRadius:'4px', padding:'2px 6px', fontSize:'0.55rem', cursor:'pointer', fontWeight:'bold'}}>🔄</button>
             </div>
             
@@ -72,6 +84,7 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 const qL = query(collection(db, 'jugadores'), where('equipoId', '==', matchData.equipoLocalId));
                 const qV = query(collection(db, 'jugadores'), where('equipoId', '==', matchData.equipoVisitanteId));
                 const [snapL, snapV] = await Promise.all([getDocs(qL), getDocs(qV)]);
+                // Cargamos jugadores incluyendo su número de camiseta
                 setPlayersLocal(snapL.docs.map(d => ({ id: d.id, ...d.data() })));
                 setPlayersVisitante(snapV.docs.map(d => ({ id: d.id, ...d.data() })));
             };
@@ -82,9 +95,31 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const handleStat = async (player: any, team: 'local'|'visitante', field: string, val: number) => {
         if (!matchData) return;
         let pts = field === 'tirosLibres' ? 1 : field === 'dobles' ? 2 : field === 'triples' ? 3 : 0;
-        await addDoc(collection(db, 'jugadas_partido'), { partidoId: matchData.id, jugadorId: player.id, jugadorNombre: player.nombre, equipo: team, accion: field, puntos: pts, timestamp: Date.now() });
+        
+        // Guardar jugada individual con número
+        await addDoc(collection(db, 'jugadas_partido'), { 
+            partidoId: matchData.id, 
+            jugadorId: player.id, 
+            jugadorNombre: player.nombre, 
+            jugadorNumero: player.numero || '??',
+            equipo: team, 
+            accion: field, 
+            puntos: pts, 
+            timestamp: Date.now() 
+        });
+
         if (pts > 0) await updateDoc(doc(db, 'calendario', matchData.id), { [team === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(pts) });
-        await setDoc(doc(db, 'stats_partido', `${matchData.id}_${player.id}`), { partidoId: matchData.id, jugadorId: player.id, nombre: player.nombre, equipo: team === 'local' ? matchData.equipoLocalNombre : matchData.equipoVisitanteNombre, [field]: increment(val), puntos: increment(pts) }, { merge: true });
+        
+        // Actualizar estadísticas globales del partido para este jugador
+        await setDoc(doc(db, 'stats_partido', `${matchData.id}_${player.id}`), { 
+            partidoId: matchData.id, 
+            jugadorId: player.id, 
+            nombre: player.nombre, 
+            numero: player.numero || '??',
+            equipo: team === 'local' ? matchData.equipoLocalNombre : matchData.equipoVisitanteNombre, 
+            [field]: increment(val), 
+            puntos: increment(pts) 
+        }, { merge: true });
     };
 
     const handleDeletePlay = async (play: any) => {
@@ -132,29 +167,24 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <div style={{background:'#000', height:'100vh', display:'flex', flexDirection:'column', color:'white', overflow:'hidden'}}>
             <style>{`.btn-stat { padding:8px 0; border:none; border-radius:6px; color:white; font-weight:900; cursor:pointer; font-size:0.6rem; transition: 0.1s; } .btn-stat:active { transform: scale(0.95); }`}</style>
             
-            {/* HEADER FIJO 50PX */}
             <div style={{height:'50px', background:'#111', borderBottom:'2px solid #333', display:'flex', alignItems:'center', padding:'0 15px', justifyContent:'space-between'}}>
-                {/* Local */}
                 <div style={{display:'flex', alignItems:'center', gap:'8px', flex:1}}>
                     <img src={logos.local} style={{width:'30px', height:'30px', borderRadius:'50%', background:'white', objectFit:'contain'}} alt="L" />
                     <span style={{fontSize:'0.75rem', fontWeight:'900', color:'#60a5fa', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'80px'}}>{matchData?.equipoLocalNombre}</span>
                 </div>
                 
-                {/* Marcador Central */}
                 <div style={{display:'flex', alignItems:'center', gap:'10px', background:'#222', padding:'4px 12px', borderRadius:'8px', border:'1px solid #444'}}>
                     <span style={{fontSize:'1.5rem', fontWeight:'900', color:'#fff'}}>{matchData?.marcadorLocal}</span>
                     <span style={{fontSize:'0.6rem', color:'#666'}}>VS</span>
                     <span style={{fontSize:'1.5rem', fontWeight:'900', color:'#fff'}}>{matchData?.marcadorVisitante}</span>
                 </div>
 
-                {/* Visitante */}
                 <div style={{display:'flex', alignItems:'center', gap:'8px', flex:1, justifyContent:'flex-end'}}>
                     <span style={{fontSize:'0.75rem', fontWeight:'900', color:'#facc15', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'80px'}}>{matchData?.equipoVisitanteNombre}</span>
                     <img src={logos.visitante} style={{width:'30px', height:'30px', borderRadius:'50%', background:'white', objectFit:'contain'}} alt="V" />
                 </div>
             </div>
 
-            {/* ÁREA DE JUEGO */}
             <div style={{flex:1, display:'flex', overflow:'hidden'}}>
                 {['local', 'visitante'].map((t: any) => (
                     <div key={t} style={{flex:1, padding:'5px', borderRight: t==='local'?'1px solid #222':'none', overflowY:'auto'}}>
@@ -169,14 +199,13 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 ))}
             </div>
 
-            {/* ACCIONES INFERIORES */}
             <div style={{padding:'10px', background:'#111', display:'flex', gap:'6px', borderTop:'2px solid #333'}}>
                 <button onClick={()=>setSelectedMatchId(null)} style={{flex:1, padding:'12px', background:'#333', color:'white', border:'none', borderRadius:'10px', fontWeight:'bold', fontSize:'0.7rem'}}>SALIR</button>
                 <button onClick={()=>setIsHistoryOpen(true)} style={{flex:1, padding:'12px', background:'#475569', color:'white', border:'none', borderRadius:'10px', fontWeight:'bold', fontSize:'0.7rem'}}>📜 HIST.</button>
                 <button onClick={handleFinalize} style={{flex:2, padding:'12px', background:'#10b981', color:'white', border:'none', borderRadius:'10px', fontWeight:'bold', fontSize:'0.7rem'}}>FINALIZAR</button>
             </div>
 
-            {/* MODALES */}
+            {/* MODAL HISTORIAL CON NÚMEROS */}
             {isHistoryOpen && (
                 <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.95)', zIndex:5000, padding:'20px', display:'flex', justifyContent:'center', alignItems:'center'}}>
                     <div style={{background:'white', width:'100%', maxWidth:'400px', borderRadius:'16px', overflow:'hidden', height:'70vh', display:'flex', flexDirection:'column'}}>
@@ -184,7 +213,10 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         <div style={{flex:1, overflowY:'auto', padding:'10px'}}>
                             {recentPlays.map(play => (
                                 <div key={play.id} style={{display:'flex', background:'#f8fafc', padding:'10px', borderRadius:'10px', alignItems:'center', justifyContent:'space-between', border:'1px solid #e2e8f0', marginBottom:'6px'}}>
-                                    <div style={{fontSize:'0.8rem', color:'#333'}}><b>{play.jugadorNombre}</b>: {play.accion.toUpperCase()}</div>
+                                    <div style={{fontSize:'0.8rem', color:'#333'}}>
+                                        <b style={{color: '#1e3a8a', marginRight: '5px'}}>#{play.jugadorNumero || '??'}</b>
+                                        <b>{play.jugadorNombre}</b>: {play.accion.toUpperCase()}
+                                    </div>
                                     <button onClick={() => handleDeletePlay(play)} style={{background:'#fee2e2', border:'none', color:'#ef4444', borderRadius:'8px', padding:'6px 12px', fontSize:'0.6rem', fontWeight:'bold'}}>BORRAR</button>
                                 </div>
                             ))}
@@ -194,6 +226,7 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
             )}
 
+            {/* MODAL CAMBIOS CON NÚMEROS */}
             {subModal.isOpen && (
                 <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.95)', zIndex:4000, padding:'20px', display:'flex', justifyContent:'center', alignItems:'center'}}>
                     <div style={{background:'white', width:'100%', maxWidth:'400px', borderRadius:'15px', overflow:'hidden'}}>
@@ -207,8 +240,12 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                         const setter = subModal.team === 'local' ? setOnCourtLocal : setOnCourtVisitante;
                                         if (isSelected) setter(activeIds.filter(id => id !== p.id));
                                         else if (activeIds.length < 5) setter([...activeIds, p.id]);
-                                    }} style={{ padding:'12px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', background: isSelected ? '#dbeafe' : 'transparent', color:'#333', cursor:'pointer' }}>
-                                        <span>{p.nombre}</span>{isSelected && <span style={{fontWeight:'bold', color:'#1e40af'}}>CANCHA</span>}
+                                    }} style={{ padding:'12px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', background: isSelected ? '#dbeafe' : 'transparent', color:'#333', cursor:'pointer', alignItems:'center' }}>
+                                        <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                                            <span style={{background:'#eee', padding:'2px 6px', borderRadius:'4px', fontWeight:'bold', fontSize:'0.8rem'}}>#{p.numero || '??'}</span>
+                                            <span style={{fontWeight: isSelected ? 'bold' : 'normal'}}>{p.nombre}</span>
+                                        </div>
+                                        {isSelected && <span style={{fontWeight:'bold', color:'#1e40af', fontSize: '0.7rem'}}>EN CANCHA</span>}
                                     </div>
                                 );
                             })}
