@@ -112,7 +112,7 @@ function App() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.8)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`,
+      backgroundImage: `linear-gradient(rgba(241, 245, 249, 0.2), rgba(241, 245, 249, 0.4)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundAttachment: 'fixed',
