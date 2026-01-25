@@ -110,7 +110,16 @@ function App() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f1f5f9', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: '110px' }}>
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.8)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed',
+      color: '#1e293b', 
+      fontFamily: 'sans-serif', 
+      paddingBottom: '110px' 
+    }}>
       
       {/* HEADER CORREGIDO */}
       <header style={{ height: '65px', background: '#f8fafc', display: 'flex', alignItems: 'center', padding: '0 15px', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 1000 }}>
@@ -128,7 +137,7 @@ function App() {
 
       <main style={{ padding: '15px', maxWidth: '600px', margin: '0 auto' }}>
         
-        {/* VISTA LOGIN (INDISPENSABLE) */}
+        {/* VISTA LOGIN */}
         {activeView === 'login' && (
           <div style={{ padding: '20px', background: 'white', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
             <Login />
