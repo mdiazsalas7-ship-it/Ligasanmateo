@@ -38,7 +38,10 @@ function App() {
           if (activeView === 'login') setActiveView('dashboard');
           setLoading(false);
         });
-      } else { setUser(null); setLoading(false); }
+      } else { 
+        setUser(null); 
+        setLoading(false); 
+      }
     });
     return () => unsubscribe();
   }, [activeView]);
@@ -85,42 +88,22 @@ function App() {
 
   if (loading) return <div style={{background:'#f8fafc', height:'100vh', color:'#1e3a8a', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>Sincronizando Liga...</div>;
 
-  const isAdmin = user?.rol === 'admin' || user?.email?.toLowerCase() === 'mdiazsalas7@gmail.com';
+  const isAdmin = user?.rol === 'admin';
 
-  // --- TABLA CON DISEÑO MEJORADO (BORDE Y COLOR) ---
   const RenderTable = ({ title, data, color }: { title: string, data: any[], color: string }) => (
-    <div style={{ 
-        minWidth: '285px', 
-        background: 'white', 
-        borderRadius: '20px', 
-        overflow: 'hidden',
-        boxShadow: '0 10px 25px rgba(0,0,0,0.08)', 
-        scrollSnapAlign: 'center', 
-        border: `2px solid ${color}` // BORDE CON EL COLOR DE LA LIGA O GRUPO
-    }}>
-      <div style={{ background: color, padding: '8px', textAlign: 'center' }}>
-        <h4 style={{ fontSize: '0.7rem', color: 'white', margin: 0, fontWeight: '900', letterSpacing: '1px' }}>{title}</h4>
-      </div>
+    <div style={{ minWidth: '285px', background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 10px 25px rgba(0,0,0,0.08)', scrollSnapAlign: 'center', border: `2px solid ${color}` }}>
+      <div style={{ background: color, padding: '8px', textAlign: 'center' }}><h4 style={{ fontSize: '0.7rem', color: 'white', margin: 0, fontWeight: '900' }}>{title}</h4></div>
       <div style={{ padding: '12px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-          <thead>
-            <tr style={{ color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>
-              <th style={{ textAlign: 'left', paddingBottom: '8px' }}>EQUIPO</th>
-              <th style={{ paddingBottom: '8px' }}>JG</th>
-              <th style={{ paddingBottom: '8px' }}>JP</th>
-              <th style={{ paddingBottom: '8px' }}>PTS</th>
+          <thead><tr style={{ color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}><th style={{ textAlign: 'left' }}>EQUIPO</th><th>JG</th><th>JP</th><th>PTS</th></tr></thead>
+          <tbody>{data.map((eq, i) => (
+            <tr key={eq.id} style={{ borderBottom: i === data.length - 1 ? 'none' : '1px solid #f8fafc' }}>
+              <td style={{ padding: '10px 0', fontWeight: 'bold', fontSize: '0.75rem' }}>{i + 1}. {eq.nombre}</td>
+              <td style={{ textAlign: 'center' }}>{eq.victorias || 0}</td>
+              <td style={{ textAlign: 'center' }}>{eq.derrotas || 0}</td>
+              <td style={{ textAlign: 'center', fontWeight: '900', color: color }}>{eq.puntos || 0}</td>
             </tr>
-          </thead>
-          <tbody>
-            {data.map((eq, i) => (
-              <tr key={eq.id} style={{ borderBottom: i === data.length - 1 ? 'none' : '1px solid #f8fafc' }}>
-                <td style={{ padding: '10px 0', fontWeight: 'bold', fontSize: '0.75rem' }}>{i + 1}. {eq.nombre}</td>
-                <td style={{ textAlign: 'center' }}>{eq.victorias || 0}</td>
-                <td style={{ textAlign: 'center' }}>{eq.derrotas || 0}</td>
-                <td style={{ textAlign: 'center', fontWeight: '900', color: color }}>{eq.puntos || 0}</td>
-              </tr>
-            ))}
-          </tbody>
+          ))}</tbody>
         </table>
       </div>
     </div>
@@ -129,29 +112,40 @@ function App() {
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: '110px' }}>
       
-      <header style={{ height: '48px', background: '#f8fafc', display: 'flex', alignItems: 'center', padding: '0 15px', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 1000 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-          <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '30px' }} />
-          <h1 style={{ fontSize: '0.7rem', margin: 0, fontWeight: 900, color: '#1e3a8a', textTransform: 'uppercase' }}>LIGA METROPOLITANA EJE ESTE</h1>
+      {/* HEADER CORREGIDO */}
+      <header style={{ height: '65px', background: '#f8fafc', display: 'flex', alignItems: 'center', padding: '0 15px', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 1000 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+          <div style={{ position: 'relative' }}>
+            <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '45px', cursor: 'pointer' }} onClick={() => !user && setActiveView('login')} />
+            {!isAdmin && (
+              <button onClick={() => setActiveView('login')} style={{ position: 'absolute', bottom: '-5px', right: '-5px', background: '#1e3a8a', color: 'white', border: '2px solid white', borderRadius: '50%', width: '22px', height: '22px', fontSize: '0.6rem', cursor: 'pointer' }}>🔑</button>
+            )}
+          </div>
+          <h1 style={{ fontSize: '0.8rem', fontWeight: 900, color: '#1e3a8a', textTransform: 'uppercase', lineHeight: '1.1' }}>LIGA METROPOLITANA<br/>EJE ESTE</h1>
         </div>
-        {user && <button onClick={() => signOut(auth)} style={{background:'none', border:'none', color:'#ef4444', fontSize:'0.55rem', fontWeight:'bold'}}>SALIR</button>}
+        {user && <button onClick={() => { signOut(auth); setUser(null); setActiveView('dashboard'); }} style={{background:'#fef2f2', border:'1px solid #fee2e2', color:'#ef4444', padding:'6px 12px', borderRadius:'10px', fontSize:'0.65rem', fontWeight:'bold'}}>SALIR</button>}
       </header>
 
       <main style={{ padding: '15px', maxWidth: '600px', margin: '0 auto' }}>
         
+        {/* VISTA LOGIN (INDISPENSABLE) */}
+        {activeView === 'login' && (
+          <div style={{ padding: '20px', background: 'white', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+            <Login />
+            <button onClick={() => setActiveView('dashboard')} style={{ width: '100%', marginTop: '15px', background: 'none', border: 'none', color: '#94a3b8', fontWeight: 'bold', cursor: 'pointer' }}>← VOLVER AL INICIO</button>
+          </div>
+        )}
+
         {activeView === 'dashboard' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-            
             {/* PRENSA */}
             <section>
               <h3 style={{ fontSize:'0.75rem', fontWeight:'900', color:'#1e3a8a', marginBottom:'10px' }}>📢 PRENSA METROPOLITANA</h3>
               <div className="no-scrollbar" style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '5px', scrollSnapType: 'x mandatory' }}>
                 {noticias.map(n => (
-                  <div key={n.id} onClick={() => setActiveView('noticias')} style={{ minWidth: '240px', background: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', scrollSnapAlign: 'start', cursor: 'pointer' }}>
-                    <img src={n.imageUrl || 'https://i.postimg.cc/wjPRcBLL/download.jpg'} style={{ width: '100%', height: '130px', objectFit: 'contain', background: '#f8fafc' }} />
-                    <div style={{ padding: '10px' }}>
-                      <p style={{ fontSize: '0.75rem', fontWeight: '800', margin: 0, color: '#1e293b' }}>{n.titulo}</p>
-                    </div>
+                  <div key={n.id} onClick={() => setActiveView('noticias')} style={{ minWidth: '215px', background: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', scrollSnapAlign: 'start', cursor: 'pointer', border: '2px solid #1e3a8a' }}>
+                    <div style={{ height: '115px', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><img src={n.imageUrl || 'https://i.postimg.cc/wjPRcBLL/download.jpg'} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>
+                    <div style={{ padding: '8px', background: '#1e3a8a' }}><p style={{ fontSize: '0.7rem', fontWeight: '800', margin: 0, color: 'white', textAlign: 'center' }}>{n.titulo.toUpperCase()}</p></div>
                   </div>
                 ))}
               </div>
@@ -159,41 +153,23 @@ function App() {
 
             {/* LÍDERES */}
             <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div className="card-leader score">
-                <span className="badge">LÍDER PUNTOS</span>
-                {liderAnotacion && teamLogos[liderAnotacion.equipoNombre] && (
-                    <img src={teamLogos[liderAnotacion.equipoNombre]} className="team-logo-card" alt="Logo" />
-                )}
-                <div className="content">
-                    <p className="full-name">{liderAnotacion?.nombre || '---'}</p>
-                    <p className="value">{liderAnotacion?.puntos || 0} <small>PTS</small></p>
-                </div>
-              </div>
-              <div className="card-leader mvp-gold">
-                <span className="badge">MVP POR EFICIENCIA</span>
-                {liderMVP && teamLogos[liderMVP.equipoNombre] && (
-                    <img src={teamLogos[liderMVP.equipoNombre]} className="team-logo-card" alt="Logo" />
-                )}
-                <div className="content">
-                    <p className="full-name">{liderMVP?.nombre || '---'}</p>
-                    <p className="value">{liderMVP?.valoracion || 0} <small>VAL</small></p>
-                </div>
-              </div>
+              <div className="card-leader score"><span className="badge">LÍDER PUNTOS</span>{liderAnotacion && teamLogos[liderAnotacion.equipoNombre] && <img src={teamLogos[liderAnotacion.equipoNombre]} className="team-logo-card" alt="Logo" />}<div className="content"><p className="full-name">{liderAnotacion?.nombre || '---'}</p><p className="value">{liderAnotacion?.puntos || 0} <small>PTS</small></p></div></div>
+              <div className="card-leader mvp-gold"><span className="badge">MVP POR EFICIENCIA</span>{liderMVP && teamLogos[liderMVP.equipoNombre] && <img src={teamLogos[liderMVP.equipoNombre]} className="team-logo-card" alt="Logo" />}<div className="content"><p className="full-name">{liderMVP?.nombre || '---'}</p><p className="value">{liderMVP?.valoracion || 0} <small>VAL</small></p></div></div>
             </section>
 
-            {/* TABLAS CON BORDES DE COLOR */}
+            {/* TABLAS */}
             <section>
                 <h3 style={{ fontSize:'0.75rem', fontWeight:'900', color:'#1e3a8a', marginBottom:'10px' }}>🏆 POSICIONES ACTUALIZADAS</h3>
-                <div className="no-scrollbar" style={{ display: 'flex', gap: '15px', overflowX: 'auto', paddingBottom: '15px', scrollSnapType: 'x mandatory' }}>
-                    {equiposA.length > 0 && <RenderTable title="GRUPO A" data={equiposA} color="#1e3a8a" />}
-                    {equiposB.length > 0 && <RenderTable title="GRUPO B" data={equiposB} color="#d97706" />}
+                <div className="no-scrollbar" style={{ display: 'flex', gap: '15px', overflowX: 'auto', paddingBottom: '10px', scrollSnapType: 'x mandatory' }}>
+                    {equiposA.length > 0 && <RenderTable title="GRUPO A - ELITE" data={equiposA} color="#1e3a8a" />}
+                    {equiposB.length > 0 && <RenderTable title="GRUPO B - PRO" data={equiposB} color="#d97706" />}
                 </div>
             </section>
 
             {/* PANEL ADMIN */}
             {isAdmin && (
               <div style={{ padding: '15px', background: '#1e3a8a', borderRadius: '24px', color: 'white', border: '2px solid white', boxShadow: '0 8px 16px rgba(30,58,138,0.2)' }}>
-                <p style={{ textAlign: 'center', margin: '0 0 10px 0', fontWeight: '900', fontSize:'0.65rem', letterSpacing: '1px' }}>⚙️ PANEL DE CONTROL MASTER</p>
+                <p style={{ textAlign: 'center', margin: '0 0 10px 0', fontWeight: '900', fontSize:'0.65rem' }}>⚙️ PANEL DE CONTROL MASTER</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <button className="admin-btn-white-border" onClick={() => setActiveView('mesa')}>⏱️ MESA TÉCNICA</button>
                   <button className="admin-btn-white-border" onClick={() => setActiveView('equipos')}>🛡️ GESTIÓN F21</button>
@@ -203,6 +179,7 @@ function App() {
           </div>
         )}
 
+        {/* RESTO DE COMPONENTES */}
         {activeView === 'noticias' && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'equipos' && (isAdmin ? <AdminEquipos onClose={() => setActiveView('dashboard')} /> : <TeamsPublicViewer onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'calendario' && <CalendarViewer rol={isAdmin ? 'admin' : 'fan'} onClose={() => setActiveView('dashboard')} />}
@@ -211,13 +188,8 @@ function App() {
         {activeView === 'mesa' && isAdmin && <MesaTecnica onClose={() => setActiveView('dashboard')} />}
       </main>
 
-      <nav style={{ 
-          position: 'fixed', bottom: '15px', left: '15px', right: '15px', 
-          background: '#1e3a8a', height: '70px', display: 'flex', 
-          justifyContent: 'space-around', alignItems: 'center', 
-          borderRadius: '20px', border: '2px solid white', 
-          boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 1000 
-      }}>
+      {/* NAV INFERIOR */}
+      <nav style={{ position: 'fixed', bottom: '15px', left: '15px', right: '15px', background: '#1e3a8a', height: '70px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderRadius: '20px', border: '2px solid white', boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 1000 }}>
           {[
             { v: 'calendario', i: '📅', l: 'Fechas' },
             { v: 'tabla', i: '🏆', l: 'Tablas' },
@@ -225,13 +197,7 @@ function App() {
             { v: 'stats', i: '📊', l: 'Líderes' },
             { v: 'noticias', i: '📰', l: 'Noticias' }
           ].map(item => (
-            <button key={item.v} onClick={() => setActiveView(item.v as any)} style={{ 
-                background: activeView === item.v ? 'rgba(255,255,255,0.2)' : 'none', 
-                border: activeView === item.v ? '1px solid white' : 'none', 
-                borderRadius: '12px', padding: '8px',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', 
-                color: 'white', cursor: 'pointer', transition: '0.3s'
-            }}>
+            <button key={item.v} onClick={() => setActiveView(item.v as any)} style={{ background: activeView === item.v ? 'rgba(255,255,255,0.2)' : 'none', border: activeView === item.v ? '1px solid white' : 'none', borderRadius: '12px', padding: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', color: 'white', cursor: 'pointer' }}>
               <span style={{ fontSize: '1.3rem' }}>{item.i}</span>
               <span style={{ fontSize: '0.55rem', fontWeight: 'bold' }}>{item.l}</span>
             </button>
