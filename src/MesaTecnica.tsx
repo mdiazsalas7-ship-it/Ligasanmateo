@@ -2,7 +2,7 @@ import React, { useState, useEffect, memo } from 'react';
 import { db } from './firebase';
 import { doc, updateDoc, onSnapshot, collection, query, getDocs, setDoc, increment, where, writeBatch, limit, orderBy, addDoc, deleteDoc } from 'firebase/firestore';
 
-// --- FILA DE JUGADOR (Ahora con Número Resaltado) ---
+// --- FILA DE JUGADOR ---
 const PlayerRow = memo(({ player, team, stats, onStat, onSub }: any) => {
     const s = stats || { puntos: 0, rebotes: 0, robos: 0, bloqueos: 0, triples: 0, dobles: 0, tirosLibres: 0 };
 
@@ -10,7 +10,6 @@ const PlayerRow = memo(({ player, team, stats, onStat, onSub }: any) => {
         <div style={{ marginBottom:'5px', padding:'6px 10px', borderRadius:'10px', background: '#1a1a1a', border: '1px solid #333', boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
             <div style={{display:'flex', justifyContent:'space-between', marginBottom:'4px', alignItems:'center'}}>
                 <div style={{display:'flex', alignItems:'center', gap:'8px', flex: 1, overflow:'hidden'}}>
-                    {/* DORSAL: Indispensable para la mesa técnica */}
                     <span style={{ 
                         background: team === 'local' ? '#3b82f6' : '#ef4444', 
                         color:'white', padding:'2px 6px', borderRadius:'4px', 
@@ -52,16 +51,30 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [recentPlays, setRecentPlays] = useState<any[]>([]);
 
     const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/166/166344.png";
-    const selectedDate = new Date().toISOString().split('T')[0];
 
+    // --- CORRECCIÓN DE FECHA LOCAL (VENEZUELA) ---
     useEffect(() => {
-        const q = query(collection(db, 'calendario'), where('fechaAsignada', '==', selectedDate), where('estatus', '==', 'programado'));
-        getDocs(q).then(snap => setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    }, [selectedDate]);
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000;
+        const localDate = new Date(now.getTime() - offset).toISOString().split('T')[0];
+
+        // Escucha activa para que los juegos aparezcan al instante
+        const q = query(
+            collection(db, 'calendario'), 
+            where('fechaAsignada', '==', localDate), 
+            where('estatus', '==', 'programado')
+        );
+
+        const unsub = onSnapshot(q, (snap) => {
+            setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
+        return () => unsub();
+    }, []);
 
     useEffect(() => {
         if (!selectedMatchId) return;
-        onSnapshot(doc(db, 'calendario', selectedMatchId), async (snap) => {
+        const unsubMatch = onSnapshot(doc(db, 'calendario', selectedMatchId), async (snap) => {
             if (snap.exists()) {
                 const data = { id: snap.id, ...snap.data() } as any;
                 setMatchData(data);
@@ -70,12 +83,13 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 setLogos({ local: lDoc.docs[0]?.data()?.logoUrl || DEFAULT_LOGO, visitante: vDoc.docs[0]?.data()?.logoUrl || DEFAULT_LOGO });
             }
         });
-        onSnapshot(query(collection(db, 'jugadas_partido'), where('partidoId', '==', selectedMatchId), orderBy('timestamp', 'desc'), limit(15)), (snap) => setRecentPlays(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        onSnapshot(query(collection(db, 'stats_partido'), where('partidoId', '==', selectedMatchId)), (snap) => {
+        const unsubPlays = onSnapshot(query(collection(db, 'jugadas_partido'), where('partidoId', '==', selectedMatchId), orderBy('timestamp', 'desc'), limit(15)), (snap) => setRecentPlays(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubStats = onSnapshot(query(collection(db, 'stats_partido'), where('partidoId', '==', selectedMatchId)), (snap) => {
             const cache: Record<string, any> = {};
             snap.docs.forEach(d => { cache[d.data().jugadorId] = d.data(); });
             setStatsCache(cache);
         });
+        return () => { unsubMatch(); unsubPlays(); unsubStats(); };
     }, [selectedMatchId]);
 
     useEffect(() => {
@@ -84,7 +98,6 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 const qL = query(collection(db, 'jugadores'), where('equipoId', '==', matchData.equipoLocalId));
                 const qV = query(collection(db, 'jugadores'), where('equipoId', '==', matchData.equipoVisitanteId));
                 const [snapL, snapV] = await Promise.all([getDocs(qL), getDocs(qV)]);
-                // Cargamos jugadores incluyendo su número de camiseta
                 setPlayersLocal(snapL.docs.map(d => ({ id: d.id, ...d.data() })));
                 setPlayersVisitante(snapV.docs.map(d => ({ id: d.id, ...d.data() })));
             };
@@ -95,31 +108,9 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const handleStat = async (player: any, team: 'local'|'visitante', field: string, val: number) => {
         if (!matchData) return;
         let pts = field === 'tirosLibres' ? 1 : field === 'dobles' ? 2 : field === 'triples' ? 3 : 0;
-        
-        // Guardar jugada individual con número
-        await addDoc(collection(db, 'jugadas_partido'), { 
-            partidoId: matchData.id, 
-            jugadorId: player.id, 
-            jugadorNombre: player.nombre, 
-            jugadorNumero: player.numero || '??',
-            equipo: team, 
-            accion: field, 
-            puntos: pts, 
-            timestamp: Date.now() 
-        });
-
+        await addDoc(collection(db, 'jugadas_partido'), { partidoId: matchData.id, jugadorId: player.id, jugadorNombre: player.nombre, jugadorNumero: player.numero || '??', equipo: team, accion: field, puntos: pts, timestamp: Date.now() });
         if (pts > 0) await updateDoc(doc(db, 'calendario', matchData.id), { [team === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(pts) });
-        
-        // Actualizar estadísticas globales del partido para este jugador
-        await setDoc(doc(db, 'stats_partido', `${matchData.id}_${player.id}`), { 
-            partidoId: matchData.id, 
-            jugadorId: player.id, 
-            nombre: player.nombre, 
-            numero: player.numero || '??',
-            equipo: team === 'local' ? matchData.equipoLocalNombre : matchData.equipoVisitanteNombre, 
-            [field]: increment(val), 
-            puntos: increment(pts) 
-        }, { merge: true });
+        await setDoc(doc(db, 'stats_partido', `${matchData.id}_${player.id}`), { partidoId: matchData.id, jugadorId: player.id, nombre: player.nombre, numero: player.numero || '??', equipo: team === 'local' ? matchData.equipoLocalNombre : matchData.equipoVisitanteNombre, [field]: increment(val), puntos: increment(pts) }, { merge: true });
     };
 
     const handleDeletePlay = async (play: any) => {
@@ -135,12 +126,14 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         if (!matchData || !window.confirm("¿FINALIZAR PARTIDO?")) return;
         const batch = writeBatch(db);
         const win = matchData.marcadorLocal > matchData.marcadorVisitante;
+        const lRef = doc(db, 'equipos', matchData.equipoLocalId);
+        const vRef = doc(db, 'equipos', matchData.equipoVisitanteId);
         if (win) {
-            batch.update(doc(db, 'equipos', matchData.equipoLocalId), { victorias: increment(1), puntos: increment(2), puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
-            batch.update(doc(db, 'equipos', matchData.equipoVisitanteId), { derrotas: increment(1), puntos: increment(1), puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
+            batch.update(lRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
+            batch.update(vRef, { derrotas: increment(1), puntos: increment(1), puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
         } else {
-            batch.update(doc(db, 'equipos', matchData.equipoVisitanteId), { victorias: increment(1), puntos: increment(2), puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
-            batch.update(doc(db, 'equipos', matchData.equipoLocalId), { derrotas: increment(1), puntos: increment(1), puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
+            batch.update(vRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
+            batch.update(lRef, { derrotas: increment(1), puntos: increment(1), puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
         }
         const statsSnap = await getDocs(query(collection(db, 'stats_partido'), where('partidoId', '==', matchData.id)));
         statsSnap.forEach(sDoc => {
@@ -149,15 +142,21 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         });
         batch.update(doc(db, 'calendario', matchData.id), { estatus: 'finalizado' });
         await batch.commit();
-        alert("✅ Liga actualizada con éxito.");
+        alert("✅ Liga actualizada.");
         onClose();
     };
 
     if (!selectedMatchId) return (
         <div style={{padding:'20px', color:'white', background:'#000', minHeight:'100vh'}}>
             <h2 style={{color: '#60a5fa', marginBottom:'20px'}}>⏱️ Mesa Técnica</h2>
-            {matches.map(m => (
-                <button key={m.id} onClick={()=>setSelectedMatchId(m.id)} style={{padding:'18px', background:'#1a1a1a', border:'1px solid #333', borderRadius:'10px', color:'white', width:'100%', marginBottom:'10px', textAlign:'left', fontWeight:'bold'}}>{m.equipoLocalNombre} vs {m.equipoVisitanteNombre}</button>
+            {matches.length === 0 ? (
+                <div style={{textAlign:'center', padding:'40px', border:'1px dashed #333', borderRadius:'15px'}}>
+                    <p style={{color:'#666'}}>No hay juegos programados para hoy.</p>
+                </div>
+            ) : matches.map(m => (
+                <button key={m.id} onClick={()=>setSelectedMatchId(m.id)} style={{padding:'18px', background:'#1a1a1a', border:'1px solid #333', borderRadius:'10px', color:'white', width:'100%', marginBottom:'10px', textAlign:'left', fontWeight:'bold'}}>
+                    {m.equipoLocalNombre} vs {m.equipoVisitanteNombre}
+                </button>
             ))}
             <button onClick={onClose} style={{marginTop:'30px', padding:'12px', width:'100%', background:'#333', color:'white', border:'none', borderRadius:'8px'}}>VOLVER</button>
         </div>
@@ -172,13 +171,11 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <img src={logos.local} style={{width:'30px', height:'30px', borderRadius:'50%', background:'white', objectFit:'contain'}} alt="L" />
                     <span style={{fontSize:'0.75rem', fontWeight:'900', color:'#60a5fa', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'80px'}}>{matchData?.equipoLocalNombre}</span>
                 </div>
-                
                 <div style={{display:'flex', alignItems:'center', gap:'10px', background:'#222', padding:'4px 12px', borderRadius:'8px', border:'1px solid #444'}}>
                     <span style={{fontSize:'1.5rem', fontWeight:'900', color:'#fff'}}>{matchData?.marcadorLocal}</span>
                     <span style={{fontSize:'0.6rem', color:'#666'}}>VS</span>
                     <span style={{fontSize:'1.5rem', fontWeight:'900', color:'#fff'}}>{matchData?.marcadorVisitante}</span>
                 </div>
-
                 <div style={{display:'flex', alignItems:'center', gap:'8px', flex:1, justifyContent:'flex-end'}}>
                     <span style={{fontSize:'0.75rem', fontWeight:'900', color:'#facc15', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'80px'}}>{matchData?.equipoVisitanteNombre}</span>
                     <img src={logos.visitante} style={{width:'30px', height:'30px', borderRadius:'50%', background:'white', objectFit:'contain'}} alt="V" />
@@ -190,7 +187,7 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <div key={t} style={{flex:1, padding:'5px', borderRight: t==='local'?'1px solid #222':'none', overflowY:'auto'}}>
                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'6px', background: t==='local'?'#1e3a8a':'#854d0e', padding:'4px 8px', borderRadius:'6px'}}>
                             <span style={{fontSize:'0.6rem', fontWeight:'900'}}>{t === 'local' ? 'LOCAL' : 'VISIT'}</span>
-                            <button onClick={() => setSubModal({team:t, isOpen:true})} style={{fontSize:'0.5rem', padding:'2px 5px', background:'rgba(255,255,255,0.2)', border:'none', color:'white', borderRadius:'4px'}}>F21</button>
+                            <button onClick={() => setSubModal({team:t, isOpen:true})} style={{fontSize:'0.55rem', padding:'2px 5px', background:'rgba(255,255,255,0.2)', border:'none', color:'white', borderRadius:'4px'}}>F21</button>
                         </div>
                         {(t === 'local' ? playersLocal : playersVisitante).filter(p => (t==='local'?onCourtLocal:onCourtVisitante).includes(p.id)).map(p => (
                             <PlayerRow key={p.id} player={p} team={t} stats={statsCache[p.id]} onStat={handleStat} onSub={() => setSubModal({team:t, isOpen:true})} />
@@ -205,7 +202,7 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <button onClick={handleFinalize} style={{flex:2, padding:'12px', background:'#10b981', color:'white', border:'none', borderRadius:'10px', fontWeight:'bold', fontSize:'0.7rem'}}>FINALIZAR</button>
             </div>
 
-            {/* MODAL HISTORIAL CON NÚMEROS */}
+            {/* MODAL HISTORIAL */}
             {isHistoryOpen && (
                 <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.95)', zIndex:5000, padding:'20px', display:'flex', justifyContent:'center', alignItems:'center'}}>
                     <div style={{background:'white', width:'100%', maxWidth:'400px', borderRadius:'16px', overflow:'hidden', height:'70vh', display:'flex', flexDirection:'column'}}>
@@ -226,11 +223,11 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
             )}
 
-            {/* MODAL CAMBIOS CON NÚMEROS */}
+            {/* MODAL CAMBIOS */}
             {subModal.isOpen && (
                 <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.95)', zIndex:4000, padding:'20px', display:'flex', justifyContent:'center', alignItems:'center'}}>
                     <div style={{background:'white', width:'100%', maxWidth:'400px', borderRadius:'15px', overflow:'hidden'}}>
-                        <div style={{padding:'15px', background:'#1e3a8a', color:'white', textAlign:'center', fontWeight:'bold'}}>GESTOR DE QUINTETO</div>
+                        <div style={{padding:'15px', background:'#1e3a8a', color:'white', textAlign:'center', fontWeight:'bold'}}>GESTIÓN DE QUINTETO</div>
                         <div style={{maxHeight:'350px', overflowY:'auto', padding:'10px'}}>
                             {(subModal.team === 'local' ? playersLocal : playersVisitante).map(p => {
                                 const activeIds = subModal.team === 'local' ? onCourtLocal : onCourtVisitante;
