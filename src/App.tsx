@@ -212,8 +212,8 @@ function App() {
             <section>
                 <h3 style={{ fontSize:'0.75rem', fontWeight:'900', color:'#1e3a8a', marginBottom:'10px' }}>🏆 POSICIONES ACTUALIZADAS</h3>
                 <div className="no-scrollbar" style={{ display: 'flex', gap: '15px', overflowX: 'auto', paddingBottom: '10px', scrollSnapType: 'x mandatory' }}>
-                    {equiposA.length > 0 && <RenderTable title="GRUPO A - ELITE" data={equiposA} color="#1e3a8a" />}
-                    {equiposB.length > 0 && <RenderTable title="GRUPO B - PRO" data={equiposB} color="#d97706" />}
+                    {equiposA.length > 0 && <RenderTable title="GRUPO A" data={equiposA} color="#1e3a8a" />}
+                    {equiposB.length > 0 && <RenderTable title="GRUPO B" data={equiposB} color="#d97706" />}
                 </div>
             </section>
 
