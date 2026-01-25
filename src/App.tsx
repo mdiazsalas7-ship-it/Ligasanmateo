@@ -23,7 +23,6 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<'dashboard' | 'equipos' | 'calendario' | 'mesa' | 'stats' | 'tabla' | 'login' | 'noticias'>('dashboard');
 
-  // 1. SESIÓN CON LLAVE MAESTRA PARA MANUEL
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
@@ -45,7 +44,6 @@ function App() {
     return () => unsubscribe();
   }, [activeView]);
 
-  // 2. CARGA DE EQUIPOS PARA POSICIONES
   useEffect(() => {
     const fetchEquipos = async () => {
       try {
@@ -57,14 +55,14 @@ function App() {
     fetchEquipos();
   }, [activeView]);
 
-  if (loading) return <div style={{background:'#0f172a', height:'100vh', color:'white', display:'flex', alignItems:'center', justifyContent:'center'}}>Sincronizando Liga...</div>;
+  if (loading) return <div style={{background:'#f8fafc', height:'100vh', color:'#1e3a8a', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>Sincronizando Liga...</div>;
 
   const isAdmin = user?.rol === 'admin' || user?.email?.toLowerCase() === 'mdiazsalas7@gmail.com';
 
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0.7)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`,
+      backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.85), rgba(240, 244, 248, 0.9)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundAttachment: 'fixed',
@@ -72,21 +70,33 @@ function App() {
       fontFamily: 'sans-serif' 
     }}>
       
-      {/* HEADER */}
-      <header style={{ background: 'rgba(30, 58, 138, 0.9)', color: 'white', padding: '20px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', backdropFilter: 'blur(4px)' }}>
-        <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '60px', marginBottom: '10px' }} />
-        <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 900 }}>LIGA SAN MATEO MASTER 40</h1>
+      {/* HEADER CLARO ACTUALIZADO */}
+      <header style={{ 
+        background: '#ffffff', 
+        color: '#1e3a8a', 
+        padding: '15px 20px', 
+        textAlign: 'center', 
+        boxShadow: '0 2px 10px rgba(0,0,0,0.05)', 
+        borderBottom: '2px solid #e2e8f0',
+        position: 'sticky',
+        top: 0,
+        zIndex: 1000
+      }}>
+        <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '55px', marginBottom: '5px' }} />
+        <h1 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 900, letterSpacing: '0.5px', color: '#111827' }}>
+            LIGA METROPOLITANA MASTER 40
+        </h1>
         
-        <div style={{marginTop:'10px'}}>
+        <div style={{marginTop:'8px'}}>
           {user ? (
             <div style={{display:'flex', justifyContent:'center', alignItems:'center', gap:'10px'}}>
-               <span style={{fontSize:'0.6rem', background: isAdmin ? '#ef4444' : 'rgba(255,255,255,0.2)', padding:'4px 12px', borderRadius:'20px', fontWeight:'bold'}}>
+               <span style={{fontSize:'0.65rem', background: isAdmin ? '#1e3a8a' : '#f1f5f9', color: isAdmin ? 'white' : '#64748b', padding:'4px 12px', borderRadius:'20px', fontWeight:'bold', border: isAdmin ? 'none' : '1px solid #e2e8f0'}}>
                   MODO: {isAdmin ? 'ADMINISTRADOR' : 'VISITANTE'}
                </span>
-               <button onClick={() => { signOut(auth); setActiveView('dashboard'); }} style={{background:'none', border:'1px solid white', color:'white', padding:'2px 8px', borderRadius:'10px', cursor:'pointer', fontSize:'0.7rem'}}>Salir</button>
+               <button onClick={() => { signOut(auth); setActiveView('dashboard'); }} style={{background:'#fef2f2', border:'1px solid #fee2e2', color:'#ef4444', padding:'4px 10px', borderRadius:'8px', cursor:'pointer', fontSize:'0.65rem', fontWeight:'bold'}}>Cerrar Sesión</button>
             </div>
           ) : (
-            <button onClick={() => setActiveView('login')} style={{background:'rgba(255,255,255,0.1)', border:'1px solid white', color:'white', padding:'4px 12px', borderRadius:'20px', fontSize:'0.7rem', cursor:'pointer'}}>🔑 Acceso Admin</button>
+            <button onClick={() => setActiveView('login')} style={{background:'#f1f5f9', border:'1px solid #e2e8f0', color:'#1e3a8a', padding:'6px 15px', borderRadius:'20px', fontSize:'0.7rem', cursor:'pointer', fontWeight:'bold'}}>🔑 ACCESO ADMINISTRACIÓN</button>
           )}
         </div>
       </header>
@@ -112,7 +122,7 @@ function App() {
               <span className="label">LÍDERES</span>
             </button>
 
-            <button className="menu-card" style={{border:'1px solid #f59e0b'}} onClick={() => setActiveView('noticias')}>
+            <button className="menu-card" style={{borderBottom:'4px solid #f59e0b'}} onClick={() => setActiveView('noticias')}>
               <span className="icon">📰</span>
               <span className="label" style={{color:'#d97706'}}>NOTICIAS</span>
             </button>
@@ -123,11 +133,11 @@ function App() {
             </button>
 
             {isAdmin && (
-              <div style={{ gridColumn: '1 / -1', marginTop: '20px', padding: '20px', background: 'rgba(254, 226, 226, 0.9)', borderRadius: '20px', border: '2px dashed #ef4444', backdropFilter: 'blur(4px)' }}>
-                <p style={{ textAlign: 'center', margin: '0 0 15px 0', fontWeight: '900', color: '#b91c1c', fontSize:'0.8rem' }}>⚙️ PANEL DE CONTROL</p>
+              <div style={{ gridColumn: '1 / -1', marginTop: '20px', padding: '20px', background: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)' }}>
+                <p style={{ textAlign: 'center', margin: '0 0 15px 0', fontWeight: '900', color: '#1e3a8a', fontSize:'0.75rem', textTransform: 'uppercase', letterSpacing: '1px' }}>⚙️ Panel de Gestión Oficial</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <button className="admin-btn" onClick={() => setActiveView('mesa')}>⏱️ MESA TÉCNICA</button>
-                  <button className="admin-btn" onClick={() => setActiveView('equipos')}>🛡️ GESTIÓN F21</button>
+                  <button className="admin-btn" style={{background: '#1e3a8a'}} onClick={() => setActiveView('mesa')}>⏱️ MESA TÉCNICA</button>
+                  <button className="admin-btn" style={{background: '#334155'}} onClick={() => setActiveView('equipos')}>🛡️ GESTIÓN F21</button>
                 </div>
               </div>
             )}
@@ -136,22 +146,16 @@ function App() {
 
         {/* MODAL LOGIN */}
         {activeView === 'login' && (
-          <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.9)', zIndex:5000, display:'flex', justifyContent:'center', alignItems:'center' }}>
-            <div style={{ background:'white', padding:'20px', borderRadius:'15px', width:'90%', maxWidth:'400px' }}>
+          <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(255,255,255,0.9)', zIndex:5000, display:'flex', justifyContent:'center', alignItems:'center', backdropFilter: 'blur(8px)' }}>
+            <div style={{ background:'white', padding:'30px', borderRadius:'24px', width:'90%', maxWidth:'400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
               <Login />
-              <button onClick={() => setActiveView('dashboard')} style={{ width:'100%', marginTop:'10px', background:'none', border:'none', color:'#666', cursor:'pointer' }}>Volver</button>
+              <button onClick={() => setActiveView('dashboard')} style={{ width:'100%', marginTop:'15px', background:'none', border:'none', color:'#94a3b8', cursor:'pointer', fontWeight: 'bold' }}>← Volver al inicio</button>
             </div>
           </div>
         )}
 
-        {/* COMPONENTES DE NOTICIAS */}
-        {activeView === 'noticias' && (
-          isAdmin 
-            ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> 
-            : <NewsFeed onClose={() => setActiveView('dashboard')} />
-        )}
-
-        {/* RESTO DE COMPONENTES */}
+        {/* OTROS COMPONENTES */}
+        {activeView === 'noticias' && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'equipos' && (isAdmin ? <AdminEquipos onClose={() => setActiveView('dashboard')} /> : <TeamsPublicViewer onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'calendario' && <CalendarViewer rol={isAdmin ? 'admin' : 'fan'} onClose={() => setActiveView('dashboard')} />}
         {activeView === 'stats' && <StatsViewer onClose={() => setActiveView('dashboard')} />}
@@ -161,23 +165,23 @@ function App() {
 
       <style>{`
         .menu-card { 
-          background: rgba(255, 255, 255, 0.95); 
-          border: 1px solid #e2e8f0; 
-          border-radius: 20px; 
-          padding: 30px 10px; 
+          background: #ffffff; 
+          border: 1px solid #f1f5f9; 
+          border-radius: 24px; 
+          padding: 25px 10px; 
           display: flex; 
           flex-direction: column; 
           align-items: center; 
           justify-content: center; 
-          gap: 10px; 
+          gap: 8px; 
           cursor: pointer; 
-          transition: 0.2s; 
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+          transition: all 0.2s ease; 
+          box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); 
         }
-        .menu-card:active { transform: scale(0.95); background: #f1f5f9; }
-        .menu-card .icon { font-size: 2.5rem; }
-        .menu-card .label { font-weight: 800; font-size: 0.8rem; color: #1e3a8a; }
-        .admin-btn { background: #b91c1c; color: white; border: none; padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 0.75rem; }
+        .menu-card:active { transform: scale(0.96); background: #f8fafc; }
+        .menu-card .icon { font-size: 2rem; }
+        .menu-card .label { font-weight: 800; font-size: 0.75rem; color: #1e3a8a; text-transform: uppercase; }
+        .admin-btn { color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 0.7rem; text-transform: uppercase; }
       `}</style>
     </div>
   );
