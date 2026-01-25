@@ -5,6 +5,7 @@ import MatchForm from './MatchForm';
 
 const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/451/451716.png";
 
+// --- COMPONENTE INTERNO: BOX SCORE (Resumen del Partido) ---
 const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
     const [stats, setStats] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -23,12 +24,12 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
         const players = stats.filter(s => s.equipo === teamName);
         return (
             <div style={{ marginBottom: '25px' }}>
-                <div style={{ background: teamColor, color: 'white', padding: '10px', fontWeight: 'bold', fontSize: '0.9rem', borderRadius: '8px 8px 0 0', textTransform: 'uppercase' }}>{teamName}</div>
+                <div style={{ background: teamColor, color: 'white', padding: '10px', fontWeight: 'bold', fontSize: '0.9rem', borderRadius: '12px 12px 0 0', textTransform: 'uppercase' }}>{teamName}</div>
                 <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'center', color: 'white' }}>
-                        <thead style={{ background: '#222', color: '#aaa' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'center', color: '#334155' }}>
+                        <thead style={{ background: '#f8fafc', color: '#64748b', borderBottom: '2px solid #f1f5f9' }}>
                             <tr>
-                                <th style={{ textAlign: 'left', padding: '10px' }}>JUGADOR</th>
+                                <th style={{ textAlign: 'left', padding: '12px' }}>JUGADOR</th>
                                 <th style={{ color: teamColor }}>PTS</th>
                                 <th>2P</th><th>3P</th><th>TL</th><th>REB</th><th>TAP</th><th>ROB</th>
                             </tr>
@@ -37,9 +38,9 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
                             {players.map((p, i) => {
                                 const pts = (Number(p.tirosLibres)||0) + (Number(p.dobles)||0)*2 + (Number(p.triples)||0)*3;
                                 return (
-                                    <tr key={i} style={{ borderBottom: '1px solid #222' }}>
-                                        <td style={{ textAlign: 'left', padding: '10px', fontWeight: 'bold', color: '#eee' }}>{p.nombre.toUpperCase()}</td>
-                                        <td style={{ background: 'rgba(255,255,255,0.05)', fontWeight: 'bold', fontSize: '0.9rem', color: teamColor }}>{pts}</td>
+                                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                        <td style={{ textAlign: 'left', padding: '12px', fontWeight: 'bold', color: '#1e293b' }}>{p.nombre.toUpperCase()}</td>
+                                        <td style={{ background: 'rgba(0,0,0,0.02)', fontWeight: '900', fontSize: '1rem', color: teamColor }}>{pts}</td>
                                         <td>{p.dobles || 0}</td>
                                         <td>{p.triples || 0}</td>
                                         <td>{p.tirosLibres || 0}</td>
@@ -57,14 +58,38 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
     };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.98)', zIndex: 3000, display: 'flex', justifyContent: 'center', padding: '15px', overflowY: 'auto' }}>
-            <div style={{ background: '#000', width: '100%', maxWidth: '750px', borderRadius: '15px', height: 'fit-content', border: '1px solid #333' }}>
-                <div style={{ padding: '15px', background: '#111', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #222' }}>
-                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '900' }}>📊 ESTADÍSTICAS DEL JUEGO</h3>
-                    <button onClick={onClose} style={{ color: 'white', background: '#e11d48', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize:'0.7rem' }}>CERRAR</button>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(241, 245, 249, 0.98)', zIndex: 3000, display: 'flex', justifyContent: 'center', padding: '15px', overflowY: 'auto' }}>
+            <div style={{ background: '#fff', width: '100%', maxWidth: '750px', borderRadius: '25px', height: 'fit-content', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+                
+                {/* CABECERA BLANCA */}
+                <div style={{ padding: '15px', background: '#f8fafc', color: '#1e3a8a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', textTransform: 'uppercase' }}>📊 ESTADÍSTICAS DEL JUEGO</h3>
+                    <button onClick={onClose} style={{ color: 'white', background: '#ef4444', border: 'none', borderRadius: '10px', padding: '8px 15px', cursor: 'pointer', fontWeight: 'bold', fontSize:'0.7rem' }}>CERRAR</button>
                 </div>
-                <div style={{ padding: '15px' }}>
-                    {loading ? <p style={{textAlign:'center', color: '#666'}}>Cargando...</p> : (
+
+                {/* MARCADOR PRO CON LOGOS CIRCULARES */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '25px 15px', background: '#fff' }}>
+                    <div style={{ textAlign: 'center', flex: 1 }}>
+                        <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'white', border: '2px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', padding: '5px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                            <img src={getLogo(match.equipoLocalId)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="L" />
+                        </div>
+                        <div style={{ color: '#3b82f6', fontWeight: '900', fontSize: '2rem', marginTop: '8px' }}>{match.marcadorLocal}</div>
+                        <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#94a3b8' }}>LOCAL</div>
+                    </div>
+
+                    <div style={{ fontSize: '1rem', color: '#cbd5e1', fontWeight: '900' }}>VS</div>
+
+                    <div style={{ textAlign: 'center', flex: 1 }}>
+                        <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'white', border: '2px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', padding: '5px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                            <img src={getLogo(match.equipoVisitanteId)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="V" />
+                        </div>
+                        <div style={{ color: '#ef4444', fontWeight: '900', fontSize: '2rem', marginTop: '8px' }}>{match.marcadorVisitante}</div>
+                        <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#94a3b8' }}>VISITANTE</div>
+                    </div>
+                </div>
+
+                <div style={{ padding: '0 15px 15px 15px' }}>
+                    {loading ? <p style={{textAlign:'center', color: '#666', padding:'20px'}}>Cargando estadísticas...</p> : (
                         <>
                             {renderTable(match.equipoLocalNombre, '#3b82f6')}
                             {renderTable(match.equipoVisitanteNombre, '#ef4444')}
@@ -112,7 +137,6 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
             
             {selectedBoxScore && <BoxScoreModal match={selectedBoxScore} onClose={() => setSelectedBoxScore(null)} getLogo={getLogo} />}
 
-            {/* HEADER FIJO */}
             <div style={{background:'#1e3a8a', color:'white', padding:'15px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'4px solid #f59e0b'}}>
                 <div>
                     <h2 style={{margin:0, fontSize:'1rem', fontWeight:'900'}}>📅 CALENDARIO OFICIAL</h2>
@@ -121,7 +145,6 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
                 <button onClick={onClose} style={{background:'white', color:'#1e3a8a', border:'none', padding:'8px 15px', borderRadius:'12px', fontWeight:'bold', fontSize:'0.7rem'}}>VOLVER</button>
             </div>
 
-            {/* FILTROS POR GRUPO (TABS) */}
             <div style={{ background:'white', padding:'10px', display:'flex', justifyContent:'center', gap:'10px', boxShadow:'0 2px 10px rgba(0,0,0,0.05)' }}>
                 {['TODOS', 'A', 'B'].map((f: any) => (
                     <button 
@@ -157,21 +180,18 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
                                     boxShadow:'0 4px 15px rgba(0,0,0,0.05)', 
                                     border: isFinished ? '1px solid #e2e8f0' : (m.grupo === 'A' ? '2px solid #3b82f6' : '2px solid #ef4444')
                                 }}>
-                                    {/* Cabecera del juego: Grupo y Fecha */}
                                     <div style={{ background:'#f8fafc', padding:'5px 15px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid #f1f5f9' }}>
                                         <span style={{ fontSize:'0.6rem', fontWeight:'900', color: m.grupo === 'A' ? '#3b82f6' : '#ef4444' }}>GRUPO {m.grupo}</span>
                                         <span style={{ fontSize:'0.65rem', fontWeight:'bold', color:'#64748b' }}>{m.fechaAsignada}</span>
                                     </div>
 
                                     <div style={{ display:'flex', padding:'15px', alignItems:'center', justifyContent:'space-between' }}>
-                                        {/* Equipo Local */}
                                         <div style={{ flex:1, textAlign:'center' }}>
                                             <img src={getLogo(m.equipoLocalId)} style={{width:'45px', height:'45px', borderRadius:'50%', objectFit:'cover', border:'2px solid #f1f5f9'}} />
                                             <div style={{fontWeight:'900', fontSize:'0.7rem', marginTop:'5px', color:'#1e293b'}}>{m.equipoLocalNombre.toUpperCase()}</div>
                                             {isFinished && <div style={{fontSize:'1.5rem', fontWeight:'900', color:'#1e3a8a'}}>{m.marcadorLocal}</div>}
                                         </div>
 
-                                        {/* VS o Estado */}
                                         <div style={{ flex:0.5, textAlign:'center' }}>
                                             {isFinished ? (
                                                 <div style={{background:'#1e3a8a', color:'white', fontSize:'0.5rem', padding:'4px', borderRadius:'6px', fontWeight:'bold'}}>FINAL</div>
@@ -180,7 +200,6 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
                                             )}
                                         </div>
 
-                                        {/* Equipo Visitante */}
                                         <div style={{ flex:1, textAlign:'center' }}>
                                             <img src={getLogo(m.equipoVisitanteId)} style={{width:'45px', height:'45px', borderRadius:'50%', objectFit:'cover', border:'2px solid #f1f5f9'}} />
                                             <div style={{fontWeight:'900', fontSize:'0.7rem', marginTop:'5px', color:'#1e293b'}}>{m.equipoVisitanteNombre.toUpperCase()}</div>
@@ -188,7 +207,6 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
                                         </div>
                                     </div>
 
-                                    {/* Botones de acción inferiores */}
                                     {isFinished && (
                                         <button onClick={() => setSelectedBoxScore(m)} style={{ width:'100%', background:'#f1f5f9', border:'none', padding:'10px', color:'#1e3a8a', fontSize:'0.7rem', fontWeight:'bold', cursor:'pointer', borderTop:'1px solid #f1f5f9' }}>
                                             📊 VER ESTADÍSTICAS COMPLETAS

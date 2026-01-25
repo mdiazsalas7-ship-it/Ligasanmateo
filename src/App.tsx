@@ -20,14 +20,14 @@ function App() {
   const [equiposA, setEquiposA] = useState<any[]>([]); 
   const [equiposB, setEquiposB] = useState<any[]>([]); 
   const [noticias, setNoticias] = useState<any[]>([]);
-  const [proximosJuegos, setProximosJuegos] = useState<any[]>([]); // Nuevo estado
+  const [proximosJuegos, setProximosJuegos] = useState<any[]>([]); 
   const [liderAnotacion, setLiderAnotacion] = useState<any>(null);
   const [liderMVP, setLiderMVP] = useState<any>(null);
   const [teamLogos, setTeamLogos] = useState<{[key: string]: string}>({});
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<'dashboard' | 'equipos' | 'calendario' | 'mesa' | 'stats' | 'tabla' | 'login' | 'noticias'>('dashboard');
   
-  const [noticiaIndex, setNoticiaIndex] = useState(0); // Para el carrusel
+  const [noticiaIndex, setNoticiaIndex] = useState(0);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -49,7 +49,6 @@ function App() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. EQUIPOS Y LOGOS
         const qEq = query(collection(db, "equipos"), orderBy("puntos", "desc"));
         const snapEq = await getDocs(qEq);
         const todosEq = snapEq.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -59,7 +58,6 @@ function App() {
         setEquiposA(todosEq.filter(e => e.grupo === 'A' || e.grupo === 'a'));
         setEquiposB(todosEq.filter(e => e.grupo === 'B' || e.grupo === 'b'));
 
-        // 2. LÍDERES
         const qJugadores = query(collection(db, "jugadores"));
         const snapJugadores = await getDocs(qJugadores);
         if (!snapJugadores.empty) {
@@ -73,18 +71,16 @@ function App() {
             setLiderMVP(eficiencia[0]);
         }
 
-        // 3. NOTICIAS
         const qNews = query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5));
         const snapNews = await getDocs(qNews);
         setNoticias(snapNews.docs.map(d => ({ id: d.id, ...d.data() })));
 
-        // 4. PRÓXIMOS JUEGOS
         const qCal = query(collection(db, "calendario"), orderBy("fechaAsignada", "asc"));
         const snapCal = await getDocs(qCal);
         const proximos = snapCal.docs
           .map(d => ({ id: d.id, ...d.data() }))
           .filter(m => m.estatus !== 'finalizado')
-          .slice(0, 3); // Tomamos los 3 más cercanos
+          .slice(0, 3); 
         setProximosJuegos(proximos);
 
       } catch (e) { console.error("Error en Dashboard:", e); }
@@ -92,7 +88,6 @@ function App() {
     fetchData();
   }, [activeView]);
 
-  // TEMPORIZADOR CARRUSEL
   useEffect(() => {
     if (noticias.length > 0) {
       const interval = setInterval(() => {
@@ -137,7 +132,7 @@ function App() {
         <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
           <div style={{ position: 'relative' }}>
             <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '45px', cursor: 'pointer' }} onClick={() => !user && setActiveView('login')} />
-            {!isAdmin && <button onClick={() => setActiveView('login')} style={{ position: 'absolute', bottom: '-5px', right: '-5px', background: '#1e3a8a', color: 'white', border: '2px solid white', borderRadius: '50%', width: '22px', height: '22px', fontSize: '0.6rem', cursor: 'pointer' }}>🔑</button>}
+            {!isAdmin && <button onClick={() => setActiveView('login')} style={{ position: 'absolute', bottom: '-5px', right: '-5px', background: '#1e3a8a', color: 'white', border: '2px solid white', borderRadius: '50%', width: '22px', height: '22px', fontSize: '0.6rem', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>🔑</button>}
           </div>
           <h1 style={{ fontSize: '0.8rem', fontWeight: 900, color: '#1e3a8a', textTransform: 'uppercase', lineHeight: '1.1' }}>LIGA METROPOLITANA<br/>EJE ESTE</h1>
         </div>
@@ -156,10 +151,8 @@ function App() {
         {activeView === 'dashboard' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             
-            {/* SECCIÓN SUPERIOR DIVIDIDA: NOTICIAS + PRÓXIMOS JUEGOS */}
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
               
-              {/* CARRUSEL DE NOTICIAS */}
               <div onClick={() => setActiveView('noticias')} style={{ background: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid #1e3a8a', position: 'relative', cursor: 'pointer' }}>
                 <div style={{ height: '110px', background: '#f8fafc' }}>
                   {noticias.length > 0 && (
@@ -173,7 +166,6 @@ function App() {
                 </div>
               </div>
 
-              {/* CUADRO PRÓXIMOS ENCUENTROS */}
               <div onClick={() => setActiveView('calendario')} style={{ background: '#1e3a8a', borderRadius: '18px', padding: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid white', cursor: 'pointer', display:'flex', flexDirection:'column', gap:'8px' }}>
                 <p style={{ color: 'white', fontSize: '0.6rem', fontWeight: '900', margin: 0, textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '4px' }}>📅 PRÓXIMOS JUEGOS</p>
                 {proximosJuegos.length > 0 ? proximosJuegos.map(m => (
@@ -192,10 +184,28 @@ function App() {
               </div>
             </div>
 
-            {/* LÍDERES */}
+            {/* LÍDERES CON LOGOS CIRCULARES */}
             <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div className="card-leader score"><span className="badge">LÍDER PUNTOS</span>{liderAnotacion && teamLogos[liderAnotacion.equipoNombre] && <img src={teamLogos[liderAnotacion.equipoNombre]} className="team-logo-card" alt="Logo" />}<div className="content"><p className="full-name">{liderAnotacion?.nombre || '---'}</p><p className="value">{liderAnotacion?.puntos || 0} <small>PTS</small></p></div></div>
-              <div className="card-leader mvp-gold"><span className="badge">MVP POR EFICIENCIA</span>{liderMVP && teamLogos[liderMVP.equipoNombre] && <img src={teamLogos[liderMVP.equipoNombre]} className="team-logo-card" alt="Logo" />}<div className="content"><p className="full-name">{liderMVP?.nombre || '---'}</p><p className="value">{liderMVP?.valoracion || 0} <small>VAL</small></p></div></div>
+              <div className="card-leader score">
+                <span className="badge">LÍDER PUNTOS</span>
+                {liderAnotacion && teamLogos[liderAnotacion.equipoNombre] && (
+                    <img src={teamLogos[liderAnotacion.equipoNombre]} className="team-logo-card" alt="Logo" />
+                )}
+                <div className="content">
+                    <p className="full-name">{liderAnotacion?.nombre || '---'}</p>
+                    <p className="value">{liderAnotacion?.puntos || 0} <small>PTS</small></p>
+                </div>
+              </div>
+              <div className="card-leader mvp-gold">
+                <span className="badge">MVP POR EFICIENCIA</span>
+                {liderMVP && teamLogos[liderMVP.equipoNombre] && (
+                    <img src={teamLogos[liderMVP.equipoNombre]} className="team-logo-card" alt="Logo" />
+                )}
+                <div className="content">
+                    <p className="full-name">{liderMVP?.nombre || '---'}</p>
+                    <p className="value">{liderMVP?.valoracion || 0} <small>VAL</small></p>
+                </div>
+              </div>
             </section>
 
             {/* TABLAS */}
@@ -231,7 +241,7 @@ function App() {
 
       <nav style={{ position: 'fixed', bottom: '15px', left: '15px', right: '15px', background: '#1e3a8a', height: '70px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderRadius: '20px', border: '2px solid white', boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 1000 }}>
           {[
-            { v: 'calendario', i: '📅', l: 'Fechas' },
+            { v: 'calendario', i: '📅', l: 'Calendario' },
             { v: 'tabla', i: '🏆', l: 'Tablas' },
             { v: 'dashboard', i: '🏠', l: 'Inicio' },
             { v: 'stats', i: '📊', l: 'Líderes' },
@@ -252,7 +262,24 @@ function App() {
         .score { background: linear-gradient(135deg, #1e3a8a, #3b82f6); }
         .mvp-gold { background: linear-gradient(135deg, #f59e0b, #d97706); }
         .badge { position: absolute; top: 8px; left: 10px; font-size: 0.45rem; font-weight: 900; background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 4px; z-index: 2; }
-        .team-logo-card { position: absolute; top: 5px; right: 5px; width: 40px; height: 40px; object-fit: contain; opacity: 0.8; z-index: 1; }
+        
+        /* ESTILO CORREGIDO PARA LOGOS CIRCULARES */
+        .team-logo-card { 
+            position: absolute; 
+            top: 6px; 
+            right: 6px; 
+            width: 36px; 
+            height: 36px; 
+            object-fit: contain; 
+            border-radius: 50%; /* CIRCULO */
+            background: white; /* FONDO BLANCO */
+            border: 2px solid rgba(255,255,255,0.8); /* BORDE */
+            padding: 2px; /* ESPACIO INTERNO */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2); /* SOMBRA */
+            opacity: 1; /* NITIDEZ TOTAL */
+            z-index: 1;
+        }
+
         .full-name { font-size: 0.75rem; font-weight: 900; margin: 0; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; position: relative; z-index: 2; }
         .value { font-size: 1.1rem; font-weight: 900; margin: 0; position: relative; z-index: 2; }
         .value small { font-size: 0.55rem; opacity: 0.8; }
