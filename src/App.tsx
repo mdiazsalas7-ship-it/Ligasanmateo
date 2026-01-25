@@ -74,7 +74,7 @@ function App() {
       
       {/* HEADER */}
       <header style={{ background: 'rgba(30, 58, 138, 0.9)', color: 'white', padding: '20px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', backdropFilter: 'blur(4px)' }}>
-        <img src="https://i.postimg.cc/qMsBxr6P/image.png" alt="Logo" style={{ height: '60px', marginBottom: '10px' }} />
+        <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '60px', marginBottom: '10px' }} />
         <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 900 }}>LIGA SAN MATEO MASTER 40</h1>
         
         <div style={{marginTop:'10px'}}>
