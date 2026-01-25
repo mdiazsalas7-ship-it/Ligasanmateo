@@ -84,7 +84,7 @@ function App() {
       }}>
         <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '55px', marginBottom: '5px' }} />
         <h1 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 900, letterSpacing: '0.5px', color: '#111827' }}>
-            LIGA METROPOLITANA MASTER 40
+            LIGA METROPOLITANA EJE ESTE
         </h1>
         
         <div style={{marginTop:'8px'}}>

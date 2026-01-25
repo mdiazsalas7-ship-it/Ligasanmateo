@@ -97,7 +97,7 @@ const StandingsViewer: React.FC<{ equipos?: Equipo[], onClose: () => void }> = (
             <header style={{ background: '#1e3a8a', color: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', flexShrink: 0 }}>
                 <div>
                     <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, letterSpacing: '-0.5px' }}>🏆 TABLA DE POSICIONES</h2>
-                    <span style={{ fontSize: '0.7rem', opacity: 0.8, fontWeight: 'bold', textTransform: 'uppercase' }}>Liga San Mateo • Oficial</span>
+                    <span style={{ fontSize: '0.7rem', opacity: 0.8, fontWeight: 'bold', textTransform: 'uppercase' }}>LIGA METROPOLITANA EJE ESTE • Oficial</span>
                 </div>
                 <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', padding: '8px 20px', borderRadius: '25px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem' }}>VOLVER</button>
             </header>
