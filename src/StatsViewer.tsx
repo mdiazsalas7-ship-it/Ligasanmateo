@@ -185,7 +185,7 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <div style={{maxWidth:'1200px', margin:'0 auto'}}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'30px', background:'#1e3a8a', padding:'20px', borderRadius:'15px', color:'white', boxShadow:'0 4px 12px rgba(0,0,0,0.2)'}}>
                     <div>
-                        <h2 style={{margin:0, fontWeight:900, fontSize:'1.8rem', letterSpacing:'-1px'}}>📊 ESTADÍSTICAS OFICIALES</h2>
+                        <h2 style={{margin:0, fontWeight:900, fontSize:'1.8rem', letterSpacing:'-1px'}}>📊 LIDERES</h2>
                         <p style={{margin:0, opacity:0.8, fontSize:'0.9rem', fontWeight:'bold'}}>LÍDERES DE TEMPORADA - LIGA METROPOLITANA EJE ESTE</p>
                     </div>
                     <button onClick={onClose} style={{background:'rgba(255,255,255,0.2)', border:'2px solid white', color:'white', padding:'10px 25px', borderRadius:'10px', fontWeight:'bold', cursor:'pointer'}}>CERRAR</button>
