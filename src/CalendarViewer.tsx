@@ -30,7 +30,13 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
                         <thead style={{ background: '#222', color: '#aaa' }}>
                             <tr>
                                 <th style={{ textAlign: 'left', padding: '10px' }}>JUGADOR</th>
-                                <th>PTS</th><th>3P</th><th>REB</th><th>AST</th><th>ROB</th><th>F</th>
+                                <th style={{ color: teamColor }}>PTS</th>
+                                <th>2P</th>
+                                <th>3P</th>
+                                <th>TL</th>
+                                <th>REB</th>
+                                <th>TAP</th>
+                                <th>ROB</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -40,11 +46,12 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
                                     <tr key={i} style={{ borderBottom: '1px solid #222' }}>
                                         <td style={{ textAlign: 'left', padding: '10px', fontWeight: 'bold', color: '#eee' }}>{p.nombre.toUpperCase()}</td>
                                         <td style={{ background: 'rgba(255,255,255,0.05)', fontWeight: 'bold', fontSize: '1rem', color: teamColor }}>{pts}</td>
+                                        <td>{p.dobles || 0}</td>
                                         <td>{p.triples || 0}</td>
+                                        <td>{p.tirosLibres || 0}</td>
                                         <td>{p.rebotes || 0}</td>
-                                        <td>{p.asistencias || 0}</td>
+                                        <td>{p.tapones || 0}</td>
                                         <td>{p.robos || 0}</td>
-                                        <td style={{ color: p.faltas >= 5 ? '#ff4444' : '#fff' }}>{p.faltas || 0}</td>
                                     </tr>
                                 );
                             })}
@@ -63,7 +70,6 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
                     <button onClick={onClose} style={{ color: 'white', background: '#333', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold' }}>✕ CERRAR</button>
                 </div>
 
-                {/* MARCADOR CON LOGOS */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', background: '#0a0a0a' }}>
                     <div style={{ textAlign: 'center', flex: 1 }}>
                         <img src={getLogo(match.equipoLocalId)} style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover', background: 'white', padding: '2px' }} alt="L" />
@@ -127,7 +133,7 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
             snapC.docs.forEach(d => batch.delete(d.ref));
             snapS.docs.forEach(d => batch.delete(d.ref));
             snapE.docs.forEach(d => batch.update(d.ref, { victorias: 0, derrotas: 0, puntos: 0, puntos_favor: 0, puntos_contra: 0 }));
-            snapJ.docs.forEach(d => batch.update(d.ref, { puntos: 0, triples: 0, dobles: 0, tirosLibres: 0, rebotes: 0, asistencias: 0, robos: 0, partidosJugados: 0 }));
+            snapJ.docs.forEach(d => batch.update(d.ref, { puntos: 0, triples: 0, dobles: 0, tirosLibres: 0, rebotes: 0, tapones: 0, robos: 0, partidosJugados: 0 }));
 
             await batch.commit();
             alert("✅ Temporada reiniciada. Todo está en cero.");

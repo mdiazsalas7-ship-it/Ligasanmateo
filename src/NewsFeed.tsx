@@ -76,7 +76,7 @@ const NewsFeed: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         </div>
 
                         <div style={{ marginTop: '50px', padding: '20px', background: '#f8fafc', borderRadius: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem', border: '1px solid #e2e8f0' }}>
-                            <b>LIGA SAN MATEO</b><br />Departamento de Prensa y Comunicaciones
+                            <b>LIGA METROPOLITANA DEL EJE ESTE</b><br />Departamento de Prensa y Comunicaciones
                         </div>
                     </div>
                 </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import './App.css'; 
 import { db, auth } from './firebase'; 
-import { doc, onSnapshot, collection, query, orderBy, getDocs } from 'firebase/firestore'; 
+import { doc, onSnapshot, collection, query, orderBy, getDocs, limit } from 'firebase/firestore'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth'; 
 
 // Componentes
@@ -12,14 +12,17 @@ import MesaTecnica from './MesaTecnica';
 import StatsViewer from './StatsViewer'; 
 import StandingsViewer from './StandingsViewer'; 
 import TeamsPublicViewer from './TeamsPublicViewer';
-
-// TUS ARCHIVOS DE NOTICIAS
 import NewsAdmin from './NewsAdmin'; 
 import NewsFeed from './NewsFeed';
 
 function App() {
   const [user, setUser] = useState<{uid: string, email: string | null, rol: string} | null>(null);
-  const [equipos, setEquipos] = useState<any[]>([]); 
+  const [equiposA, setEquiposA] = useState<any[]>([]); 
+  const [equiposB, setEquiposB] = useState<any[]>([]); 
+  const [noticias, setNoticias] = useState<any[]>([]);
+  const [liderAnotacion, setLiderAnotacion] = useState<any>(null);
+  const [liderMVP, setLiderMVP] = useState<any>(null);
+  const [teamLogos, setTeamLogos] = useState<{[key: string]: string}>({}); // Mapa de logos
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<'dashboard' | 'equipos' | 'calendario' | 'mesa' | 'stats' | 'tabla' | 'login' | 'noticias'>('dashboard');
 
@@ -28,7 +31,6 @@ function App() {
       if (u) {
         const superAdminEmail = 'mdiazsalas7@gmail.com'.toLowerCase();
         const isMaster = u.email?.toLowerCase() === superAdminEmail;
-
         onSnapshot(doc(db, 'usuarios', u.uid), (docSnap) => {
           const data = docSnap.data();
           const userRole = (isMaster || data?.rol === 'admin') ? 'admin' : 'fan';
@@ -36,152 +38,234 @@ function App() {
           if (activeView === 'login') setActiveView('dashboard');
           setLoading(false);
         });
-      } else { 
-        setUser(null); 
-        setLoading(false); 
-      }
+      } else { setUser(null); setLoading(false); }
     });
     return () => unsubscribe();
   }, [activeView]);
 
   useEffect(() => {
-    const fetchEquipos = async () => {
+    const fetchData = async () => {
       try {
-        const q = query(collection(db, "equipos"), orderBy("puntos", "desc"));
-        const snap = await getDocs(q);
-        setEquipos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (e) { console.error(e); }
+        // 1. CARGAR EQUIPOS PRIMERO (Para tener los logos)
+        const qEq = query(collection(db, "equipos"), orderBy("puntos", "desc"));
+        const snapEq = await getDocs(qEq);
+        const todosEq = snapEq.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        // Crear mapa de logos (Usando el nombre o ID del equipo como llave)
+        const logosMap: {[key: string]: string} = {};
+        todosEq.forEach(eq => {
+            if (eq.nombre) logosMap[eq.nombre] = eq.imageUrl || eq.logoUrl || "";
+        });
+        setTeamLogos(logosMap);
+
+        setEquiposA(todosEq.filter(e => e.grupo === 'A' || e.grupo === 'a'));
+        setEquiposB(todosEq.filter(e => e.grupo === 'B' || e.grupo === 'b'));
+
+        // 2. CARGAR JUGADORES (Líderes)
+        const qJugadores = query(collection(db, "jugadores"));
+        const snapJugadores = await getDocs(qJugadores);
+        
+        if (!snapJugadores.empty) {
+            const lista = snapJugadores.docs.map(d => ({ id: d.id, ...d.data() }));
+            
+            // Líder de Anotación
+            const anotadores = [...lista].sort((a, b) => (b.puntos || 0) - (a.puntos || 0));
+            setLiderAnotacion(anotadores[0]);
+
+            // Líder MVP (Eficiencia)
+            const eficiencia = lista.map(p => ({
+                ...p,
+                valoracion: (p.puntos || 0) + (p.rebotes || 0) + (p.asistencias || 0) + (p.robos || 0) + (p.bloqueos || 0) - (p.faltas || 0)
+            })).sort((a, b) => b.valoracion - a.valoracion);
+            
+            setLiderMVP(eficiencia[0]);
+        }
+
+        // 3. NOTICIAS
+        const qNews = query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5));
+        const snapNews = await getDocs(qNews);
+        setNoticias(snapNews.docs.map(d => ({ id: d.id, ...d.data() })));
+
+      } catch (e) { console.error("Error en Dashboard:", e); }
     };
-    fetchEquipos();
+    fetchData();
   }, [activeView]);
 
-  if (loading) return <div style={{background:'#f8fafc', height:'100vh', color:'#1e3a8a', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>Sincronizando Liga...</div>;
+  if (loading) return <div style={{background:'#f8fafc', height:'100vh', color:'#1e3a8a', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>Actualizando Pizarra...</div>;
 
   const isAdmin = user?.rol === 'admin' || user?.email?.toLowerCase() === 'mdiazsalas7@gmail.com';
 
+  const RenderTable = ({ title, data }: { title: string, data: any[] }) => (
+    <div style={{ minWidth: '280px', background: 'white', borderRadius: '20px', padding: '15px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', scrollSnapAlign: 'center' }}>
+      <h4 style={{ fontSize: '0.65rem', color: '#64748b', margin: '0 0 10px 0', fontWeight: '900', letterSpacing: '0.5px' }}>{title}</h4>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+        <thead>
+          <tr style={{ color: '#1e3a8a', borderBottom: '2px solid #f1f5f9' }}>
+            <th style={{ textAlign: 'left', padding: '5px' }}>EQUIPO</th>
+            <th style={{ padding: '5px' }}>JG</th>
+            <th style={{ padding: '5px' }}>JP</th>
+            <th style={{ padding: '5px' }}>PTS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((eq, i) => (
+            <tr key={eq.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+              <td style={{ padding: '8px 5px', fontWeight: 'bold' }}>{i + 1}. {eq.nombre}</td>
+              <td style={{ textAlign: 'center' }}>{eq.victorias || 0}</td>
+              <td style={{ textAlign: 'center' }}>{eq.derrotas || 0}</td>
+              <td style={{ textAlign: 'center', fontWeight: '900', color: '#1e3a8a' }}>{eq.puntos || 0}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.85), rgba(240, 244, 248, 0.9)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundAttachment: 'fixed',
-      color: '#1e293b', 
-      fontFamily: 'sans-serif' 
-    }}>
+    <div style={{ minHeight: '100vh', background: '#f1f5f9', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: '90px' }}>
       
-      {/* HEADER CLARO ACTUALIZADO */}
-      <header style={{ 
-        background: '#ffffff', 
-        color: '#1e3a8a', 
-        padding: '15px 20px', 
-        textAlign: 'center', 
-        boxShadow: '0 2px 10px rgba(0,0,0,0.05)', 
-        borderBottom: '2px solid #e2e8f0',
-        position: 'sticky',
-        top: 0,
-        zIndex: 1000
-      }}>
-        <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '55px', marginBottom: '5px' }} />
-        <h1 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 900, letterSpacing: '0.5px', color: '#111827' }}>
-            LIGA METROPOLITANA EJE ESTE
-        </h1>
-        
-        <div style={{marginTop:'8px'}}>
-          {user ? (
-            <div style={{display:'flex', justifyContent:'center', alignItems:'center', gap:'10px'}}>
-               <span style={{fontSize:'0.65rem', background: isAdmin ? '#1e3a8a' : '#f1f5f9', color: isAdmin ? 'white' : '#64748b', padding:'4px 12px', borderRadius:'20px', fontWeight:'bold', border: isAdmin ? 'none' : '1px solid #e2e8f0'}}>
-                  MODO: {isAdmin ? 'ADMINISTRADOR' : 'VISITANTE'}
-               </span>
-               <button onClick={() => { signOut(auth); setActiveView('dashboard'); }} style={{background:'#fef2f2', border:'1px solid #fee2e2', color:'#ef4444', padding:'4px 10px', borderRadius:'8px', cursor:'pointer', fontSize:'0.65rem', fontWeight:'bold'}}>Cerrar Sesión</button>
-            </div>
-          ) : (
-            <button onClick={() => setActiveView('login')} style={{background:'#f1f5f9', border:'1px solid #e2e8f0', color:'#1e3a8a', padding:'6px 15px', borderRadius:'20px', fontSize:'0.7rem', cursor:'pointer', fontWeight:'bold'}}>🔑 ACCESO ADMINISTRACIÓN</button>
-          )}
+      {/* HEADER HUESO COMPACTO */}
+      <header style={{ height: '48px', background: '#f8fafc', display: 'flex', alignItems: 'center', padding: '0 15px', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 1000 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+          <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '30px' }} />
+          <h1 style={{ fontSize: '0.7rem', margin: 0, fontWeight: 900, color: '#1e3a8a', textTransform: 'uppercase' }}>LIGA METROPOLITANA DEL EJE ESTE</h1>
         </div>
+        {user ? (
+          <button onClick={() => signOut(auth)} style={{background:'none', border:'none', color:'#ef4444', fontSize:'0.55rem', fontWeight:'bold'}}>SALIR</button>
+        ) : (
+          <button onClick={() => setActiveView('login')} style={{background:'#1e3a8a', color:'white', border:'none', padding:'4px 10px', borderRadius:'15px', fontSize:'0.6rem', fontWeight:'bold'}}>ADMIN</button>
+        )}
       </header>
 
-      {/* DASHBOARD */}
-      <main style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+      <main style={{ padding: '15px', maxWidth: '600px', margin: '0 auto' }}>
         
         {activeView === 'dashboard' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             
-            <button className="menu-card" onClick={() => setActiveView('calendario')}>
-              <span className="icon">📅</span>
-              <span className="label">CALENDARIO</span>
-            </button>
+            {/* 1. NOTICIAS */}
+            <section>
+              <h3 style={{ fontSize:'0.75rem', fontWeight:'900', color:'#1e3a8a', marginBottom:'10px' }}>📢 PRENSA METROPOLITANA</h3>
+              <div className="no-scrollbar" style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '5px', scrollSnapType: 'x mandatory' }}>
+                {noticias.map(n => (
+                  <div key={n.id} onClick={() => setActiveView('noticias')} style={{ minWidth: '240px', background: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', scrollSnapAlign: 'start', cursor: 'pointer' }}>
+                    <img src={n.imageUrl || 'https://i.postimg.cc/wjPRcBLL/download.jpg'} style={{ width: '100%', height: '130px', objectFit: 'contain', background: '#f8fafc' }} />
+                    <div style={{ padding: '10px' }}>
+                      <p style={{ fontSize: '0.75rem', fontWeight: '800', margin: 0, color: '#1e293b' }}>{n.titulo}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
 
-            <button className="menu-card" onClick={() => setActiveView('tabla')}>
-              <span className="icon">🏆</span>
-              <span className="label">POSICIONES</span>
-            </button>
+            {/* 2. LÍDERES CON LOGOS DE EQUIPO */}
+            <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              
+              {/* LÍDER PUNTOS */}
+              <div className="card-leader score">
+                <span className="badge">LÍDER PUNTOS</span>
+                {/* Logo del equipo del líder de puntos */}
+                {liderAnotacion && teamLogos[liderAnotacion.equipoNombre] && (
+                    <img src={teamLogos[liderAnotacion.equipoNombre]} className="team-logo-card" alt="Logo" />
+                )}
+                <div className="content">
+                    <p className="full-name">{liderAnotacion?.nombre || '---'}</p>
+                    <p className="value">{liderAnotacion?.puntos || 0} <small>PTS</small></p>
+                </div>
+              </div>
 
-            <button className="menu-card" onClick={() => setActiveView('stats')}>
-              <span className="icon">📊</span>
-              <span className="label">LÍDERES</span>
-            </button>
+              {/* MVP EFICIENCIA */}
+              <div className="card-leader mvp-gold">
+                <span className="badge">MVP POR EFICIENCIA</span>
+                {/* Logo del equipo del MVP */}
+                {liderMVP && teamLogos[liderMVP.equipoNombre] && (
+                    <img src={teamLogos[liderMVP.equipoNombre]} className="team-logo-card" alt="Logo" />
+                )}
+                <div className="content">
+                    <p className="full-name">{liderMVP?.nombre || '---'}</p>
+                    <p className="value">{liderMVP?.valoracion || 0} <small>VAL</small></p>
+                </div>
+              </div>
+            </section>
 
-            <button className="menu-card" style={{borderBottom:'4px solid #f59e0b'}} onClick={() => setActiveView('noticias')}>
-              <span className="icon">📰</span>
-              <span className="label" style={{color:'#d97706'}}>NOTICIAS</span>
-            </button>
+            {/* 3. TABLAS DE POSICIONES */}
+            <section>
+                <h3 style={{ fontSize:'0.75rem', fontWeight:'900', color:'#1e3a8a', marginBottom:'10px' }}>🏆 POSICIONES DE GRUPOS</h3>
+                <div className="no-scrollbar" style={{ display: 'flex', gap: '15px', overflowX: 'auto', paddingBottom: '10px', scrollSnapType: 'x mandatory' }}>
+                    {equiposA.length > 0 && <RenderTable title="GRUPO A" data={equiposA} />}
+                    {equiposB.length > 0 && <RenderTable title="GRUPO B" data={equiposB} />}
+                </div>
+            </section>
 
-            <button className="menu-card" onClick={() => setActiveView('equipos')}>
-              <span className="icon">🛡️</span>
-              <span className="label">EQUIPOS</span>
-            </button>
-
+            {/* PANEL ADMIN */}
             {isAdmin && (
-              <div style={{ gridColumn: '1 / -1', marginTop: '20px', padding: '20px', background: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)' }}>
-                <p style={{ textAlign: 'center', margin: '0 0 15px 0', fontWeight: '900', color: '#1e3a8a', fontSize:'0.75rem', textTransform: 'uppercase', letterSpacing: '1px' }}>⚙️ Panel de Gestión Oficial</p>
+              <div style={{ padding: '15px', background: '#1e3a8a', borderRadius: '20px', color: 'white' }}>
+                <p style={{ textAlign: 'center', margin: '0 0 10px 0', fontWeight: '900', fontSize:'0.6rem', letterSpacing: '1px' }}>⚙️ GESTIÓN TÉCNICA</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <button className="admin-btn" style={{background: '#1e3a8a'}} onClick={() => setActiveView('mesa')}>⏱️ MESA TÉCNICA</button>
-                  <button className="admin-btn" style={{background: '#334155'}} onClick={() => setActiveView('equipos')}>🛡️ GESTIÓN F21</button>
+                  <button className="admin-btn-light" onClick={() => setActiveView('mesa')}>⏱️ MESA</button>
+                  <button className="admin-btn-light" onClick={() => setActiveView('equipos')}>🛡️ F21</button>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* MODAL LOGIN */}
-        {activeView === 'login' && (
-          <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(255,255,255,0.9)', zIndex:5000, display:'flex', justifyContent:'center', alignItems:'center', backdropFilter: 'blur(8px)' }}>
-            <div style={{ background:'white', padding:'30px', borderRadius:'24px', width:'90%', maxWidth:'400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-              <Login />
-              <button onClick={() => setActiveView('dashboard')} style={{ width:'100%', marginTop:'15px', background:'none', border:'none', color:'#94a3b8', cursor:'pointer', fontWeight: 'bold' }}>← Volver al inicio</button>
-            </div>
-          </div>
-        )}
-
-        {/* OTROS COMPONENTES */}
+        {/* RESTO DE VISTAS */}
         {activeView === 'noticias' && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'equipos' && (isAdmin ? <AdminEquipos onClose={() => setActiveView('dashboard')} /> : <TeamsPublicViewer onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'calendario' && <CalendarViewer rol={isAdmin ? 'admin' : 'fan'} onClose={() => setActiveView('dashboard')} />}
         {activeView === 'stats' && <StatsViewer onClose={() => setActiveView('dashboard')} />}
-        {activeView === 'tabla' && <StandingsViewer equipos={equipos} onClose={() => setActiveView('dashboard')} />}
+        {activeView === 'tabla' && <StandingsViewer equipos={[...equiposA, ...equiposB]} onClose={() => setActiveView('dashboard')} />}
         {activeView === 'mesa' && isAdmin && <MesaTecnica onClose={() => setActiveView('dashboard')} />}
+        
+        {activeView === 'login' && (
+          <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(255,255,255,0.95)', zIndex:5000, display:'flex', justifyContent:'center', alignItems:'center' }}>
+            <div style={{ background:'white', padding:'30px', borderRadius:'24px', width:'90%', maxWidth:'400px' }}>
+              <Login />
+              <button onClick={() => setActiveView('dashboard')} style={{ width:'100%', marginTop:'15px', background:'none', border:'none', color:'#94a3b8', cursor:'pointer' }}>Volver</button>
+            </div>
+          </div>
+        )}
       </main>
 
+      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', height: '65px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderTop: '1px solid #e2e8f0', zIndex: 1000 }}>
+          {[
+            { v: 'calendario', i: '📅', l: 'Jornadas' },
+            { v: 'tabla', i: '🏆', l: 'Tablas' },
+            { v: 'dashboard', i: '🏠', l: 'Inicio' },
+            { v: 'stats', i: '📊', l: 'Líderes' },
+            { v: 'noticias', i: '📰', l: 'Noticias' }
+          ].map(item => (
+            <button key={item.v} onClick={() => setActiveView(item.v as any)} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: activeView === item.v ? '#1e3a8a' : '#94a3b8' }}>
+              <span style={{ fontSize: '1.2rem' }}>{item.i}</span>
+              <span style={{ fontSize: '0.55rem', fontWeight: 'bold' }}>{item.l}</span>
+            </button>
+          ))}
+      </nav>
+
       <style>{`
-        .menu-card { 
-          background: #ffffff; 
-          border: 1px solid #f1f5f9; 
-          border-radius: 24px; 
-          padding: 25px 10px; 
-          display: flex; 
-          flex-direction: column; 
-          align-items: center; 
-          justify-content: center; 
-          gap: 8px; 
-          cursor: pointer; 
-          transition: all 0.2s ease; 
-          box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); 
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .card-leader { padding: 12px; border-radius: 20px; color: white; position: relative; overflow: hidden; height: 90px; display: flex; align-items: flex-end; box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+        .score { background: linear-gradient(135deg, #1e3a8a, #3b82f6); }
+        .mvp-gold { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .badge { position: absolute; top: 8px; left: 10px; font-size: 0.45rem; font-weight: 900; background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 4px; z-index: 2; }
+        
+        /* LOGO DEL EQUIPO EN LA TARJETA */
+        .team-logo-card { 
+            position: absolute; 
+            top: 5px; 
+            right: 5px; 
+            width: 40px; 
+            height: 40px; 
+            object-fit: contain; 
+            opacity: 0.8; 
+            filter: drop-shadow(0 0 5px rgba(0,0,0,0.2));
+            z-index: 1;
         }
-        .menu-card:active { transform: scale(0.96); background: #f8fafc; }
-        .menu-card .icon { font-size: 2rem; }
-        .menu-card .label { font-weight: 800; font-size: 0.75rem; color: #1e3a8a; text-transform: uppercase; }
-        .admin-btn { color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 0.7rem; text-transform: uppercase; }
+
+        .full-name { font-size: 0.75rem; font-weight: 900; margin: 0; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; position: relative; z-index: 2; }
+        .value { font-size: 1.1rem; font-weight: 900; margin: 0; position: relative; z-index: 2; }
+        .value small { font-size: 0.55rem; opacity: 0.8; }
+        .admin-btn-light { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 10px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 0.6rem; }
       `}</style>
     </div>
   );
