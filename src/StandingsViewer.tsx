@@ -29,14 +29,13 @@ const StandingsViewer: React.FC<{ equipos?: Equipo[], onClose: () => void }> = (
         return (b.puntos_favor ?? 0) - (a.puntos_favor ?? 0);
     };
 
-    // Filtramos y ordenamos con seguridad (evita errores si el prop es null)
     const safeEquipos = equipos || [];
-    const grupoA = safeEquipos.filter(e => e.grupo === 'A').sort(sortTeams);
-    const grupoB = safeEquipos.filter(e => e.grupo === 'B').sort(sortTeams);
+    const grupoA = safeEquipos.filter(e => e.grupo === 'A' || e.grupo === 'a').sort(sortTeams);
+    const grupoB = safeEquipos.filter(e => e.grupo === 'B' || e.grupo === 'b').sort(sortTeams);
 
     const RenderTable = ({ teams, groupName, color }: { teams: Equipo[], groupName: string, color: string }) => (
-        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', marginBottom: '30px', overflow: 'hidden', borderTop: `5px solid ${color}` }}>
-            <div style={{ background: '#fff', color: color, padding: '15px 20px', fontWeight: '900', fontSize: '1.1rem', textAlign: 'left', borderBottom: '1px solid #eee' }}>
+        <div style={{ background: 'white', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.08)', marginBottom: '30px', overflow: 'hidden', border: `2px solid ${color}` }}>
+            <div style={{ background: color, color: 'white', padding: '12px 20px', fontWeight: '900', fontSize: '1rem', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '1px' }}>
                 CLASIFICACIÓN {groupName}
             </div>
             <div style={{ overflowX: 'auto' }}>
@@ -46,7 +45,7 @@ const StandingsViewer: React.FC<{ equipos?: Equipo[], onClose: () => void }> = (
                             <th style={{ padding: '12px' }}>Pos</th>
                             <th style={{ padding: '12px', textAlign: 'left' }}>Equipo</th>
                             <th>JJ</th><th>G</th><th>P</th><th>DIF</th>
-                            <th style={{ background: '#eff6ff', color: '#1e40af' }}>PTS</th>
+                            <th style={{ background: 'rgba(0,0,0,0.05)', color: '#1e293b' }}>PTS</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -60,10 +59,10 @@ const StandingsViewer: React.FC<{ equipos?: Equipo[], onClose: () => void }> = (
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                             <img 
                                                 src={eq.logoUrl || DEFAULT_LOGO} 
-                                                style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', background: '#f1f5f9' }}
+                                                style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'contain', background: '#f1f5f9' }}
                                                 alt="logo"
                                             />
-                                            <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.8rem' }}>{eq.nombre}</span>
+                                            <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.75rem' }}>{eq.nombre.toUpperCase()}</span>
                                         </div>
                                     </td>
                                     <td style={{ fontWeight: '600' }}>{jj}</td>
@@ -72,19 +71,12 @@ const StandingsViewer: React.FC<{ equipos?: Equipo[], onClose: () => void }> = (
                                     <td style={{ fontWeight: 'bold', color: dif >= 0 ? '#3b82f6' : '#ef4444' }}>
                                         {dif > 0 ? `+${dif}` : dif}
                                     </td>
-                                    <td style={{ background: '#eff6ff', fontWeight: '900', color: '#1e40af', fontSize: '1.1rem' }}>
+                                    <td style={{ background: 'rgba(0,0,0,0.02)', fontWeight: '900', color: color, fontSize: '1rem' }}>
                                         {eq.puntos ?? 0}
                                     </td>
                                 </tr>
                             );
                         })}
-                        {teams.length === 0 && (
-                            <tr>
-                                <td colSpan={7} style={{ padding: '30px', color: '#94a3b8', fontStyle: 'italic' }}>
-                                    No hay resultados registrados en este grupo.
-                                </td>
-                            </tr>
-                        )}
                     </tbody>
                 </table>
             </div>
@@ -92,38 +84,35 @@ const StandingsViewer: React.FC<{ equipos?: Equipo[], onClose: () => void }> = (
     );
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: '#f1f5f9', zIndex: 1500, display: 'flex', flexDirection: 'column' }}>
-            {/* CABECERA AZUL */}
-            <header style={{ background: '#1e3a8a', color: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', flexShrink: 0 }}>
-                <div>
-                    <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, letterSpacing: '-0.5px' }}>🏆 TABLA DE POSICIONES</h2>
-                    <span style={{ fontSize: '0.7rem', opacity: 0.8, fontWeight: 'bold', textTransform: 'uppercase' }}>LIGA METROPOLITANA EJE ESTE • Oficial</span>
-                </div>
-                <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', padding: '8px 20px', borderRadius: '25px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem' }}>VOLVER</button>
-            </header>
-
-            {/* CUERPO DE LA TABLA */}
-            <main style={{ flex: 1, overflowY: 'auto', padding: '15px' }}>
-                <div style={{ maxWidth: '850px', margin: '0 auto' }}>
-                    
-                    {/* INFO DE CARGA SOLO SI ES NULL (TOTALMENTE VACÍO) */}
-                    {!equipos ? (
-                        <div style={{ textAlign: 'center', padding: '50px', color: '#1e3a8a', fontWeight: 'bold' }}>
-                            Sincronizando con la liga...
-                        </div>
-                    ) : (
-                        <>
-                            <RenderTable teams={grupoA} groupName="GRUPO A" color="#2563eb" />
-                            <RenderTable teams={grupoB} groupName="GRUPO B" color="#dc2626" />
-                        </>
-                    )}
-
-                    <div style={{ padding: '20px', background: 'white', borderRadius: '10px', fontSize: '0.7rem', color: '#64748b', textAlign: 'center', border: '1px solid #e2e8f0', marginBottom: '30px' }}>
-                        <strong>REGLAMENTO FIBA:</strong> Ganado: 2 pts | Perdido: 1 pt | Forfait: 0 pts.<br/>
-                        Criterios de desempate: 1. Puntos de Tabla | 2. Diferencia de Puntos | 3. Puntos a Favor.
+        <div style={{ minHeight: '100vh', paddingBottom: '120px' }}>
+            {/* CABECERA ESTILO LIGA */}
+            <div style={{ background: '#1e3a8a', color: 'white', padding: '20px', borderRadius: '0 0 25px 25px', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900 }}>🏆 TABLAS</h2>
+                        <p style={{ margin: 0, fontSize: '0.7rem', opacity: 0.8, fontWeight: 'bold', textTransform: 'uppercase' }}>Posiciones Oficiales Master 40</p>
                     </div>
+                    <button onClick={onClose} style={{ background: 'white', color: '#1e3a8a', border: 'none', padding: '8px 15px', borderRadius: '10px', fontWeight: '900', fontSize: '0.7rem', cursor: 'pointer' }}>CERRAR</button>
                 </div>
-            </main>
+            </div>
+
+            <div style={{ maxWidth: '850px', margin: '0 auto', padding: '0 15px' }}>
+                {!equipos || equipos.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '50px', color: '#1e3a8a', fontWeight: 'bold' }}>
+                        Sincronizando con la liga...
+                    </div>
+                ) : (
+                    <>
+                        <RenderTable teams={grupoA} groupName="GRUPO A - ELITE" color="#1e3a8a" />
+                        <RenderTable teams={grupoB} groupName="GRUPO B - PRO" color="#d97706" />
+                    </>
+                )}
+
+                <div style={{ padding: '15px', background: 'rgba(255,255,255,0.7)', borderRadius: '15px', fontSize: '0.65rem', color: '#64748b', textAlign: 'center', border: '1px solid #e2e8f0', backdropFilter: 'blur(4px)' }}>
+                    <strong>SISTEMA DE PUNTUACIÓN:</strong><br/>
+                    Victoria: 2 pts | Derrota: 1 pt | Forfait: 0 pts.
+                </div>
+            </div>
         </div>
     );
 };

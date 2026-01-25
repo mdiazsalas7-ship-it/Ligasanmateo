@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import './App.css'; 
 import { db, auth } from './firebase'; 
-import { doc, onSnapshot, collection, query, orderBy, getDocs, limit } from 'firebase/firestore'; 
+import { doc, onSnapshot, collection, query, orderBy, getDocs, limit, where } from 'firebase/firestore'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth'; 
 
 // Componentes
@@ -20,11 +20,14 @@ function App() {
   const [equiposA, setEquiposA] = useState<any[]>([]); 
   const [equiposB, setEquiposB] = useState<any[]>([]); 
   const [noticias, setNoticias] = useState<any[]>([]);
+  const [proximosJuegos, setProximosJuegos] = useState<any[]>([]); // Nuevo estado
   const [liderAnotacion, setLiderAnotacion] = useState<any>(null);
   const [liderMVP, setLiderMVP] = useState<any>(null);
   const [teamLogos, setTeamLogos] = useState<{[key: string]: string}>({});
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<'dashboard' | 'equipos' | 'calendario' | 'mesa' | 'stats' | 'tabla' | 'login' | 'noticias'>('dashboard');
+  
+  const [noticiaIndex, setNoticiaIndex] = useState(0); // Para el carrusel
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -38,10 +41,7 @@ function App() {
           if (activeView === 'login') setActiveView('dashboard');
           setLoading(false);
         });
-      } else { 
-        setUser(null); 
-        setLoading(false); 
-      }
+      } else { setUser(null); setLoading(false); }
     });
     return () => unsubscribe();
   }, [activeView]);
@@ -49,27 +49,23 @@ function App() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // 1. EQUIPOS Y LOGOS
         const qEq = query(collection(db, "equipos"), orderBy("puntos", "desc"));
         const snapEq = await getDocs(qEq);
         const todosEq = snapEq.docs.map(d => ({ id: d.id, ...d.data() }));
-        
         const logosMap: {[key: string]: string} = {};
-        todosEq.forEach(eq => {
-            if (eq.nombre) logosMap[eq.nombre] = eq.imageUrl || eq.logoUrl || "";
-        });
+        todosEq.forEach(eq => { if (eq.nombre) logosMap[eq.nombre] = eq.logoUrl || ""; });
         setTeamLogos(logosMap);
-
         setEquiposA(todosEq.filter(e => e.grupo === 'A' || e.grupo === 'a'));
         setEquiposB(todosEq.filter(e => e.grupo === 'B' || e.grupo === 'b'));
 
+        // 2. LÍDERES
         const qJugadores = query(collection(db, "jugadores"));
         const snapJugadores = await getDocs(qJugadores);
-        
         if (!snapJugadores.empty) {
             const lista = snapJugadores.docs.map(d => ({ id: d.id, ...d.data() }));
             const anotadores = [...lista].sort((a, b) => (b.puntos || 0) - (a.puntos || 0));
             setLiderAnotacion(anotadores[0]);
-
             const eficiencia = lista.map(p => ({
                 ...p,
                 valoracion: (p.puntos || 0) + (p.rebotes || 0) + (p.asistencias || 0) + (p.robos || 0) + (p.bloqueos || 0) - (p.faltas || 0)
@@ -77,16 +73,36 @@ function App() {
             setLiderMVP(eficiencia[0]);
         }
 
+        // 3. NOTICIAS
         const qNews = query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5));
         const snapNews = await getDocs(qNews);
         setNoticias(snapNews.docs.map(d => ({ id: d.id, ...d.data() })));
+
+        // 4. PRÓXIMOS JUEGOS
+        const qCal = query(collection(db, "calendario"), orderBy("fechaAsignada", "asc"));
+        const snapCal = await getDocs(qCal);
+        const proximos = snapCal.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(m => m.estatus !== 'finalizado')
+          .slice(0, 3); // Tomamos los 3 más cercanos
+        setProximosJuegos(proximos);
 
       } catch (e) { console.error("Error en Dashboard:", e); }
     };
     fetchData();
   }, [activeView]);
 
-  if (loading) return <div style={{background:'#f8fafc', height:'100vh', color:'#1e3a8a', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>Sincronizando Liga...</div>;
+  // TEMPORIZADOR CARRUSEL
+  useEffect(() => {
+    if (noticias.length > 0) {
+      const interval = setInterval(() => {
+        setNoticiaIndex((prev) => (prev + 1) % noticias.length);
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [noticias]);
+
+  if (loading) return <div style={{background:'#f8fafc', height:'100vh', color:'#1e3a8a', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>Actualizando Jugada...</div>;
 
   const isAdmin = user?.rol === 'admin';
 
@@ -112,23 +128,16 @@ function App() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundImage: `linear-gradient(rgba(241, 245, 249, 0.2), rgba(241, 245, 249, 0.4)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundAttachment: 'fixed',
-      color: '#1e293b', 
-      fontFamily: 'sans-serif', 
-      paddingBottom: '110px' 
+      backgroundImage: `linear-gradient(rgba(241, 245, 249, 0.3), rgba(241, 245, 249, 0.45)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`,
+      backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed',
+      color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: '110px' 
     }}>
       
-      {/* HEADER CORREGIDO */}
       <header style={{ height: '65px', background: '#f8fafc', display: 'flex', alignItems: 'center', padding: '0 15px', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 1000 }}>
         <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
           <div style={{ position: 'relative' }}>
             <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '45px', cursor: 'pointer' }} onClick={() => !user && setActiveView('login')} />
-            {!isAdmin && (
-              <button onClick={() => setActiveView('login')} style={{ position: 'absolute', bottom: '-5px', right: '-5px', background: '#1e3a8a', color: 'white', border: '2px solid white', borderRadius: '50%', width: '22px', height: '22px', fontSize: '0.6rem', cursor: 'pointer' }}>🔑</button>
-            )}
+            {!isAdmin && <button onClick={() => setActiveView('login')} style={{ position: 'absolute', bottom: '-5px', right: '-5px', background: '#1e3a8a', color: 'white', border: '2px solid white', borderRadius: '50%', width: '22px', height: '22px', fontSize: '0.6rem', cursor: 'pointer' }}>🔑</button>}
           </div>
           <h1 style={{ fontSize: '0.8rem', fontWeight: 900, color: '#1e3a8a', textTransform: 'uppercase', lineHeight: '1.1' }}>LIGA METROPOLITANA<br/>EJE ESTE</h1>
         </div>
@@ -137,7 +146,6 @@ function App() {
 
       <main style={{ padding: '15px', maxWidth: '600px', margin: '0 auto' }}>
         
-        {/* VISTA LOGIN */}
         {activeView === 'login' && (
           <div style={{ padding: '20px', background: 'white', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
             <Login />
@@ -147,18 +155,42 @@ function App() {
 
         {activeView === 'dashboard' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-            {/* PRENSA */}
-            <section>
-              <h3 style={{ fontSize:'0.75rem', fontWeight:'900', color:'#1e3a8a', marginBottom:'10px' }}>📢 PRENSA METROPOLITANA</h3>
-              <div className="no-scrollbar" style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '5px', scrollSnapType: 'x mandatory' }}>
-                {noticias.map(n => (
-                  <div key={n.id} onClick={() => setActiveView('noticias')} style={{ minWidth: '215px', background: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', scrollSnapAlign: 'start', cursor: 'pointer', border: '2px solid #1e3a8a' }}>
-                    <div style={{ height: '115px', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><img src={n.imageUrl || 'https://i.postimg.cc/wjPRcBLL/download.jpg'} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>
-                    <div style={{ padding: '8px', background: '#1e3a8a' }}><p style={{ fontSize: '0.7rem', fontWeight: '800', margin: 0, color: 'white', textAlign: 'center' }}>{n.titulo.toUpperCase()}</p></div>
-                  </div>
-                ))}
+            
+            {/* SECCIÓN SUPERIOR DIVIDIDA: NOTICIAS + PRÓXIMOS JUEGOS */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
+              
+              {/* CARRUSEL DE NOTICIAS */}
+              <div onClick={() => setActiveView('noticias')} style={{ background: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid #1e3a8a', position: 'relative', cursor: 'pointer' }}>
+                <div style={{ height: '110px', background: '#f8fafc' }}>
+                  {noticias.length > 0 && (
+                    <img key={noticias[noticiaIndex].id} src={noticias[noticiaIndex].imageUrl || 'https://i.postimg.cc/wjPRcBLL/download.jpg'} className="fade-in" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  )}
+                </div>
+                <div style={{ padding: '8px', background: '#1e3a8a', minHeight: '40px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <p style={{ fontSize: '0.6rem', fontWeight: '800', margin: 0, color: 'white', textAlign: 'center' }}>
+                    {noticias[noticiaIndex]?.titulo.toUpperCase()}
+                  </p>
+                </div>
               </div>
-            </section>
+
+              {/* CUADRO PRÓXIMOS ENCUENTROS */}
+              <div onClick={() => setActiveView('calendario')} style={{ background: '#1e3a8a', borderRadius: '18px', padding: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid white', cursor: 'pointer', display:'flex', flexDirection:'column', gap:'8px' }}>
+                <p style={{ color: 'white', fontSize: '0.6rem', fontWeight: '900', margin: 0, textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '4px' }}>📅 PRÓXIMOS JUEGOS</p>
+                {proximosJuegos.length > 0 ? proximosJuegos.map(m => (
+                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.1)', padding: '5px', borderRadius: '8px' }}>
+                    <div style={{ textAlign: 'center', flex: 1 }}>
+                      <img src={teamLogos[m.equipoLocalNombre]} style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'contain', background: 'white' }} />
+                      <p style={{ color: 'white', fontSize: '0.45rem', fontWeight: 'bold', margin: 0 }}>{m.equipoLocalNombre.substring(0,3).toUpperCase()}</p>
+                    </div>
+                    <p style={{ color: '#f59e0b', fontSize: '0.5rem', fontWeight: '900', margin: '0 4px' }}>VS</p>
+                    <div style={{ textAlign: 'center', flex: 1 }}>
+                      <img src={teamLogos[m.equipoVisitanteNombre]} style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'contain', background: 'white' }} />
+                      <p style={{ color: 'white', fontSize: '0.45rem', fontWeight: 'bold', margin: 0 }}>{m.equipoVisitanteNombre.substring(0,3).toUpperCase()}</p>
+                    </div>
+                  </div>
+                )) : <p style={{color:'white', fontSize:'0.5rem', textAlign:'center', marginTop:'10px'}}>No hay juegos programados</p>}
+              </div>
+            </div>
 
             {/* LÍDERES */}
             <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -188,7 +220,7 @@ function App() {
           </div>
         )}
 
-        {/* RESTO DE COMPONENTES */}
+        {/* COMPONENTES DE VISTA */}
         {activeView === 'noticias' && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'equipos' && (isAdmin ? <AdminEquipos onClose={() => setActiveView('dashboard')} /> : <TeamsPublicViewer onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'calendario' && <CalendarViewer rol={isAdmin ? 'admin' : 'fan'} onClose={() => setActiveView('dashboard')} />}
@@ -197,7 +229,6 @@ function App() {
         {activeView === 'mesa' && isAdmin && <MesaTecnica onClose={() => setActiveView('dashboard')} />}
       </main>
 
-      {/* NAV INFERIOR */}
       <nav style={{ position: 'fixed', bottom: '15px', left: '15px', right: '15px', background: '#1e3a8a', height: '70px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderRadius: '20px', border: '2px solid white', boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 1000 }}>
           {[
             { v: 'calendario', i: '📅', l: 'Fechas' },
@@ -215,6 +246,8 @@ function App() {
 
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        .fade-in { animation: fadeInEffect 0.8s ease-in-out; }
+        @keyframes fadeInEffect { from { opacity: 0.2; } to { opacity: 1; } }
         .card-leader { padding: 12px; border-radius: 20px; color: white; position: relative; overflow: hidden; height: 90px; display: flex; align-items: flex-end; box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
         .score { background: linear-gradient(135deg, #1e3a8a, #3b82f6); }
         .mvp-gold { background: linear-gradient(135deg, #f59e0b, #d97706); }
