@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { collection, getDocs, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 interface NewsItem { id: string; titulo: string; cuerpo: string; tipo: 'general' | 'sancion' | 'destacado'; fecha: any; imageUrl?: string; }
 
@@ -13,7 +13,6 @@ const NewsFeed: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
     useEffect(() => {
         const q = query(collection(db, 'noticias'), orderBy('fecha', 'desc'), limit(20));
-        // Usamos onSnapshot para que si la IA genera una noticia, aparezca sola sin recargar
         const unsub = onSnapshot(q, (snap) => {
             setNews(snap.docs.map(d => ({ id: d.id, ...d.data() } as NewsItem)));
             setLoading(false);
@@ -21,12 +20,11 @@ const NewsFeed: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         return () => unsub();
     }, []);
 
-    // --- VISTA DE LA NOTICIA COMPLETA (ESTILO DIARIO DEPORTIVO) ---
+    // --- VISTA DE LA NOTICIA COMPLETA ---
     if (selectedNews) {
         return (
             <div className="animate-fade-in" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'white', zIndex: 2000, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
                 
-                {/* HEADER 50PX (Igual que Mesa Técnica para consistencia) */}
                 <div style={{ height: '50px', background: '#111', display: 'flex', alignItems: 'center', padding: '0 15px', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10, borderBottom: '1px solid #333' }}>
                     <button onClick={() => setSelectedNews(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>
                         ← VOLVER
@@ -34,10 +32,8 @@ const NewsFeed: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <img src={LEAGUE_LOGO} style={{ height: '30px' }} alt="Liga" />
                 </div>
 
-                {/* CUERPO DEL ARTÍCULO */}
                 <div style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
                     
-                    {/* FOTO COMPLETA ARRIBA */}
                     {selectedNews.imageUrl && (
                         <div style={{ width: '100%', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                             <img 
@@ -48,7 +44,6 @@ const NewsFeed: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         </div>
                     )}
 
-                    {/* TEXTO DE LA NOTICIA */}
                     <div style={{ padding: '25px', background: 'white' }}>
                         <div style={{ marginBottom: '20px' }}>
                             <span style={{ 
@@ -57,26 +52,16 @@ const NewsFeed: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             }}>
                                 {selectedNews.tipo}
                             </span>
-                            <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#111', marginTop: '15px', lineHeight: 1.1 }}>
+                            <h1 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111', marginTop: '15px', lineHeight: 1.1 }}>
                                 {selectedNews.titulo.toUpperCase()}
                             </h1>
                             <p style={{ color: '#666', fontSize: '0.85rem', marginTop: '10px', borderBottom: '1px solid #eee', paddingBottom: '15px' }}>
-                                Publicado el: {selectedNews.fecha?.seconds ? new Date(selectedNews.fecha.seconds * 1000).toLocaleDateString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric'}) : 'Recientemente'}
+                                Publicado: {selectedNews.fecha?.seconds ? new Date(selectedNews.fecha.seconds * 1000).toLocaleDateString() : 'Recientemente'}
                             </p>
                         </div>
 
-                        <div style={{ 
-                            whiteSpace: 'pre-wrap', 
-                            lineHeight: '1.8', 
-                            color: '#334155', 
-                            fontSize: '1.15rem', 
-                            fontFamily: 'serif' // Fuente tipo periódico para el cuerpo
-                        }}>
+                        <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.7', color: '#334155', fontSize: '1.1rem' }}>
                             {selectedNews.cuerpo}
-                        </div>
-
-                        <div style={{ marginTop: '50px', padding: '20px', background: '#f8fafc', borderRadius: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem', border: '1px solid #e2e8f0' }}>
-                            <b>LIGA METROPOLITANA DEL EJE ESTE</b><br />Departamento de Prensa y Comunicaciones
                         </div>
                     </div>
                 </div>
@@ -94,8 +79,6 @@ const NewsFeed: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
             {loading ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Cargando boletines oficiales...</div>
-            ) : news.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', background: 'white', borderRadius: '15px' }}>No hay noticias publicadas.</div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '0 10px' }}>
                     {news.map(item => (
@@ -106,19 +89,27 @@ const NewsFeed: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 background: 'white', 
                                 borderRadius: '16px', 
                                 overflow: 'hidden', 
-                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', 
+                                boxShadow: '0 4px 10px rgba(0,0,0,0.05)', 
                                 cursor: 'pointer',
                                 display: 'flex',
                                 flexDirection: 'column',
                                 border: '1px solid #e2e8f0'
                             }}
                         >
+                            {/* AJUSTE CLAVE: Contenedor con fondo suave e imagen completa */}
                             {item.imageUrl && (
-                                <div style={{ width: '100%', height: '180px', background: `url(${item.imageUrl}) center/cover no-repeat` }} />
+                                <div style={{ width: '100%', height: '200px', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid #f1f5f9' }}>
+                                    <img 
+                                        src={item.imageUrl} 
+                                        alt="Noticia" 
+                                        style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                                    />
+                                </div>
                             )}
+                            
                             <div style={{ padding: '15px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                    <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#3b82f6', textTransform: 'uppercase' }}>{item.tipo}</span>
+                                    <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', textTransform: 'uppercase' }}>{item.tipo}</span>
                                     <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
                                         {item.fecha?.seconds ? new Date(item.fecha.seconds * 1000).toLocaleDateString() : ''}
                                     </span>

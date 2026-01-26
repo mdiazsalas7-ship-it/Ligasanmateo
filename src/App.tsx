@@ -242,7 +242,7 @@ function App() {
       {/* NAV INFERIOR */}
       <nav style={{ position: 'fixed', bottom: '15px', left: '15px', right: '15px', background: '#1e3a8a', height: '70px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderRadius: '20px', border: '2px solid white', boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 1000 }}>
           {[
-            { v: 'calendario', i: '📅', l: 'Fechas' },
+            { v: 'calendario', i: '📅', l: 'Calendario' },
             { v: 'tabla', i: '🏆', l: 'Tablas' },
             { v: 'dashboard', i: '🏠', l: 'Inicio' },
             { v: 'stats', i: '📊', l: 'Líderes' },
