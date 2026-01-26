@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import './App.css'; 
 import { db, auth } from './firebase'; 
-import { doc, onSnapshot, collection, query, orderBy, getDocs, limit, where } from 'firebase/firestore'; 
+import { doc, onSnapshot, collection, query, orderBy, getDocs, limit } from 'firebase/firestore'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth'; 
 
 // Componentes
@@ -97,7 +97,7 @@ function App() {
     }
   }, [noticias]);
 
-  if (loading) return <div style={{background:'#f8fafc', height:'100vh', color:'#1e3a8a', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>Actualizando Jugada...</div>;
+  if (loading) return <div style={{background:'#f8fafc', height:'100vh', color:'#1e3a8a', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>Sincronizando Liga...</div>;
 
   const isAdmin = user?.rol === 'admin';
 
@@ -123,7 +123,7 @@ function App() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundImage: `linear-gradient(rgba(241, 245, 249, 0.3), rgba(241, 245, 249, 0.45)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`,
+      backgroundImage: `linear-gradient(rgba(241, 245, 249, 0.35), rgba(241, 245, 249, 0.5)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`,
       backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed',
       color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: '110px' 
     }}>
@@ -132,7 +132,7 @@ function App() {
         <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
           <div style={{ position: 'relative' }}>
             <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '45px', cursor: 'pointer' }} onClick={() => !user && setActiveView('login')} />
-            {!isAdmin && <button onClick={() => setActiveView('login')} style={{ position: 'absolute', bottom: '-5px', right: '-5px', background: '#1e3a8a', color: 'white', border: '2px solid white', borderRadius: '50%', width: '22px', height: '22px', fontSize: '0.6rem', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>🔑</button>}
+            {!isAdmin && <button onClick={() => setActiveView('login')} style={{ position: 'absolute', bottom: '-5px', right: '-5px', background: '#1e3a8a', color: 'white', border: '2px solid white', borderRadius: '50%', width: '22px', height: '22px', fontSize: '0.6rem', cursor: 'pointer' }}>🔑</button>}
           </div>
           <h1 style={{ fontSize: '0.8rem', fontWeight: 900, color: '#1e3a8a', textTransform: 'uppercase', lineHeight: '1.1' }}>LIGA METROPOLITANA<br/>EJE ESTE</h1>
         </div>
@@ -141,79 +141,73 @@ function App() {
 
       <main style={{ padding: '15px', maxWidth: '600px', margin: '0 auto' }}>
         
-        {activeView === 'login' && (
-          <div style={{ padding: '20px', background: 'white', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
-            <Login />
-            <button onClick={() => setActiveView('dashboard')} style={{ width: '100%', marginTop: '15px', background: 'none', border: 'none', color: '#94a3b8', fontWeight: 'bold', cursor: 'pointer' }}>← VOLVER AL INICIO</button>
-          </div>
-        )}
-
         {activeView === 'dashboard' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
             
+            {/* SECCIÓN SUPERIOR DIVIDIDA */}
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
               
-              <div onClick={() => setActiveView('noticias')} style={{ background: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid #1e3a8a', position: 'relative', cursor: 'pointer' }}>
-                <div style={{ height: '110px', background: '#f8fafc' }}>
-                  {noticias.length > 0 && (
-                    <img key={noticias[noticiaIndex].id} src={noticias[noticiaIndex].imageUrl || 'https://i.postimg.cc/wjPRcBLL/download.jpg'} className="fade-in" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  )}
-                </div>
-                <div style={{ padding: '8px', background: '#1e3a8a', minHeight: '40px', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <p style={{ fontSize: '0.6rem', fontWeight: '800', margin: 0, color: 'white', textAlign: 'center' }}>
-                    {noticias[noticiaIndex]?.titulo.toUpperCase()}
-                  </p>
+              <div>
+                <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>📢 Prensa Oficial</p>
+                <div onClick={() => setActiveView('noticias')} style={{ background: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid #1e3a8a', position: 'relative', cursor: 'pointer' }}>
+                  <div style={{ height: '100px', background: '#f8fafc' }}>
+                    {noticias.length > 0 && <img key={noticias[noticiaIndex].id} src={noticias[noticiaIndex].imageUrl || 'https://i.postimg.cc/wjPRcBLL/download.jpg'} className="fade-in" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                  </div>
+                  <div style={{ padding: '6px', background: '#1e3a8a', minHeight: '35px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <p style={{ fontSize: '0.55rem', fontWeight: '800', margin: 0, color: 'white', textAlign: 'center' }}>{noticias[noticiaIndex]?.titulo.toUpperCase()}</p>
+                  </div>
                 </div>
               </div>
 
-              <div onClick={() => setActiveView('calendario')} style={{ background: '#1e3a8a', borderRadius: '18px', padding: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid white', cursor: 'pointer', display:'flex', flexDirection:'column', gap:'8px' }}>
-                <p style={{ color: 'white', fontSize: '0.6rem', fontWeight: '900', margin: 0, textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '4px' }}>📅 PRÓXIMOS JUEGOS</p>
-                {proximosJuegos.length > 0 ? proximosJuegos.map(m => (
-                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.1)', padding: '5px', borderRadius: '8px' }}>
-                    <div style={{ textAlign: 'center', flex: 1 }}>
-                      <img src={teamLogos[m.equipoLocalNombre]} style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'contain', background: 'white' }} />
-                      <p style={{ color: 'white', fontSize: '0.45rem', fontWeight: 'bold', margin: 0 }}>{m.equipoLocalNombre.substring(0,3).toUpperCase()}</p>
+              <div>
+                <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>📅 Próximos Juegos</p>
+                <div onClick={() => setActiveView('calendario')} style={{ background: '#1e3a8a', borderRadius: '18px', padding: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid white', cursor: 'pointer', display:'flex', flexDirection:'column', gap:'6px', height: '141px', justifyContent: 'center' }}>
+                  {proximosJuegos.length > 0 ? proximosJuegos.map(m => (
+                    <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.1)', padding: '4px', borderRadius: '8px' }}>
+                      <div style={{ textAlign: 'center', flex: 1 }}>
+                        <img src={teamLogos[m.equipoLocalNombre]} style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'contain', background: 'white' }} />
+                        <p style={{ color: 'white', fontSize: '0.4rem', fontWeight: 'bold', margin: 0 }}>{m.equipoLocalNombre.substring(0,3).toUpperCase()}</p>
+                      </div>
+                      <p style={{ color: '#f59e0b', fontSize: '0.45rem', fontWeight: '900', margin: '0 4px' }}>VS</p>
+                      <div style={{ textAlign: 'center', flex: 1 }}>
+                        <img src={teamLogos[m.equipoVisitanteNombre]} style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'contain', background: 'white' }} />
+                        <p style={{ color: 'white', fontSize: '0.45rem', fontWeight: 'bold', margin: 0 }}>{m.equipoVisitanteNombre.substring(0,3).toUpperCase()}</p>
+                      </div>
                     </div>
-                    <p style={{ color: '#f59e0b', fontSize: '0.5rem', fontWeight: '900', margin: '0 4px' }}>VS</p>
-                    <div style={{ textAlign: 'center', flex: 1 }}>
-                      <img src={teamLogos[m.equipoVisitanteNombre]} style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'contain', background: 'white' }} />
-                      <p style={{ color: 'white', fontSize: '0.45rem', fontWeight: 'bold', margin: 0 }}>{m.equipoVisitanteNombre.substring(0,3).toUpperCase()}</p>
-                    </div>
-                  </div>
-                )) : <p style={{color:'white', fontSize:'0.5rem', textAlign:'center', marginTop:'10px'}}>No hay juegos programados</p>}
+                  )) : <p style={{color:'white', fontSize:'0.5rem', textAlign:'center'}}>Sin juegos</p>}
+                </div>
               </div>
             </div>
 
-            {/* LÍDERES CON LOGOS CIRCULARES */}
-            <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div className="card-leader score">
-                <span className="badge">LÍDER PUNTOS</span>
-                {liderAnotacion && teamLogos[liderAnotacion.equipoNombre] && (
-                    <img src={teamLogos[liderAnotacion.equipoNombre]} className="team-logo-card" alt="Logo" />
-                )}
-                <div className="content">
-                    <p className="full-name">{liderAnotacion?.nombre || '---'}</p>
-                    <p className="value">{liderAnotacion?.puntos || 0} <small>PTS</small></p>
+            {/* SECCIÓN LÍDERES */}
+            <section>
+              <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>⭐ Rendimiento Individual</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="card-leader score">
+                  <span className="badge">LÍDER PUNTOS</span>
+                  {liderAnotacion && teamLogos[liderAnotacion.equipoNombre] && <img src={teamLogos[liderAnotacion.equipoNombre]} className="team-logo-card" alt="Logo" />}
+                  <div className="content">
+                      <p className="full-name">{liderAnotacion?.nombre || '---'}</p>
+                      <p className="value">{liderAnotacion?.puntos || 0} <small>PTS</small></p>
+                  </div>
                 </div>
-              </div>
-              <div className="card-leader mvp-gold">
-                <span className="badge">MVP POR EFICIENCIA</span>
-                {liderMVP && teamLogos[liderMVP.equipoNombre] && (
-                    <img src={teamLogos[liderMVP.equipoNombre]} className="team-logo-card" alt="Logo" />
-                )}
-                <div className="content">
-                    <p className="full-name">{liderMVP?.nombre || '---'}</p>
-                    <p className="value">{liderMVP?.valoracion || 0} <small>VAL</small></p>
+                <div className="card-leader mvp-gold">
+                  <span className="badge">MVP TEMPORADA</span>
+                  {liderMVP && teamLogos[liderMVP.equipoNombre] && <img src={teamLogos[liderMVP.equipoNombre]} className="team-logo-card" alt="Logo" />}
+                  <div className="content">
+                      <p className="full-name">{liderMVP?.nombre || '---'}</p>
+                      <p className="value">{liderMVP?.valoracion || 0} <small>VAL</small></p>
+                  </div>
                 </div>
               </div>
             </section>
 
-            {/* TABLAS */}
+            {/* SECCIÓN TABLAS */}
             <section>
-                <h3 style={{ fontSize:'0.75rem', fontWeight:'900', color:'#1e3a8a', marginBottom:'10px' }}>🏆 POSICIONES ACTUALIZADAS</h3>
-                <div className="no-scrollbar" style={{ display: 'flex', gap: '15px', overflowX: 'auto', paddingBottom: '10px', scrollSnapType: 'x mandatory' }}>
-                    {equiposA.length > 0 && <RenderTable title="GRUPO A" data={equiposA} color="#1e3a8a" />}
-                    {equiposB.length > 0 && <RenderTable title="GRUPO B" data={equiposB} color="#d97706" />}
+                <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>🏆 Clasificación de Grupos</p>
+                <div className="no-scrollbar" style={{ display: 'flex', gap: '15px', overflowX: 'auto', paddingBottom: '15px', scrollSnapType: 'x mandatory' }}>
+                    {equiposA.length > 0 && <RenderTable title="GRUPO A - ELITE" data={equiposA} color="#1e3a8a" />}
+                    {equiposB.length > 0 && <RenderTable title="GRUPO B - PRO" data={equiposB} color="#d97706" />}
                 </div>
             </section>
 
@@ -230,18 +224,25 @@ function App() {
           </div>
         )}
 
-        {/* COMPONENTES DE VISTA */}
+        {/* RESTO DE COMPONENTES IGUAL */}
         {activeView === 'noticias' && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'equipos' && (isAdmin ? <AdminEquipos onClose={() => setActiveView('dashboard')} /> : <TeamsPublicViewer onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'calendario' && <CalendarViewer rol={isAdmin ? 'admin' : 'fan'} onClose={() => setActiveView('dashboard')} />}
         {activeView === 'stats' && <StatsViewer onClose={() => setActiveView('dashboard')} />}
         {activeView === 'tabla' && <StandingsViewer equipos={[...equiposA, ...equiposB]} onClose={() => setActiveView('dashboard')} />}
         {activeView === 'mesa' && isAdmin && <MesaTecnica onClose={() => setActiveView('dashboard')} />}
+        {activeView === 'login' && (
+          <div style={{ padding: '20px', background: 'white', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+            <Login />
+            <button onClick={() => setActiveView('dashboard')} style={{ width: '100%', marginTop: '15px', background: 'none', border: 'none', color: '#94a3b8', fontWeight: 'bold', cursor: 'pointer' }}>← VOLVER</button>
+          </div>
+        )}
       </main>
 
+      {/* NAV INFERIOR */}
       <nav style={{ position: 'fixed', bottom: '15px', left: '15px', right: '15px', background: '#1e3a8a', height: '70px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderRadius: '20px', border: '2px solid white', boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 1000 }}>
           {[
-            { v: 'calendario', i: '📅', l: 'Calendario' },
+            { v: 'calendario', i: '📅', l: 'Fechas' },
             { v: 'tabla', i: '🏆', l: 'Tablas' },
             { v: 'dashboard', i: '🏠', l: 'Inicio' },
             { v: 'stats', i: '📊', l: 'Líderes' },
@@ -262,24 +263,7 @@ function App() {
         .score { background: linear-gradient(135deg, #1e3a8a, #3b82f6); }
         .mvp-gold { background: linear-gradient(135deg, #f59e0b, #d97706); }
         .badge { position: absolute; top: 8px; left: 10px; font-size: 0.45rem; font-weight: 900; background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 4px; z-index: 2; }
-        
-        /* ESTILO CORREGIDO PARA LOGOS CIRCULARES */
-        .team-logo-card { 
-            position: absolute; 
-            top: 6px; 
-            right: 6px; 
-            width: 36px; 
-            height: 36px; 
-            object-fit: contain; 
-            border-radius: 50%; /* CIRCULO */
-            background: white; /* FONDO BLANCO */
-            border: 2px solid rgba(255,255,255,0.8); /* BORDE */
-            padding: 2px; /* ESPACIO INTERNO */
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2); /* SOMBRA */
-            opacity: 1; /* NITIDEZ TOTAL */
-            z-index: 1;
-        }
-
+        .team-logo-card { position: absolute; top: 6px; right: 6px; width: 36px; height: 36px; object-fit: contain; border-radius: 50%; background: white; border: 2px solid rgba(255,255,255,0.8); padding: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); opacity: 1; z-index: 1; }
         .full-name { font-size: 0.75rem; font-weight: 900; margin: 0; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; position: relative; z-index: 2; }
         .value { font-size: 1.1rem; font-weight: 900; margin: 0; position: relative; z-index: 2; }
         .value small { font-size: 0.55rem; opacity: 0.8; }
