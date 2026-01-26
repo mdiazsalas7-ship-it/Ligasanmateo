@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { collection, query, onSnapshot, orderBy, deleteDoc, doc, getDocs, writeBatch, where } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, deleteDoc, doc, getDocs, where } from 'firebase/firestore';
 import MatchForm from './MatchForm'; 
 
 const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/451/451716.png";
 
-// --- COMPONENTE INTERNO: BOX SCORE (Resumen del Partido) ---
+// --- COMPONENTE INTERNO: BOX SCORE ---
 const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
     const [stats, setStats] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -60,14 +60,11 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
     return (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(241, 245, 249, 0.98)', zIndex: 3000, display: 'flex', justifyContent: 'center', padding: '15px', overflowY: 'auto' }}>
             <div style={{ background: '#fff', width: '100%', maxWidth: '750px', borderRadius: '25px', height: 'fit-content', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
-                
-                {/* CABECERA BLANCA */}
                 <div style={{ padding: '15px', background: '#f8fafc', color: '#1e3a8a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
                     <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', textTransform: 'uppercase' }}>📊 ESTADÍSTICAS DEL JUEGO</h3>
                     <button onClick={onClose} style={{ color: 'white', background: '#ef4444', border: 'none', borderRadius: '10px', padding: '8px 15px', cursor: 'pointer', fontWeight: 'bold', fontSize:'0.7rem' }}>CERRAR</button>
                 </div>
 
-                {/* MARCADOR PRO CON LOGOS CIRCULARES */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '25px 15px', background: '#fff' }}>
                     <div style={{ textAlign: 'center', flex: 1 }}>
                         <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'white', border: '2px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', padding: '5px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
@@ -101,6 +98,7 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
     );
 };
 
+// --- COMPONENTE PRINCIPAL ---
 const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, onClose }) => {
     const [matches, setMatches] = useState<any[]>([]);
     const [equipos, setEquipos] = useState<any[]>([]);
@@ -108,6 +106,7 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
     const [showMatchForm, setShowMatchForm] = useState(false); 
     const [selectedBoxScore, setSelectedBoxScore] = useState<any | null>(null);
     const [activeFilter, setActiveFilter] = useState<'TODOS' | 'A' | 'B'>('TODOS');
+    const [matchToEdit, setMatchToEdit] = useState<any | null>(null);
 
     useEffect(() => {
         const qM = query(collection(db, 'calendario'), orderBy('fechaAsignada', 'asc'));
@@ -124,6 +123,22 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
     }, []);
 
     const getLogo = (teamId: string) => equipos.find(e => e.id === teamId)?.logoUrl || DEFAULT_LOGO;
+
+    const handleDeleteMatch = async (id: string) => {
+        if (window.confirm("⚠️ ¿Estás seguro de ELIMINAR este juego? Se borrará permanentemente del calendario.")) {
+            try {
+                await deleteDoc(doc(db, 'calendario', id));
+                alert("Juego eliminado con éxito.");
+            } catch (e) {
+                alert("Error al intentar eliminar el juego.");
+            }
+        }
+    };
+
+    const handleEditMatch = (match: any) => {
+        setMatchToEdit(match);
+        setShowMatchForm(true);
+    };
 
     const filteredMatches = matches.filter(m => {
         if (activeFilter === 'TODOS') return true;
@@ -166,7 +181,7 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
                 <div style={{maxWidth:'600px', margin:'0 auto'}}>
 
                     {rol === 'admin' && (
-                        <button onClick={() => setShowMatchForm(true)} style={{ width:'100%', padding:'12px', background:'#10b981', color:'white', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'0.8rem', cursor:'pointer', marginBottom:'15px', borderBottom:'4px solid #059669' }}>
+                        <button onClick={() => { setMatchToEdit(null); setShowMatchForm(true); }} style={{ width:'100%', padding:'12px', background:'#10b981', color:'white', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'0.8rem', cursor:'pointer', marginBottom:'15px', borderBottom:'4px solid #059669' }}>
                             ➕ PROGRAMAR NUEVO JUEGO
                         </button>
                     )}
@@ -180,9 +195,13 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
                                     boxShadow:'0 4px 15px rgba(0,0,0,0.05)', 
                                     border: isFinished ? '1px solid #e2e8f0' : (m.grupo === 'A' ? '2px solid #3b82f6' : '2px solid #ef4444')
                                 }}>
-                                    <div style={{ background:'#f8fafc', padding:'5px 15px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid #f1f5f9' }}>
+                                    {/* CABECERA CON FECHA Y HORA VISIBLE */}
+                                    <div style={{ background:'#f8fafc', padding:'8px 15px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid #f1f5f9' }}>
                                         <span style={{ fontSize:'0.6rem', fontWeight:'900', color: m.grupo === 'A' ? '#3b82f6' : '#ef4444' }}>GRUPO {m.grupo}</span>
-                                        <span style={{ fontSize:'0.65rem', fontWeight:'bold', color:'#64748b' }}>{m.fechaAsignada}</span>
+                                        <div style={{ display:'flex', gap:'10px', alignItems:'center' }}>
+                                            <span style={{ fontSize:'0.65rem', fontWeight:'bold', color:'#64748b' }}>📅 {m.fechaAsignada}</span>
+                                            <span style={{ fontSize:'0.65rem', fontWeight:'900', color:'#1e3a8a', background:'#e0f2fe', padding:'2px 6px', borderRadius:'4px' }}>⏰ {m.hora || 'POR DEFINIR'}</span>
+                                        </div>
                                     </div>
 
                                     <div style={{ display:'flex', padding:'15px', alignItems:'center', justifyContent:'space-between' }}>
@@ -207,6 +226,14 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
                                         </div>
                                     </div>
 
+                                    {/* CONTROLES DE ADMINISTRADOR */}
+                                    {rol === 'admin' && !isFinished && (
+                                        <div style={{ display:'flex', gap:'1px', background:'#e2e8f0', borderTop:'1px solid #f1f5f9' }}>
+                                            <button onClick={() => handleEditMatch(m)} style={{ flex:1, background:'white', border:'none', padding:'10px', fontSize:'0.65rem', fontWeight:'bold', color:'#1e3a8a', cursor:'pointer' }}>✏️ EDITAR CITA</button>
+                                            <button onClick={() => handleDeleteMatch(m.id)} style={{ flex:1, background:'white', border:'none', padding:'10px', fontSize:'0.65rem', fontWeight:'bold', color:'#ef4444', cursor:'pointer' }}>🗑️ ELIMINAR</button>
+                                        </div>
+                                    )}
+
                                     {isFinished && (
                                         <button onClick={() => setSelectedBoxScore(m)} style={{ width:'100%', background:'#f1f5f9', border:'none', padding:'10px', color:'#1e3a8a', fontSize:'0.7rem', fontWeight:'bold', cursor:'pointer', borderTop:'1px solid #f1f5f9' }}>
                                             📊 VER ESTADÍSTICAS COMPLETAS
@@ -223,7 +250,13 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
 
             {showMatchForm && (
                 <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.8)', zIndex:2000, display:'flex', justifyContent:'center', alignItems:'center', padding:'20px'}}>
-                    <div style={{width:'100%', maxWidth:'450px', background:'white', borderRadius:'20px', overflow:'hidden'}}><MatchForm onSuccess={() => setShowMatchForm(false)} onClose={() => setShowMatchForm(false)} /></div>
+                    <div style={{width:'100%', maxWidth:'450px', background:'white', borderRadius:'20px', overflow:'hidden'}}>
+                        <MatchForm 
+                            matchToEdit={matchToEdit}
+                            onSuccess={() => { setShowMatchForm(false); setMatchToEdit(null); }} 
+                            onClose={() => { setShowMatchForm(false); setMatchToEdit(null); }} 
+                        />
+                    </div>
                 </div>
             )}
         </div>

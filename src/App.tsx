@@ -28,6 +28,7 @@ function App() {
   const [activeView, setActiveView] = useState<'dashboard' | 'equipos' | 'calendario' | 'mesa' | 'stats' | 'tabla' | 'login' | 'noticias'>('dashboard');
   
   const [noticiaIndex, setNoticiaIndex] = useState(0);
+  const [juegoIndex, setJuegoIndex] = useState(0); // Índice para el carrusel de juegos
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -80,7 +81,7 @@ function App() {
         const proximos = snapCal.docs
           .map(d => ({ id: d.id, ...d.data() }))
           .filter(m => m.estatus !== 'finalizado')
-          .slice(0, 3); 
+          .slice(0, 10); 
         setProximosJuegos(proximos);
 
       } catch (e) { console.error("Error en Dashboard:", e); }
@@ -88,14 +89,25 @@ function App() {
     fetchData();
   }, [activeView]);
 
+  // Rotación de Noticias: 3 segundos
   useEffect(() => {
     if (noticias.length > 0) {
       const interval = setInterval(() => {
         setNoticiaIndex((prev) => (prev + 1) % noticias.length);
-      }, 5000);
+      }, 3000);
       return () => clearInterval(interval);
     }
   }, [noticias]);
+
+  // Rotación de Juegos: 3 segundos
+  useEffect(() => {
+    if (proximosJuegos.length > 0) {
+      const interval = setInterval(() => {
+        setJuegoIndex((prev) => (prev + 1) % proximosJuegos.length);
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [proximosJuegos]);
 
   if (loading) return <div style={{background:'#f8fafc', height:'100vh', color:'#1e3a8a', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>Sincronizando Liga...</div>;
 
@@ -144,14 +156,13 @@ function App() {
         {activeView === 'dashboard' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
             
-            {/* SECCIÓN SUPERIOR DIVIDIDA */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: '12px' }}>
               
               <div>
                 <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>📢 Prensa Oficial</p>
                 <div onClick={() => setActiveView('noticias')} style={{ background: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid #1e3a8a', position: 'relative', cursor: 'pointer' }}>
-                  <div style={{ height: '100px', background: '#f8fafc' }}>
-                    {noticias.length > 0 && <img key={noticias[noticiaIndex].id} src={noticias[noticiaIndex].imageUrl || 'https://i.postimg.cc/wjPRcBLL/download.jpg'} className="fade-in" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                  <div style={{ height: '100px', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {noticias.length > 0 && <img key={noticias[noticiaIndex].id} src={noticias[noticiaIndex].imageUrl || 'https://i.postimg.cc/wjPRcBLL/download.jpg'} className="fade-in" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
                   </div>
                   <div style={{ padding: '6px', background: '#1e3a8a', minHeight: '35px', display:'flex', alignItems:'center', justifyContent:'center' }}>
                     <p style={{ fontSize: '0.55rem', fontWeight: '800', margin: 0, color: 'white', textAlign: 'center' }}>{noticias[noticiaIndex]?.titulo.toUpperCase()}</p>
@@ -161,20 +172,53 @@ function App() {
 
               <div>
                 <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>📅 Próximos Juegos</p>
-                <div onClick={() => setActiveView('calendario')} style={{ background: '#1e3a8a', borderRadius: '18px', padding: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid white', cursor: 'pointer', display:'flex', flexDirection:'column', gap:'6px', height: '141px', justifyContent: 'center' }}>
-                  {proximosJuegos.length > 0 ? proximosJuegos.map(m => (
-                    <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.1)', padding: '4px', borderRadius: '8px' }}>
-                      <div style={{ textAlign: 'center', flex: 1 }}>
-                        <img src={teamLogos[m.equipoLocalNombre]} style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'contain', background: 'white' }} />
-                        <p style={{ color: 'white', fontSize: '0.4rem', fontWeight: 'bold', margin: 0 }}>{m.equipoLocalNombre.substring(0,3).toUpperCase()}</p>
-                      </div>
-                      <p style={{ color: '#f59e0b', fontSize: '0.45rem', fontWeight: '900', margin: '0 4px' }}>VS</p>
-                      <div style={{ textAlign: 'center', flex: 1 }}>
-                        <img src={teamLogos[m.equipoVisitanteNombre]} style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'contain', background: 'white' }} />
-                        <p style={{ color: 'white', fontSize: '0.45rem', fontWeight: 'bold', margin: 0 }}>{m.equipoVisitanteNombre.substring(0,3).toUpperCase()}</p>
+                <div onClick={() => setActiveView('calendario')} style={{ background: '#1e3a8a', borderRadius: '18px', padding: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid white', cursor: 'pointer', height: '141px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  {proximosJuegos.length > 0 ? (
+                    <div className="fade-in" style={{ textAlign: 'center' }}>
+                      <p style={{ color: '#f59e0b', fontSize: '0.55rem', fontWeight: '900', margin: '0 0 2px 0' }}>{proximosJuegos[juegoIndex].fechaAsignada}</p>
+                      <p style={{ color: 'white', fontSize: '0.8rem', fontWeight: '900', marginBottom: '10px' }}>🕒 {proximosJuegos[juegoIndex].hora || 'POR DEFINIR'}</p>
+                      
+                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px' }}>
+                        {/* LOCAL LOGO CORREGIDO - ESTILO LÍDER INDIVIDUAL */}
+                        <div style={{ textAlign: 'center', flex: 1 }}>
+                          <div style={{ 
+                            width: '40px', height: '40px', borderRadius: '50%', 
+                            background: 'white', display: 'flex', alignItems: 'center', 
+                            justifyContent: 'center', margin: '0 auto', 
+                            border: '2px solid rgba(255,255,255,0.8)', padding: '3px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                          }}>
+                            <img 
+                              src={teamLogos[proximosJuegos[juegoIndex].equipoLocalNombre]} 
+                              style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '50%' }} 
+                            />
+                          </div>
+                          {/* NOMBRE COMPLETO SIN ABREVIAR */}
+                          <p style={{ color: 'white', fontSize: '0.45rem', fontWeight: 'bold', marginTop: '5px', lineHeight: '1.2' }}>{proximosJuegos[juegoIndex].equipoLocalNombre.toUpperCase()}</p>
+                        </div>
+
+                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', fontWeight: '900' }}>VS</p>
+
+                        {/* VISITANTE LOGO CORREGIDO - ESTILO LÍDER INDIVIDUAL */}
+                        <div style={{ textAlign: 'center', flex: 1 }}>
+                          <div style={{ 
+                            width: '40px', height: '40px', borderRadius: '50%', 
+                            background: 'white', display: 'flex', alignItems: 'center', 
+                            justifyContent: 'center', margin: '0 auto', 
+                            border: '2px solid rgba(255,255,255,0.8)', padding: '3px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                          }}>
+                            <img 
+                              src={teamLogos[proximosJuegos[juegoIndex].equipoVisitanteNombre]} 
+                              style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '50%' }} 
+                            />
+                          </div>
+                          {/* NOMBRE COMPLETO SIN ABREVIAR */}
+                          <p style={{ color: 'white', fontSize: '0.45rem', fontWeight: 'bold', marginTop: '5px', lineHeight: '1.2' }}>{proximosJuegos[juegoIndex].equipoVisitanteNombre.toUpperCase()}</p>
+                        </div>
                       </div>
                     </div>
-                  )) : <p style={{color:'white', fontSize:'0.5rem', textAlign:'center'}}>Sin juegos</p>}
+                  ) : <p style={{color:'white', fontSize:'0.5rem', textAlign:'center'}}>Cargando agenda...</p>}
                 </div>
               </div>
             </div>
@@ -224,7 +268,7 @@ function App() {
           </div>
         )}
 
-        {/* RESTO DE COMPONENTES IGUAL */}
+        {/* RESTO DE COMPONENTES */}
         {activeView === 'noticias' && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'equipos' && (isAdmin ? <AdminEquipos onClose={() => setActiveView('dashboard')} /> : <TeamsPublicViewer onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'calendario' && <CalendarViewer rol={isAdmin ? 'admin' : 'fan'} onClose={() => setActiveView('dashboard')} />}
