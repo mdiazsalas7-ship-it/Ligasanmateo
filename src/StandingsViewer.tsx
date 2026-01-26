@@ -103,8 +103,8 @@ const StandingsViewer: React.FC<{ equipos?: Equipo[], onClose: () => void }> = (
                     </div>
                 ) : (
                     <>
-                        <RenderTable teams={grupoA} groupName="GRUPO A - ELITE" color="#1e3a8a" />
-                        <RenderTable teams={grupoB} groupName="GRUPO B - PRO" color="#d97706" />
+                        <RenderTable teams={grupoA} groupName="GRUPO A" color="#1e3a8a" />
+                        <RenderTable teams={grupoB} groupName="GRUPO B" color="#d97706" />
                     </>
                 )}
 
