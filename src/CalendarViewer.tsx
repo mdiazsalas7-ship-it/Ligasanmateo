@@ -140,7 +140,7 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void }> = ({ rol, o
             <div style={{background:'#1e3a8a', color:'white', padding:'15px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'4px solid #f59e0b'}}>
                 <div>
                     <h2 style={{margin:0, fontSize:'1rem', fontWeight:'900'}}>📅 CALENDARIO OFICIAL</h2>
-                    <p style={{margin:0, fontSize:'0.6rem', opacity:0.8}}>LIGA METROPOLITANA MASTER 40</p>
+                    <p style={{margin:0, fontSize:'0.6rem', opacity:0.8}}>LIGA METROPOLITANA EJE ESTE</p>
                 </div>
                 <button onClick={onClose} style={{background:'white', color:'#1e3a8a', border:'none', padding:'8px 15px', borderRadius:'12px', fontWeight:'bold', fontSize:'0.7rem'}}>VOLVER</button>
             </div>
