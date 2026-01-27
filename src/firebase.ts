@@ -2,7 +2,6 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-// 1. NUEVA IMPORTACIÓN PARA NOTIFICACIONES
 import { getMessaging, isSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
@@ -14,27 +13,20 @@ const firebaseConfig = {
   appId: '1:71674005364:web:6d6e93746ac430b77c4e21',
 };
 
-// Lógica Singleton para evitar errores de reinicialización
+// Singleton para evitar errores de duplicidad en Vite/React
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Inicializar servicios existentes
+// Inicialización de servicios principales
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app);
+const storage = getStorage(app); // <--- Este es el encargado de recibir las fotos de las planillas
 
-// 2. INICIALIZAR MESSAGING DE FORMA SEGURA
-// Usamos isSupported() porque Messaging necesita Service Workers (no funciona en modo incógnito a veces o navegadores muy viejos)
+// Inicialización segura de Mensajería (Notificaciones)
 let messaging: any = null;
+isSupported().then((supported) => {
+  if (supported) {
+    messaging = getMessaging(app);
+  }
+}).catch(err => console.error("Messaging no soportado:", err));
 
-isSupported()
-  .then((yes) => {
-    if (yes) {
-      messaging = getMessaging(app);
-    }
-  })
-  .catch((err) => {
-    console.log('Firebase Messaging no es soportado en este navegador:', err);
-  });
-
-// 3. EXPORTAR SERVICIOS (Agregamos messaging al final)
 export { auth, db, storage, messaging };

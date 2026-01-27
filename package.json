@@ -10,11 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "axios": "^1.13.3",
     "firebase": "^10.0.0",
-    "jspdf": "^2.5.1",
-    "jspdf-autotable": "^3.5.31"
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

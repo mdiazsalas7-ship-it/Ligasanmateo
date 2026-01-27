@@ -27,13 +27,10 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     });
     
     const [loading, setLoading] = useState(true);
-    const [selectedCard, setSelectedCard] = useState<{player: PlayerStat, type: string} | null>(null);
-    const [activeTab, setActiveTab] = useState('mvp'); // Control de la categoría activa
+    const [activeTab, setActiveTab] = useState('mvp');
 
     const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/451/451716.png";
-    const DEFAULT_PLAYER = "https://cdn-icons-png.flaticon.com/512/166/166344.png";
 
-    // Configuración de las pestañas
     const categories = [
         { id: 'mvp', label: 'MVP', icon: '👑', color: '#eab308', statKey: 'valpg', unit: 'VAL' },
         { id: 'puntos', label: 'PUNTOS', icon: '🔥', color: '#ef4444', statKey: 'ppg', unit: 'PPG' },
@@ -123,33 +120,6 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         return () => { if (unsubscribe) unsubscribe(); };
     }, []);
 
-    const AwardCardModal = () => {
-        if (!selectedCard) return null;
-        const { player, type } = selectedCard;
-        const currentCat = categories.find(c => c.id === type) || categories[0];
-
-        return (
-            <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.95)', zIndex:3000, display:'flex', justifyContent:'center', alignItems:'center', padding:'20px'}} onClick={() => setSelectedCard(null)}>
-                <div onClick={e => e.stopPropagation()} style={{
-                    width: '100%', maxWidth: '320px', height: '450px', borderRadius: '25px', 
-                    background: `linear-gradient(135deg, ${currentCat.color}, #000)`, boxShadow: '0 0 50px rgba(0,0,0,0.5)', position: 'relative', overflow: 'hidden',
-                    border: '3px solid white', color: 'white', textAlign:'center'
-                }}>
-                    <div style={{marginTop:'30px', fontWeight:'900', fontSize:'1.1rem', letterSpacing:'2px'}}>{currentCat.label}</div>
-                    <div style={{background:'white', width:'55px', height:'55px', borderRadius:'50%', margin:'15px auto', display:'flex', alignItems:'center', justifyContent:'center', padding:'5px'}}>
-                        <img src={player.logoUrl || DEFAULT_LOGO} style={{width:'100%', height:'100%', borderRadius:'50%', objectFit:'contain'}} alt="team" />
-                    </div>
-                    <div style={{fontSize:'1.5rem', fontWeight:'900', textTransform:'uppercase', padding:'0 10px'}}>{player.nombre}</div>
-                    <img src={DEFAULT_PLAYER} style={{width:'80%', position:'absolute', bottom:80, left:'10%', opacity: 0.8}} alt="player" />
-                    <div style={{position:'absolute', bottom:20, left:20, right:20, background:'rgba(0,0,0,0.7)', borderRadius:'15px', padding:'12px', border:'1px solid rgba(255,255,255,0.2)'}}>
-                        <div style={{fontSize:'2.5rem', fontWeight:'900'}}>{(player as any)[currentCat.statKey]}</div>
-                        <div style={{fontSize:'0.7rem', fontWeight:'bold'}}>{currentCat.unit} POR PARTIDO</div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
     const ActiveLeaderSection = () => {
         const cat = categories.find(c => c.id === activeTab)!;
         const data = leaders[activeTab as keyof typeof leaders];
@@ -159,53 +129,59 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         const others = data.slice(1, 8);
 
         return (
-            <div className="animate-fade-in" style={{background:'white', borderRadius:'24px', overflow:'hidden', boxShadow:'0 10px 25px rgba(0,0,0,0.05)', border:'1px solid #e2e8f0'}}>
-                <div onClick={() => setSelectedCard({player: leader, type: activeTab})} style={{padding:'25px', textAlign:'center', cursor:'pointer', background:`linear-gradient(to bottom, white, #f8fafc)`, position:'relative'}}>
-                    <div style={{position:'absolute', top:15, right:15, background:cat.color, color:'white', padding:'4px 10px', borderRadius:'10px', fontSize:'0.6rem', fontWeight:'900'}}>LÍDER ACTUAL</div>
-                    <div style={{display:'flex', justifyContent:'center', marginBottom:'12px'}}>
-                        <img src={leader.logoUrl || DEFAULT_LOGO} style={{width:'60px', height:'60px', borderRadius:'50%', border:'3px solid white', boxShadow:'0 4px 10px rgba(0,0,0,0.1)', objectFit:'cover'}} alt="logo" />
+            <div style={{background:'white', borderRadius:'24px', overflow:'hidden', boxShadow:'0 10px 25px rgba(0,0,0,0.05)', border:'1px solid #e2e8f0'}}>
+                {/* HEMOS QUITADO LA KEY Y LA CLASE DE ANIMACIÓN.
+                   Ahora los cambios de texto e imagen son instantáneos.
+                */}
+                <div>
+                    <div style={{padding:'25px', textAlign:'center', background:`linear-gradient(to bottom, white, #f8fafc)`, position:'relative'}}>
+                        <div style={{position:'absolute', top:15, right:15, background:cat.color, color:'white', padding:'4px 10px', borderRadius:'10px', fontSize:'0.6rem', fontWeight:'900'}}>LÍDER ACTUAL</div>
+                        
+                        <div style={{display:'flex', justifyContent:'center', marginBottom:'12px'}}>
+                            <img src={leader.logoUrl || DEFAULT_LOGO} style={{width:'65px', height:'65px', borderRadius:'50%', border:'3px solid white', boxShadow:'0 4px 10px rgba(0,0,0,0.1)', objectFit:'cover'}} alt="logo" />
+                        </div>
+                        
+                        <div style={{fontWeight:'900', fontSize:'1.4rem', color:'#1e3a8a', textTransform:'uppercase'}}>{leader.nombre}</div>
+                        
+                        <div style={{fontSize:'3.2rem', fontWeight:'900', color:cat.color, lineHeight:1, marginTop:'5px'}}>
+                            {(leader as any)[cat.statKey]}
+                            <span style={{fontSize:'1rem', marginLeft:'5px', color:'#94a3b8'}}>{cat.unit}</span>
+                        </div>
                     </div>
-                    <div style={{fontWeight:'900', fontSize:'1.4rem', color:'#1e3a8a', textTransform:'uppercase'}}>{leader.nombre}</div>
-                    <div style={{fontSize:'3rem', fontWeight:'900', color:cat.color, lineHeight:1, marginTop:'10px'}}>
-                        {(leader as any)[cat.statKey]}
-                        <span style={{fontSize:'1rem', marginLeft:'5px', color:'#94a3b8'}}>{cat.unit}</span>
+                    
+                    <div style={{background:'#f8fafc', padding:'10px 20px', borderTop:'1px solid #e2e8f0', borderBottom:'1px solid #e2e8f0'}}>
+                        <span style={{fontSize:'0.7rem', fontWeight:'900', color:'#1e3a8a'}}>TOP PERSEGUIDORES</span>
                     </div>
-                    <div style={{fontSize:'0.7rem', color:'#64748b', fontWeight:'bold', marginTop:'5px'}}>CLICK PARA VER TARJETA 🎴</div>
-                </div>
-                
-                <div style={{background:'#f8fafc', padding:'10px 20px', borderTop:'1px solid #e2e8f0', borderBottom:'1px solid #e2e8f0'}}>
-                    <span style={{fontSize:'0.7rem', fontWeight:'900', color:'#1e3a8a'}}>TOP PERSEGUIDORES</span>
-                </div>
 
-                {others.map((p: any, i: number) => (
-                    <div key={p.id} style={{padding:'12px 20px', display:'flex', alignItems:'center', fontSize:'0.9rem', borderBottom:'1px solid #f1f5f9'}}>
-                        <span style={{width:'25px', fontWeight:'900', color:'#cbd5e1'}}>{i+2}</span>
-                        <img src={p.logoUrl || DEFAULT_LOGO} style={{width:'30px', height:'30px', borderRadius:'50%', marginRight:'12px', objectFit:'cover'}} alt="t" />
-                        <span style={{flex:1, fontWeight:'700', color:'#334155'}}>{p.nombre}</span>
-                        <span style={{fontWeight:'900', color:cat.color}}>{p[cat.statKey]}</span>
+                    <div style={{minHeight:'200px'}}>
+                        {others.map((p: any, i: number) => (
+                            <div key={p.id} style={{padding:'12px 20px', display:'flex', alignItems:'center', fontSize:'0.9rem', borderBottom:'1px solid #f1f5f9'}}>
+                                <span style={{width:'25px', fontWeight:'900', color:'#cbd5e1'}}>{i+2}</span>
+                                <img src={p.logoUrl || DEFAULT_LOGO} style={{width:'30px', height:'30px', borderRadius:'50%', marginRight:'12px', objectFit:'cover'}} alt="t" />
+                                <span style={{flex:1, fontWeight:'700', color:'#334155'}}>{p.nombre}</span>
+                                <span style={{fontWeight:'900', color:cat.color}}>{p[cat.statKey]}</span>
+                            </div>
+                        ))}
                     </div>
-                ))}
+                </div>
             </div>
         );
     };
 
     return (
         <div style={{ minHeight:'100vh', background:'#f1f5f9', paddingBottom:'100px' }}>
-            {selectedCard && <AwardCardModal />}
             
-            {/* CABECERA ESTÁTICA */}
             <div style={{background:'#1e3a8a', padding:'20px', color:'white', boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}>
                 <div style={{maxWidth:'800px', margin:'0 auto', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                     <div>
                         <h2 style={{margin:0, fontWeight:900, fontSize:'1.5rem'}}>📊 LÍDERES</h2>
-                        <p style={{margin:0, opacity:0.8, fontSize:'0.7rem', fontWeight:'bold', textTransform:'uppercase'}}>Estadísticas Oficiales Master 40</p>
+                        <p style={{margin:0, opacity:0.8, fontSize:'0.7rem', fontWeight:'bold', textTransform:'uppercase'}}>Estadísticas Oficiales</p>
                     </div>
                     <button onClick={onClose} style={{background:'white', color:'#1e3a8a', border:'none', padding:'8px 15px', borderRadius:'10px', fontWeight:'900', fontSize:'0.7rem', cursor:'pointer'}}>CERRAR</button>
                 </div>
             </div>
 
-            {/* SELECTOR DE CATEGORÍAS (TABS HORIZONTALES) */}
-            <div style={{ background:'white', borderBottom:'1px solid #e2e8f0', sticky:'top', top:0, zIndex:10 }}>
+            <div style={{ background:'white', borderBottom:'1px solid #e2e8f0', position:'sticky', top:0, zIndex:10 }}>
                 <div className="no-scrollbar" style={{ display:'flex', overflowX:'auto', padding:'10px', gap:'10px', maxWidth:'800px', margin:'0 auto' }}>
                     {categories.map(cat => (
                         <button 
@@ -221,7 +197,7 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 fontWeight:'bold',
                                 fontSize:'0.7rem',
                                 cursor:'pointer',
-                                transition:'0.3s',
+                                transition:'0.2s', // Transición suave de color de botón pero sin parpadeo
                                 display:'flex',
                                 alignItems:'center',
                                 gap:'5px'
@@ -233,7 +209,6 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
             </div>
 
-            {/* CONTENIDO PRINCIPAL */}
             <div style={{padding:'20px', maxWidth:'600px', margin:'0 auto'}}>
                 {loading ? (
                     <div style={{textAlign:'center', padding:'50px', color:'#1e3a8a', fontWeight:'bold'}}>PROCESANDO RÉCORDS...</div>
@@ -244,8 +219,7 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
             <style>{`
                 .no-scrollbar::-webkit-scrollbar { display: none; }
-                .animate-fade-in { animation: fadeIn 0.3s ease-in; }
-                @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+                /* Hemos eliminado las animaciones que causaban el parpadeo */
             `}</style>
         </div>
     );

@@ -1,6 +1,10 @@
-import React, { useState, useEffect, memo } from 'react';
-import { db } from './firebase';
-import { doc, updateDoc, onSnapshot, collection, query, getDocs, setDoc, increment, where, writeBatch, limit, orderBy, addDoc, deleteDoc } from 'firebase/firestore';
+import React, { useState, useEffect, memo, useRef } from 'react';
+import { db, storage } from './firebase'; 
+import { doc, updateDoc, onSnapshot, collection, query, getDocs, setDoc, increment, where, writeBatch, limit, orderBy, addDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import QRCode from 'qrcode';
 
 // --- FILA DE JUGADOR ---
 const PlayerRow = memo(({ player, team, stats, onStat, onSub }: any) => {
@@ -49,16 +53,117 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [statsCache, setStatsCache] = useState<Record<string, any>>({});
     const [recentPlays, setRecentPlays] = useState<any[]>([]);
+    
+    // ESTADOS PARA OCR
+    const [isProcessing, setIsProcessing] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/166/166344.png";
 
-    // --- CORRECCIÓN DE FECHA LOCAL (VENEZUELA) ---
+    // --- PASO 1: GENERAR PDF ---
+    const handleGeneratePlanilla = async () => {
+        if (!matchData) return;
+        const docPDF = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = docPDF.internal.pageSize.getWidth();
+        const pageHeight = docPDF.internal.pageSize.getHeight();
+
+        const drawAnchors = () => {
+            docPDF.setFillColor(0, 0, 0);
+            docPDF.circle(10, 10, 4, 'F'); 
+            docPDF.circle(pageWidth - 10, 10, 4, 'F'); 
+            docPDF.circle(10, pageHeight - 10, 4, 'F'); 
+            docPDF.circle(pageWidth - 10, pageHeight - 10, 4, 'F');
+        };
+        drawAnchors();
+
+        const qrDataUrl = await QRCode.toDataURL(matchData.id);
+        docPDF.addImage(qrDataUrl, 'PNG', pageWidth - 40, 12, 25, 25);
+
+        docPDF.setFontSize(16); docPDF.text("LIGA MADERA 15 - PLANILLA OCR", 20, 20);
+        docPDF.setFontSize(9); docPDF.text(`JUEGO ID: ${matchData.id} | FECHA: ${matchData.fechaAsignada}`, 20, 28);
+
+        const createTable = (title: string, players: any[], startY: number) => {
+            docPDF.text(title, 20, startY);
+            autoTable(docPDF, {
+                startY: startY + 4,
+                head: [['#', 'JUGADOR', 'T3', 'T2', 'TL', 'REB', 'FLT']],
+                body: players.map(p => [
+                    p.numero || '00',
+                    p.nombre.toUpperCase(),
+                    '[ ] [ ] [ ]', '[ ] [ ] [ ] [ ]', '[ ] [ ] [ ]', '[ ] [ ] [ ] [ ]', '[ ] [ ] [ ]'
+                ]),
+                styles: { fontSize: 7, cellPadding: 1.5, lineColor: [0,0,0], lineWidth: 0.1 },
+                headStyles: { fillColor: [30, 58, 138] }
+            });
+        };
+
+        createTable(`LOCAL: ${matchData.equipoLocalNombre}`, playersLocal, 45);
+        const nextY = (docPDF as any).lastAutoTable.finalY + 10;
+        createTable(`VISITANTE: ${matchData.equipoVisitanteNombre}`, playersVisitante, nextY);
+
+        docPDF.save(`Planilla_${matchData.equipoLocalNombre}_vs_${matchData.equipoVisitanteNombre}.pdf`);
+    };
+
+    // --- PASO 2 CORREGIDO: SUBIR A STORAGE Y ESCRIBIR EN LA COLA ---
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) {
+            console.error("❌ No se seleccionó archivo");
+            return;
+        }
+        if (!selectedMatchId) {
+            console.error("❌ No hay partido seleccionado");
+            return;
+        }
+
+        // Referencia a Storage
+        const storageRef = ref(storage, `planillas/${selectedMatchId}_${Date.now()}.jpg`);
+
+        try {
+            setIsProcessing(true);
+            console.log("🚀 1. Iniciando subida a Storage...");
+
+            // A. Subimos la foto (Esto ya te funciona)
+            const snapshot = await uploadBytes(storageRef, file);
+            console.log("✅ 2. Foto subida a Storage.");
+            
+            // B. Obtenemos el link público
+            const downloadURL = await getDownloadURL(snapshot.ref);
+            console.log("✅ 3. URL obtenida:", downloadURL);
+
+            // C. ¡EL CAMBIO CLAVE! Escribimos en Firestore en lugar de usar fetch
+            // Esto dispara el trigger de n8n de forma segura
+            console.log("⏳ 4. Creando documento en 'cola_ocr'...");
+            const docRef = await addDoc(collection(db, 'cola_ocr'), {
+                game_id: selectedMatchId,
+                imageUrl: downloadURL,
+                status: 'pending',     // n8n busca esto
+                created_at: Date.now() // Para ordenar por el último
+            });
+            console.log("🎉 5. Documento creado en cola con ID:", docRef.id);
+
+            // D. Actualizamos el estado visual del juego
+            await updateDoc(doc(db, 'calendario', selectedMatchId), {
+                ocr_status: 'processing',
+                planilla_url: downloadURL,
+                ocr_image_at: Date.now()
+            });
+
+            alert("✅ Planilla enviada a la cola. La IA la procesará en breve.");
+
+        } catch (error: any) {
+            console.error("🔥 ERROR:", error);
+            alert(`❌ Error subiendo planilla: ${error.message}`);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     useEffect(() => {
         const now = new Date();
         const offset = now.getTimezoneOffset() * 60000;
         const localDate = new Date(now.getTime() - offset).toISOString().split('T')[0];
 
-        // Escucha activa para que los juegos aparezcan al instante
         const q = query(
             collection(db, 'calendario'), 
             where('fechaAsignada', '==', localDate), 
@@ -78,6 +183,7 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             if (snap.exists()) {
                 const data = { id: snap.id, ...snap.data() } as any;
                 setMatchData(data);
+                if (data.ocr_status === 'completed') setIsProcessing(false); 
                 const lDoc = await getDocs(query(collection(db, 'equipos'), where('nombre', '==', data.equipoLocalNombre)));
                 const vDoc = await getDocs(query(collection(db, 'equipos'), where('nombre', '==', data.equipoVisitanteNombre)));
                 setLogos({ local: lDoc.docs[0]?.data()?.logoUrl || DEFAULT_LOGO, visitante: vDoc.docs[0]?.data()?.logoUrl || DEFAULT_LOGO });
@@ -166,20 +272,24 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <div style={{background:'#000', height:'100vh', display:'flex', flexDirection:'column', color:'white', overflow:'hidden'}}>
             <style>{`.btn-stat { padding:8px 0; border:none; border-radius:6px; color:white; font-weight:900; cursor:pointer; font-size:0.6rem; transition: 0.1s; } .btn-stat:active { transform: scale(0.95); }`}</style>
             
-            <div style={{height:'50px', background:'#111', borderBottom:'2px solid #333', display:'flex', alignItems:'center', padding:'0 15px', justifyContent:'space-between'}}>
-                <div style={{display:'flex', alignItems:'center', gap:'8px', flex:1}}>
-                    <img src={logos.local} style={{width:'30px', height:'30px', borderRadius:'50%', background:'white', objectFit:'contain'}} alt="L" />
-                    <span style={{fontSize:'0.75rem', fontWeight:'900', color:'#60a5fa', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'80px'}}>{matchData?.equipoLocalNombre}</span>
+            {/* STATUS IA */}
+            {isProcessing && (
+                <div style={{background:'#f59e0b', color:'black', textAlign:'center', padding:'4px', fontSize:'0.7rem', fontWeight:'bold'}}>
+                    🧠 IA SUBIENDO Y AVISANDO A N8N... ESPERE
                 </div>
+            )}
+
+            <div style={{height:'55px', background:'#111', borderBottom:'2px solid #333', display:'flex', alignItems:'center', padding:'0 15px', justifyContent:'space-between'}}>
+                <button onClick={handleGeneratePlanilla} style={{background:'#1e3a8a', border:'none', color:'white', padding:'6px 12px', borderRadius:'8px', fontSize:'0.65rem', fontWeight:'bold'}}>🖨️ PDF</button>
+                
                 <div style={{display:'flex', alignItems:'center', gap:'10px', background:'#222', padding:'4px 12px', borderRadius:'8px', border:'1px solid #444'}}>
                     <span style={{fontSize:'1.5rem', fontWeight:'900', color:'#fff'}}>{matchData?.marcadorLocal}</span>
                     <span style={{fontSize:'0.6rem', color:'#666'}}>VS</span>
                     <span style={{fontSize:'1.5rem', fontWeight:'900', color:'#fff'}}>{matchData?.marcadorVisitante}</span>
                 </div>
-                <div style={{display:'flex', alignItems:'center', gap:'8px', flex:1, justifyContent:'flex-end'}}>
-                    <span style={{fontSize:'0.75rem', fontWeight:'900', color:'#facc15', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'80px'}}>{matchData?.equipoVisitanteNombre}</span>
-                    <img src={logos.visitante} style={{width:'30px', height:'30px', borderRadius:'50%', background:'white', objectFit:'contain'}} alt="V" />
-                </div>
+
+                <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleFileChange} style={{display:'none'}} />
+                <button onClick={() => fileInputRef.current?.click()} style={{background:'#7c3aed', border:'none', color:'white', padding:'6px 12px', borderRadius:'8px', fontSize:'0.65rem', fontWeight:'bold'}}>📸 ENVIAR</button>
             </div>
 
             <div style={{flex:1, display:'flex', overflow:'hidden'}}>
@@ -202,7 +312,7 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <button onClick={handleFinalize} style={{flex:2, padding:'12px', background:'#10b981', color:'white', border:'none', borderRadius:'10px', fontWeight:'bold', fontSize:'0.7rem'}}>FINALIZAR</button>
             </div>
 
-            {/* MODAL HISTORIAL */}
+            {/* MODALES (Historial y Cambios) - Sin modificaciones necesarias */}
             {isHistoryOpen && (
                 <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.95)', zIndex:5000, padding:'20px', display:'flex', justifyContent:'center', alignItems:'center'}}>
                     <div style={{background:'white', width:'100%', maxWidth:'400px', borderRadius:'16px', overflow:'hidden', height:'70vh', display:'flex', flexDirection:'column'}}>
@@ -210,10 +320,7 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         <div style={{flex:1, overflowY:'auto', padding:'10px'}}>
                             {recentPlays.map(play => (
                                 <div key={play.id} style={{display:'flex', background:'#f8fafc', padding:'10px', borderRadius:'10px', alignItems:'center', justifyContent:'space-between', border:'1px solid #e2e8f0', marginBottom:'6px'}}>
-                                    <div style={{fontSize:'0.8rem', color:'#333'}}>
-                                        <b style={{color: '#1e3a8a', marginRight: '5px'}}>#{play.jugadorNumero || '??'}</b>
-                                        <b>{play.jugadorNombre}</b>: {play.accion.toUpperCase()}
-                                    </div>
+                                    <div style={{fontSize:'0.8rem', color:'#333'}}><b style={{color: '#1e3a8a', marginRight: '5px'}}>#{play.jugadorNumero}</b><b>{play.jugadorNombre}</b>: {play.accion.toUpperCase()}</div>
                                     <button onClick={() => handleDeletePlay(play)} style={{background:'#fee2e2', border:'none', color:'#ef4444', borderRadius:'8px', padding:'6px 12px', fontSize:'0.6rem', fontWeight:'bold'}}>BORRAR</button>
                                 </div>
                             ))}
@@ -223,7 +330,6 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
             )}
 
-            {/* MODAL CAMBIOS */}
             {subModal.isOpen && (
                 <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.95)', zIndex:4000, padding:'20px', display:'flex', justifyContent:'center', alignItems:'center'}}>
                     <div style={{background:'white', width:'100%', maxWidth:'400px', borderRadius:'15px', overflow:'hidden'}}>
@@ -240,7 +346,7 @@ const MesaTecnica: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                     }} style={{ padding:'12px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', background: isSelected ? '#dbeafe' : 'transparent', color:'#333', cursor:'pointer', alignItems:'center' }}>
                                         <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
                                             <span style={{background:'#eee', padding:'2px 6px', borderRadius:'4px', fontWeight:'bold', fontSize:'0.8rem'}}>#{p.numero || '??'}</span>
-                                            <span style={{fontWeight: isSelected ? 'bold' : 'normal'}}>{p.nombre}</span>
+                                            <span>{p.nombre}</span>
                                         </div>
                                         {isSelected && <span style={{fontWeight:'bold', color:'#1e40af', fontSize: '0.7rem'}}>EN CANCHA</span>}
                                     </div>
