@@ -24,7 +24,7 @@ const RenderTable = memo(({ title, data, color }: { title: string, data: any[], 
     overflow: 'hidden', 
     boxShadow: '0 10px 25px rgba(0,0,0,0.1)', 
     border: `2px solid ${color}`,
-    minHeight: '340px' // Reducido de 415px a 340px para que no sobre espacio
+    minHeight: '340px' 
   }}>
     <div style={{ background: color, padding: '10px', textAlign: 'center' }}>
       <h4 style={{ fontSize: '0.8rem', color: 'white', margin: 0, fontWeight: '900', textTransform: 'uppercase' }}>{title}</h4>
@@ -188,7 +188,22 @@ function App() {
       
       <header style={{ height: '65px', background: '#f8fafc', display: 'flex', alignItems: 'center', padding: '0 15px', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 1000 }}>
         <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-          <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '45px' }} />
+          <div style={{ position: 'relative' }}>
+            <img 
+              src="https://i.postimg.cc/hhF5fTPn/image.png" 
+              alt="Logo" 
+              style={{ height: '45px', cursor: 'pointer' }} 
+              onClick={() => !user && setActiveView('login')}
+            />
+            {!user && (
+              <button 
+                onClick={() => setActiveView('login')} 
+                style={{ position: 'absolute', bottom: '-5px', right: '-5px', background: '#1e3a8a', color: 'white', border: '2px solid white', borderRadius: '50%', width: '22px', height: '22px', fontSize: '0.6rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                🔑
+              </button>
+            )}
+          </div>
           <h1 style={{ fontSize: '0.8rem', fontWeight: 900, color: '#1e3a8a', textTransform: 'uppercase', lineHeight: '1.1' }}>LIGA METROPOLITANA<br/>EJE ESTE</h1>
         </div>
         {user && <button onClick={() => { signOut(auth); setUser(null); setActiveView('dashboard'); }} style={{background:'#fef2f2', border:'1px solid #fee2e2', color:'#ef4444', padding:'6px 12px', borderRadius:'10px', fontSize:'0.65rem', fontWeight:'bold'}}>SALIR</button>}
@@ -198,7 +213,6 @@ function App() {
         {activeView === 'dashboard' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             
-            {/* Noticias y Juegos */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: '12px' }}>
               <div style={{ height: '165px' }}>
                 <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>📢 Prensa</p>
@@ -230,7 +244,6 @@ function App() {
               </div>
             </div>
 
-            {/* Líderes */}
             <section style={{ height: '130px' }}>
               <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>⭐ Rendimiento Individual</p>
               <div onClick={() => setActiveView('stats')} style={{ cursor: 'pointer' }}>
@@ -247,7 +260,6 @@ function App() {
               </div>
             </section>
 
-            {/* Posiciones */}
             <section>
                 <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>🏆 Posiciones de la Liga</p>
                 <div onClick={() => setActiveView('tabla')} style={{ cursor: 'pointer' }}>
@@ -259,7 +271,6 @@ function App() {
                 </div>
             </section>
 
-            {/* Panel Admin */}
             {isAdmin && (
               <div style={{ padding: '15px', background: '#1e3a8a', borderRadius: '24px', color: 'white', border: '2px solid white', boxShadow: '0 8px 16px rgba(30,58,138,0.2)' }}>
                 <p style={{ textAlign: 'center', margin: '0 0 10px 0', fontWeight: 900, fontSize:'0.65rem' }}>⚙️ PANEL DE CONTROL MASTER</p>
@@ -272,7 +283,6 @@ function App() {
           </div>
         )}
 
-        {/* Otras Vistas */}
         {activeView === 'noticias' && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'equipos' && (isAdmin ? <AdminEquipos onClose={() => setActiveView('dashboard')} /> : <TeamsPublicViewer onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'calendario' && <CalendarViewer rol={isAdmin ? 'admin' : 'fan'} onClose={() => setActiveView('dashboard')} />}
@@ -307,7 +317,6 @@ function App() {
         .fade-in { animation: fadeInEffect 0.5s ease-in-out; }
         @keyframes fadeInEffect { from { opacity: 0; } to { opacity: 1; } }
         .card-leader { padding: 15px; border-radius: 20px; color: white; position: relative; overflow: hidden; height: 100px; display: flex; align-items: flex-end; box-shadow: 0 8px 20px rgba(0,0,0,0.15); transition: 0.3s; }
-        .score { background: linear-gradient(135deg, #1e3a8a, #3b82f6); }
         .mvp-gold { background: linear-gradient(135deg, #f59e0b, #d97706); }
         .leader-pts { background: linear-gradient(135deg, #ef4444, #991b1b); }
         .leader-reb { background: linear-gradient(135deg, #10b981, #065f46); }
