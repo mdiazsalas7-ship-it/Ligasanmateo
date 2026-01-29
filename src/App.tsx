@@ -15,7 +15,42 @@ import TeamsPublicViewer from './TeamsPublicViewer';
 import NewsAdmin from './NewsAdmin'; 
 import NewsFeed from './NewsFeed';
 
-// 1. TABLA OPTIMIZADA: Alto ajustado para evitar espacio muerto
+// --- CONFIGURACIÓN DE CATEGORÍAS ---
+const CATEGORIAS_DISPONIBLES = [
+  { id: 'MASTER40', label: '🍷 MASTER 40' },
+  { id: 'U19', label: '⚡ U19' },
+  { id: 'LIBRE', label: '🏀 LIBRE' },
+  { id: 'FEMENINO', label: '‍♀️ FEMENINO' }
+];
+
+// --- FUNCIÓN MAESTRA PARA ELEGIR LA COLECCIÓN ---
+const getCollectionName = (baseName, cat) => {
+  if (cat === 'MASTER40') return baseName; 
+  return `${baseName}_${cat}`; 
+};
+
+// --- HELPER PARA FORMATEAR FECHA CON DÍA ---
+const formatFechaConDia = (fechaStr) => {
+  if (!fechaStr) return '';
+  try {
+      // Asumimos formato DD/MM/YYYY
+      const [dia, mes, anio] = fechaStr.split('/').map(Number);
+      const dateObj = new Date(anio, mes - 1, dia); // Meses en JS son 0-11
+      
+      if (isNaN(dateObj.getTime())) return fechaStr; // Si falla, devuelve la original
+
+      const opciones = { weekday: 'long' };
+      let nombreDia = new Intl.DateTimeFormat('es-ES', opciones).format(dateObj);
+      // Capitalizar primera letra
+      nombreDia = nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1);
+
+      return `${nombreDia}, ${fechaStr}`;
+  } catch (e) {
+      return fechaStr;
+  }
+};
+
+// 1. TABLA OPTIMIZADA
 const RenderTable = memo(({ title, data, color }: { title: string, data: any[], color: string }) => (
   <div style={{ 
     width: '100%', 
@@ -30,43 +65,55 @@ const RenderTable = memo(({ title, data, color }: { title: string, data: any[], 
       <h4 style={{ fontSize: '0.8rem', color: 'white', margin: 0, fontWeight: '900', textTransform: 'uppercase' }}>{title}</h4>
     </div>
     <div style={{ padding: '12px' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
-        <thead>
-          <tr style={{ color: '#94a3b8', borderBottom: '2px solid #f1f5f9' }}>
-            <th style={{ textAlign: 'left', paddingBottom: '8px' }}>EQUIPO</th>
-            <th style={{ textAlign: 'center' }}>JG</th>
-            <th style={{ textAlign: 'center' }}>JP</th>
-            <th style={{ textAlign: 'center' }}>DIF</th>
-            <th style={{ textAlign: 'center', color: color }}>PTS</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((eq, i) => {
-            const diff = (Number(eq.puntos_favor) || 0) - (Number(eq.puntos_contra) || 0);
-            return (
-              <tr key={eq.id} style={{ borderBottom: i === data.length - 1 ? 'none' : '1px solid #f8fafc' }}>
-                <td style={{ padding: '8px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontWeight: 'bold', color: '#cbd5e1', width: '15px' }}>{i + 1}</span>
-                  <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(0,0,0,0.05)', padding: '2px', overflow: 'hidden' }}>
-                    <img src={eq.logoUrl || ""} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="L" />
-                  </div>
-                  <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.65rem' }}>{eq.nombre.toUpperCase()}</span>
-                </td>
-                <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{eq.victorias || 0}</td>
-                <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{eq.derrotas || 0}</td>
-                <td style={{ textAlign: 'center', fontWeight: 'bold', color: diff >= 0 ? '#10b981' : '#ef4444' }}>{diff > 0 ? `+${diff}` : diff}</td>
-                <td style={{ textAlign: 'center', fontWeight: '900', color: color, fontSize: '0.8rem' }}>{eq.puntos || 0}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {data.length > 0 ? (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+          <thead>
+            <tr style={{ color: '#94a3b8', borderBottom: '2px solid #f1f5f9' }}>
+              <th style={{ textAlign: 'left', paddingBottom: '8px' }}>EQUIPO</th>
+              <th style={{ textAlign: 'center' }}>JG</th>
+              <th style={{ textAlign: 'center' }}>JP</th>
+              <th style={{ textAlign: 'center' }}>DIF</th>
+              <th style={{ textAlign: 'center', color: color }}>PTS</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((eq, i) => {
+              const diff = (Number(eq.puntos_favor) || 0) - (Number(eq.puntos_contra) || 0);
+              return (
+                <tr key={eq.id} style={{ borderBottom: i === data.length - 1 ? 'none' : '1px solid #f8fafc' }}>
+                  <td style={{ padding: '8px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontWeight: 'bold', color: '#cbd5e1', width: '15px' }}>{i + 1}</span>
+                    <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(0,0,0,0.05)', padding: '2px', overflow: 'hidden' }}>
+                      <img src={eq.logoUrl || ""} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="L" />
+                    </div>
+                    <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.65rem' }}>{eq.nombre.toUpperCase()}</span>
+                  </td>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{eq.victorias || 0}</td>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{eq.derrotas || 0}</td>
+                  <td style={{ textAlign: 'center', fontWeight: 'bold', color: diff >= 0 ? '#10b981' : '#ef4444' }}>{diff > 0 ? `+${diff}` : diff}</td>
+                  <td style={{ textAlign: 'center', fontWeight: '900', color: color, fontSize: '0.8rem' }}>{eq.puntos || 0}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      ) : (
+        <div style={{ padding: '60px 20px', textAlign: 'center', color: '#cbd5e1' }}>
+           <p style={{fontSize:'2rem', margin:0}}>📂</p>
+           <p style={{fontSize:'0.7rem', fontWeight:'bold'}}>Temporada Nueva</p>
+        </div>
+      )}
     </div>
   </div>
 ));
 
 function App() {
   const [user, setUser] = useState<{uid: string, email: string | null, rol: string} | null>(null);
+  
+  // ESTADO: Categoría Activa
+  const [categoriaActiva, setCategoriaActiva] = useState('MASTER40');
+  const [menuAbierto, setMenuAbierto] = useState(false);
+
   const [equiposA, setEquiposA] = useState<any[]>([]); 
   const [equiposB, setEquiposB] = useState<any[]>([]); 
   const [noticias, setNoticias] = useState<any[]>([]);
@@ -81,7 +128,7 @@ function App() {
   const [leaderIndex, setLeaderIndex] = useState(0);
   const [leadersList, setLeadersList] = useState<any[]>([]);
 
-  // Auth y Datos
+  // Auth
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
@@ -99,19 +146,38 @@ function App() {
     return () => unsubscribe();
   }, [activeView]);
 
+  // --- CARGA DE DATOS DINÁMICA ---
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const qEq = query(collection(db, "equipos"), orderBy("puntos", "desc"));
+        setLoading(true); 
+        
+        setEquiposA([]); setEquiposB([]); setProximosJuegos([]); setLeadersList([]);
+
+        // 1. OBTENER NOMBRES DE COLECCIONES
+        const colEquipos = getCollectionName('equipos', categoriaActiva);
+        const colStats = getCollectionName('stats_partido', categoriaActiva);
+        const colCalendario = getCollectionName('calendario', categoriaActiva);
+
+        // 2. EQUIPOS
+        const qEq = query(collection(db, colEquipos), orderBy("puntos", "desc"));
         const snapEq = await getDocs(qEq);
         const todosEq = snapEq.docs.map(d => ({ id: d.id, ...d.data() }));
+        
         const logosMap: {[key: string]: string} = {};
         todosEq.forEach(eq => { if (eq.nombre) logosMap[eq.nombre] = eq.logoUrl || ""; });
         setTeamLogos(logosMap);
-        setEquiposA(todosEq.filter(e => e.grupo === 'A' || e.grupo === 'a'));
-        setEquiposB(todosEq.filter(e => e.grupo === 'B' || e.grupo === 'b'));
 
-        const qStats = query(collection(db, 'stats_partido'));
+        if (categoriaActiva === 'U19') {
+             setEquiposA(todosEq); 
+             setEquiposB([]);
+        } else {
+             setEquiposA(todosEq.filter(e => e.grupo === 'A' || e.grupo === 'a'));
+             setEquiposB(todosEq.filter(e => e.grupo === 'B' || e.grupo === 'b'));
+        }
+
+        // 3. STATS
+        const qStats = query(collection(db, colStats));
         const snapStats = await getDocs(qStats);
         const aggregated: Record<string, any> = {};
 
@@ -152,22 +218,27 @@ function App() {
                 { label: 'LÍDER ROBOS', player: [...list].sort((a,b) => b.spg - a.spg)[0], val: [...list].sort((a,b) => b.spg - a.spg)[0].spg, unit: 'SPG', style: 'leader-rob' },
                 { label: 'LÍDER TAPONES', player: [...list].sort((a,b) => b.bpg - a.bpg)[0], val: [...list].sort((a,b) => b.bpg - a.bpg)[0].bpg, unit: 'BPG', style: 'leader-blk' }
             ]);
+        } else {
+            setLeadersList([]);
         }
 
-        const qNews = query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5));
-        const snapNews = await getDocs(qNews);
-        setNoticias(snapNews.docs.map(d => ({ id: d.id, ...d.data() })));
-
-        const qCal = query(collection(db, "calendario"), orderBy("fechaAsignada", "asc"));
+        // 4. CALENDARIO
+        const qCal = query(collection(db, colCalendario), orderBy("fechaAsignada", "asc"));
         const snapCal = await getDocs(qCal);
         setProximosJuegos(snapCal.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.estatus !== 'finalizado').slice(0, 10));
 
-      } catch (e) { console.error("Error en Dashboard:", e); }
+        // 5. NOTICIAS
+        const qNews = query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5));
+        const snapNews = await getDocs(qNews);
+        setNoticias(snapNews.docs.map(d => ({ id: d.id, ...d.data() })));
+        
+        setLoading(false);
+
+      } catch (e) { console.error("Error:", e); setLoading(false); }
     };
     fetchData();
-  }, [activeView]);
+  }, [activeView, categoriaActiva]); 
 
-  // Intervalos de Carruseles
   useEffect(() => {
     const newsInterval = setInterval(() => setNoticiaIndex((prev) => (prev + 1) % (noticias.length || 1)), 5000);
     const gameInterval = setInterval(() => setJuegoIndex((prev) => (prev + 1) % (proximosJuegos.length || 1)), 4000);
@@ -179,116 +250,165 @@ function App() {
     };
   }, [noticias.length, proximosJuegos.length, leadersList.length]);
 
-  if (loading) return <div style={{background:'#f8fafc', height:'100vh', color:'#1e3a8a', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>Sincronizando Liga...</div>;
-
   const isAdmin = user?.rol === 'admin';
+  const activeCatLabel = CATEGORIAS_DISPONIBLES.find(c => c.id === categoriaActiva)?.label || 'CATEGORÍA';
 
   return (
     <div style={{ minHeight: '100vh', backgroundImage: `linear-gradient(rgba(241, 245, 249, 0.35), rgba(241, 245, 249, 0.5)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: '110px' }}>
       
-      <header style={{ height: '65px', background: '#f8fafc', display: 'flex', alignItems: 'center', padding: '0 15px', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 1000 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-          <div style={{ position: 'relative' }}>
-            <img 
-              src="https://i.postimg.cc/hhF5fTPn/image.png" 
-              alt="Logo" 
-              style={{ height: '45px', cursor: 'pointer' }} 
-              onClick={() => !user && setActiveView('login')}
-            />
-            {!user && (
-              <button 
-                onClick={() => setActiveView('login')} 
-                style={{ position: 'absolute', bottom: '-5px', right: '-5px', background: '#1e3a8a', color: 'white', border: '2px solid white', borderRadius: '50%', width: '22px', height: '22px', fontSize: '0.6rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                🔑
-              </button>
-            )}
+      {/* HEADER */}
+      <header style={{ background: '#f8fafc', padding: '10px 15px', borderBottom: '2px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 1000 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom:'5px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+            <div style={{ position: 'relative' }}>
+              <img src="https://i.postimg.cc/hhF5fTPn/image.png" alt="Logo" style={{ height: '45px', cursor: 'pointer' }} onClick={() => !user && setActiveView('login')} />
+              {!user && <button onClick={() => setActiveView('login')} style={{ position: 'absolute', bottom: '-5px', right: '-5px', background: '#1e3a8a', color: 'white', border: '2px solid white', borderRadius: '50%', width: '22px', height: '22px', fontSize: '0.6rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🔑</button>}
+            </div>
+            <h1 style={{ fontSize: '0.8rem', fontWeight: 900, color: '#1e3a8a', textTransform: 'uppercase', lineHeight: '1.1' }}>LIGA METROPOLITANA<br/>EJE ESTE</h1>
           </div>
-          <h1 style={{ fontSize: '0.8rem', fontWeight: 900, color: '#1e3a8a', textTransform: 'uppercase', lineHeight: '1.1' }}>LIGA METROPOLITANA<br/>EJE ESTE</h1>
+          {user && <button onClick={() => { signOut(auth); setUser(null); setActiveView('dashboard'); }} style={{background:'#fef2f2', border:'1px solid #fee2e2', color:'#ef4444', padding:'6px 12px', borderRadius:'10px', fontSize:'0.65rem', fontWeight:'bold'}}>SALIR</button>}
         </div>
-        {user && <button onClick={() => { signOut(auth); setUser(null); setActiveView('dashboard'); }} style={{background:'#fef2f2', border:'1px solid #fee2e2', color:'#ef4444', padding:'6px 12px', borderRadius:'10px', fontSize:'0.65rem', fontWeight:'bold'}}>SALIR</button>}
+
+        {/* SELECTOR DESPLEGABLE */}
+        <div style={{ position: 'relative', width: '100%' }}>
+            <button 
+                onClick={() => setMenuAbierto(!menuAbierto)}
+                style={{
+                    width: '100%', padding: '12px', borderRadius: '12px', border: 'none',
+                    background: '#1e3a8a', color: 'white', fontWeight: '900', fontSize: '0.8rem',
+                    cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    boxShadow: '0 4px 10px rgba(30,58,138,0.2)'
+                }}
+            >
+                <span>{activeCatLabel}</span>
+                <span>{menuAbierto ? '▲' : '▼'}</span>
+            </button>
+
+            {menuAbierto && (
+                <div className="fade-in" style={{
+                    position: 'absolute', top: '110%', left: 0, right: 0,
+                    background: 'white', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+                    border: '1px solid #e2e8f0', zIndex: 2000, overflow: 'hidden'
+                }}>
+                    {CATEGORIAS_DISPONIBLES.map(cat => (
+                        <div key={cat.id} onClick={() => { setCategoriaActiva(cat.id); setMenuAbierto(false); }}
+                            style={{
+                                padding: '15px', borderBottom: '1px solid #f1f5f9', fontWeight: 'bold',
+                                color: categoriaActiva === cat.id ? '#1e3a8a' : '#64748b',
+                                background: categoriaActiva === cat.id ? '#f0f9ff' : 'white',
+                                cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '10px'
+                            }}
+                        >
+                            {cat.label} {categoriaActiva === cat.id && '✅'}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
       </header>
 
       <main style={{ padding: '15px', maxWidth: '600px', margin: '0 auto' }}>
-        {activeView === 'dashboard' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: '12px' }}>
-              <div style={{ height: '165px' }}>
-                <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>📢 Prensa</p>
-                <div onClick={() => setActiveView('noticias')} style={{ background: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid #1e3a8a', cursor: 'pointer', height: '130px' }}>
-                  <div style={{ height: '95px', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {noticias.length > 0 && <img key={noticiaIndex} src={noticias[noticiaIndex].imageUrl || ''} className="fade-in" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
-                  </div>
-                  <div style={{ padding: '4px', background: '#1e3a8a', height: '35px', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <p style={{ fontSize: '0.55rem', fontWeight: '800', margin: 0, color: 'white', textAlign: 'center' }}>{noticias[noticiaIndex]?.titulo?.toUpperCase()}</p>
+        {loading ? (
+           <div style={{ textAlign: 'center', padding: '40px', color: '#1e3a8a', fontWeight: 'bold' }}>
+               <p style={{fontSize:'2rem'}}>⏳</p> Entrando al mundo {categoriaActiva}...
+           </div>
+        ) : (
+          <>
+          {activeView === 'dashboard' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: '12px' }}>
+                {/* PRENSA */}
+                <div style={{ height: '165px' }}>
+                  <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>📢 Prensa</p>
+                  <div onClick={() => setActiveView('noticias')} style={{ background: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid #1e3a8a', cursor: 'pointer', height: '130px' }}>
+                    <div style={{ height: '95px', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {noticias.length > 0 && <img key={noticiaIndex} src={noticias[noticiaIndex].imageUrl || ''} className="fade-in" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
+                    </div>
+                    <div style={{ padding: '4px', background: '#1e3a8a', height: '35px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <p style={{ fontSize: '0.55rem', fontWeight: '800', margin: 0, color: 'white', textAlign: 'center' }}>{noticias[noticiaIndex]?.titulo?.toUpperCase()}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div style={{ height: '165px' }}>
-                <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>📅 Juegos</p>
-                <div onClick={() => setActiveView('calendario')} style={{ background: '#1e3a8a', borderRadius: '18px', padding: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid white', cursor: 'pointer', height: '130px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  {proximosJuegos.length > 0 ? (
-                    <div key={juegoIndex} className="fade-in" style={{ textAlign: 'center' }}>
-                      <p style={{ color: '#f59e0b', fontSize: '0.55rem', fontWeight: '900', margin: '0 0 2px 0' }}>{proximosJuegos[juegoIndex].fechaAsignada}</p>
-                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
-                        <img src={teamLogos[proximosJuegos[juegoIndex].equipoLocalNombre]} style={{ width: '35px', height: '35px', borderRadius: '50%', background:'white', padding:'2px' }} />
-                        <p style={{ color: 'white', fontSize: '0.7rem', fontWeight: 900 }}>VS</p>
-                        <img src={teamLogos[proximosJuegos[juegoIndex].equipoVisitanteNombre]} style={{ width: '35px', height: '35px', borderRadius: '50%', background:'white', padding:'2px' }} />
+                {/* PRÓXIMOS JUEGOS - TAMAÑO AJUSTADO Y CON DÍA */}
+                <div style={{ height: '165px' }}>
+                  <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>📅 Juegos {categoriaActiva}</p>
+                  <div onClick={() => setActiveView('calendario')} style={{ background: '#1e3a8a', borderRadius: '18px', padding: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid white', cursor: 'pointer', height: '130px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    {proximosJuegos.length > 0 ? (
+                      <div key={juegoIndex} className="fade-in" style={{ textAlign: 'center' }}>
+                        {/* FECHA CON DÍA Y TAMAÑO MEDIANO */}
+                        <p style={{ color: '#f59e0b', fontSize: '0.75rem', fontWeight: '900', margin: '0 0 5px 0' }}>
+                            {formatFechaConDia(proximosJuegos[juegoIndex].fechaAsignada)}
+                        </p>
+                        
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                          <img src={teamLogos[proximosJuegos[juegoIndex].equipoLocalNombre]} style={{ width: '40px', height: '40px', borderRadius: '50%', background:'white', padding:'2px' }} />
+                          <p style={{ color: 'white', fontSize: '1rem', fontWeight: 900 }}>VS</p>
+                          <img src={teamLogos[proximosJuegos[juegoIndex].equipoVisitanteNombre]} style={{ width: '40px', height: '40px', borderRadius: '50%', background:'white', padding:'2px' }} />
+                        </div>
+                        
+                        {/* HORA */}
+                        <p style={{ color: 'white', fontSize: '0.7rem', fontWeight: 'bold', marginTop: '5px' }}>🕒 {proximosJuegos[juegoIndex].hora || 'POR DEFINIR'}</p>
                       </div>
-                      <p style={{ color: 'white', fontSize: '0.55rem', fontWeight: 'bold', marginTop: '5px' }}>🕒 {proximosJuegos[juegoIndex].hora || 'POR DEFINIR'}</p>
-                    </div>
-                  ) : <p style={{color:'white', fontSize:'0.5rem', textAlign:'center'}}>Cargando...</p>}
-                </div>
-              </div>
-            </div>
-
-            <section style={{ height: '130px' }}>
-              <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>⭐ Rendimiento Individual</p>
-              <div onClick={() => setActiveView('stats')} style={{ cursor: 'pointer' }}>
-                {leadersList.length > 0 ? (
-                  <div key={leaderIndex} className={`card-leader ${leadersList[leaderIndex].style} fade-in`}>
-                    <span className="badge">{leadersList[leaderIndex].label}</span>
-                    <img src={teamLogos[leadersList[leaderIndex].player?.equipo?.toUpperCase()]} className="team-logo-card" alt="Logo" />
-                    <div className="content">
-                        <p className="full-name">{leadersList[leaderIndex].player?.nombre || '---'}</p>
-                        <p className="value">{leadersList[leaderIndex].val || 0} <small>{leadersList[leaderIndex].unit}</small></p>
-                    </div>
+                    ) : <div style={{textAlign:'center', color:'rgba(255,255,255,0.7)', fontSize:'0.7rem'}}>Temporada Nueva<br/>Sin juegos aún</div>}
                   </div>
-                ) : <div className="card-leader score">Analizando...</div>}
-              </div>
-            </section>
-
-            <section>
-                <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>🏆 Posiciones de la Liga</p>
-                <div onClick={() => setActiveView('tabla')} style={{ cursor: 'pointer' }}>
-                  {tablaIndex === 0 ? (
-                    <RenderTable key="elite" title="GRUPO A" data={equiposA} color="#1e3a8a" />
-                  ) : (
-                    <RenderTable key="pro" title="GRUPO B" data={equiposB} color="#d97706" />
-                  )}
-                </div>
-            </section>
-
-            {isAdmin && (
-              <div style={{ padding: '15px', background: '#1e3a8a', borderRadius: '24px', color: 'white', border: '2px solid white', boxShadow: '0 8px 16px rgba(30,58,138,0.2)' }}>
-                <p style={{ textAlign: 'center', margin: '0 0 10px 0', fontWeight: 900, fontSize:'0.65rem' }}>⚙️ PANEL DE CONTROL MASTER</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <button className="admin-btn-white-border" onClick={() => setActiveView('mesa')}>⏱️ MESA TÉCNICA</button>
-                  <button className="admin-btn-white-border" onClick={() => setActiveView('equipos')}>🛡️ GESTIÓN F21</button>
                 </div>
               </div>
-            )}
-          </div>
+
+              <section style={{ height: '130px' }}>
+                <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>⭐ Rendimiento {categoriaActiva}</p>
+                <div onClick={() => setActiveView('stats')} style={{ cursor: 'pointer' }}>
+                  {leadersList.length > 0 ? (
+                    <div key={leaderIndex} className={`card-leader ${leadersList[leaderIndex].style} fade-in`}>
+                      <span className="badge">{leadersList[leaderIndex].label}</span>
+                      <img src={teamLogos[leadersList[leaderIndex].player?.equipo?.toUpperCase()]} className="team-logo-card" alt="Logo" />
+                      <div className="content">
+                          <p className="full-name">{leadersList[leaderIndex].player?.nombre || '---'}</p>
+                          <p className="value">{leadersList[leaderIndex].val || 0} <small>{leadersList[leaderIndex].unit}</small></p>
+                      </div>
+                    </div>
+                  ) : <div className="card-leader score">Esperando datos...</div>}
+                </div>
+              </section>
+
+              <section>
+                  <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>🏆 Posiciones {categoriaActiva}</p>
+                  <div onClick={() => setActiveView('tabla')} style={{ cursor: 'pointer' }}>
+                    {categoriaActiva === 'U19' ? (
+                         <RenderTable key="unico" title={`TABLA ÚNICA (${categoriaActiva})`} data={equiposA} color="#1e3a8a" />
+                    ) : (
+                        tablaIndex === 0 ? (
+                            <RenderTable key="elite" title={`GRUPO A (${categoriaActiva})`} data={equiposA} color="#1e3a8a" />
+                        ) : (
+                            <RenderTable key="pro" title={`GRUPO B (${categoriaActiva})`} data={equiposB} color="#d97706" />
+                        )
+                    )}
+                  </div>
+              </section>
+
+              {isAdmin && (
+                <div style={{ padding: '15px', background: '#1e3a8a', borderRadius: '24px', color: 'white', border: '2px solid white', boxShadow: '0 8px 16px rgba(30,58,138,0.2)' }}>
+                  <p style={{ textAlign: 'center', margin: '0 0 10px 0', fontWeight: 900, fontSize:'0.65rem' }}>⚙️ PANEL DE CONTROL MASTER</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <button className="admin-btn-white-border" onClick={() => setActiveView('mesa')}>⏱️ MESA TÉCNICA</button>
+                    <button className="admin-btn-white-border" onClick={() => setActiveView('equipos')}>🛡️ GESTIÓN F21</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          </>
         )}
 
+        {/* MODAL DE VISTAS (PASANDO LA CATEGORÍA A TODOS) */}
         {activeView === 'noticias' && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
-        {activeView === 'equipos' && (isAdmin ? <AdminEquipos onClose={() => setActiveView('dashboard')} /> : <TeamsPublicViewer onClose={() => setActiveView('dashboard')} />)}
-        {activeView === 'calendario' && <CalendarViewer rol={isAdmin ? 'admin' : 'fan'} onClose={() => setActiveView('dashboard')} />}
-        {activeView === 'stats' && <StatsViewer onClose={() => setActiveView('dashboard')} />}
+        {activeView === 'equipos' && (isAdmin ? <AdminEquipos onClose={() => setActiveView('dashboard')} categoria={categoriaActiva} /> : <TeamsPublicViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />)}
+        {activeView === 'calendario' && <CalendarViewer categoria={categoriaActiva} rol={isAdmin ? 'admin' : 'fan'} onClose={() => setActiveView('dashboard')} />}
+        {activeView === 'stats' && <StatsViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
         {activeView === 'tabla' && <StandingsViewer equipos={[...equiposA, ...equiposB]} onClose={() => setActiveView('dashboard')} />}
-        {activeView === 'mesa' && isAdmin && <MesaTecnica onClose={() => setActiveView('dashboard')} />}
+        {activeView === 'mesa' && isAdmin && <MesaTecnica categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+        
         {activeView === 'login' && (
           <div style={{ padding: '20px', background: 'white', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
             <Login />

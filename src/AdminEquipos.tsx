@@ -7,7 +7,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 interface Player { id?: string; nombre: string; numero?: number; }
 interface Equipo { id: string; nombre: string; grupo: string; logoUrl?: string; victorias: number; derrotas: number; puntos: number; puntos_favor: number; puntos_contra: number; }
 
-const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ onClose, categoria }) => {
     const [view, setView] = useState<'list' | 'addTeam' | 'forma21'>('list');
     const [equipos, setEquipos] = useState<Equipo[]>([]);
     const [loading, setLoading] = useState(true);
@@ -29,16 +29,24 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
     const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/166/166344.png";
 
+    // --- LÓGICA MULTICOLECCIÓN ---
+    // Si es MASTER40 usamos los nombres viejos. Si no, usamos el sufijo.
+    const colEquipos = categoria === 'MASTER40' ? 'equipos' : `equipos_${categoria}`;
+    const colJugadores = categoria === 'MASTER40' ? 'jugadores' : `jugadores_${categoria}`;
+
     const fetchEquipos = async () => {
         setLoading(true);
-        const q = query(collection(db, 'equipos'), orderBy('nombre', 'asc'));
-        const snap = await getDocs(q);
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Equipo));
-        setEquipos(list);
+        try {
+            // Consulta a la colección específica de la categoría
+            const q = query(collection(db, colEquipos), orderBy('nombre', 'asc'));
+            const snap = await getDocs(q);
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Equipo));
+            setEquipos(list);
+        } catch (error) { console.error("Error cargando equipos:", error); }
         setLoading(false);
     };
 
-    useEffect(() => { fetchEquipos(); }, []);
+    useEffect(() => { fetchEquipos(); }, [categoria]); // Recargar si cambia categoría
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, teamId?: string) => {
         const file = e.target.files?.[0];
@@ -50,12 +58,13 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setUploadingId(targetId);
 
         try {
-            const storageRef = ref(storage, `logos_equipos/${Date.now()}_${file.name}`);
+            // Guardamos en carpeta específica para mantener orden en Storage
+            const storageRef = ref(storage, `logos_${categoria}/${Date.now()}_${file.name}`);
             await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(storageRef);
 
             if (teamId) {
-                await updateDoc(doc(db, 'equipos', teamId), { logoUrl: downloadURL });
+                await updateDoc(doc(db, colEquipos, teamId), { logoUrl: downloadURL });
                 alert("✅ Logo actualizado correctamente.");
                 fetchEquipos();
             } else {
@@ -73,7 +82,7 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const fetchPlayers = async (teamId: string) => {
         setLoadingPlayers(true);
         try {
-            const q = query(collection(db, 'jugadores'), where('equipoId', '==', teamId));
+            const q = query(collection(db, colJugadores), where('equipoId', '==', teamId));
             const snap = await getDocs(q);
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Player));
             setPlayers(list.sort((a, b) => (a.numero || 0) - (b.numero || 0)));
@@ -81,11 +90,10 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setLoadingPlayers(false);
     };
 
-    // FUNCIÓN PARA GUARDAR LA EDICIÓN DEL NÚMERO
     const handleSaveNumber = async (playerId: string) => {
         if (!editNumberValue) return alert("Pon un número");
         try {
-            await updateDoc(doc(db, 'jugadores', playerId), {
+            await updateDoc(doc(db, colJugadores, playerId), {
                 numero: parseInt(editNumberValue)
             });
             setPlayers(players.map(p => p.id === playerId ? { ...p, numero: parseInt(editNumberValue) } : p).sort((a, b) => (a.numero || 0) - (b.numero || 0)));
@@ -95,16 +103,20 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     };
 
     const handleDeleteTeam = async (teamId: string, nombre: string) => {
-        if (!window.confirm(`⚠️ ¿ELIMINAR COMPLETAMENTE a "${nombre}"?`)) return;
+        if (!window.confirm(`⚠️ ¿ELIMINAR COMPLETAMENTE a "${nombre}" de ${categoria}?`)) return;
         if (!window.confirm(`Esto borrará también a todos los jugadores. ¿Proceder?`)) return;
 
         setLoading(true);
         try {
             const batch = writeBatch(db);
-            const qPlayers = query(collection(db, 'jugadores'), where('equipoId', '==', teamId));
+            // Borrar jugadores asociados
+            const qPlayers = query(collection(db, colJugadores), where('equipoId', '==', teamId));
             const snapPlayers = await getDocs(qPlayers);
             snapPlayers.docs.forEach(pDoc => batch.delete(pDoc.ref));
-            batch.delete(doc(db, 'equipos', teamId));
+            
+            // Borrar equipo
+            batch.delete(doc(db, colEquipos, teamId));
+            
             await batch.commit();
             alert(`🗑️ "${nombre}" eliminado.`);
             fetchEquipos();
@@ -122,10 +134,12 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         e.preventDefault();
         if (!teamName) return alert("El nombre es obligatorio");
         try {
-            await addDoc(collection(db, 'equipos'), {
-                nombre: teamName.toUpperCase(), grupo: teamGroup,
+            await addDoc(collection(db, colEquipos), {
+                nombre: teamName.toUpperCase(), 
+                grupo: teamGroup,
                 logoUrl: newLogoUrl || DEFAULT_LOGO,
-                victorias: 0, derrotas: 0, puntos: 0, puntos_favor: 0, puntos_contra: 0
+                victorias: 0, derrotas: 0, puntos: 0, puntos_favor: 0, puntos_contra: 0,
+                categoria: categoria // Etiqueta extra por seguridad
             });
             setTeamName(''); setNewLogoUrl(''); setView('list'); fetchEquipos();
         } catch (error) { alert("Error al crear equipo"); }
@@ -146,9 +160,10 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 equipoId: selectedTeam.id,
                 equipoNombre: selectedTeam.nombre,
                 grupo: selectedTeam.grupo,
+                categoria: categoria, // Etiqueta extra
                 puntos: 0, triples: 0, rebotes: 0, asistencias: 0, faltas: 0, robos: 0, bloqueos: 0
             };
-            const docRef = await addDoc(collection(db, 'jugadores'), playerDoc);
+            const docRef = await addDoc(collection(db, colJugadores), playerDoc);
             const newList = [...players, { id: docRef.id, nombre: playerDoc.nombre, numero: playerDoc.numero }];
             setPlayers(newList.sort((a, b) => (a.numero || 0) - (b.numero || 0)));
             setNewPlayerName('');
@@ -159,7 +174,7 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const handleDeletePlayer = async (playerId: string, nombre: string) => {
         if (!window.confirm(`⚠️ ¿Eliminar a "${nombre}"?`)) return;
         try {
-            await deleteDoc(doc(db, 'jugadores', playerId));
+            await deleteDoc(doc(db, colJugadores, playerId));
             setPlayers(players.filter(p => p.id !== playerId));
         } catch (error) { alert("Error al eliminar"); }
     };
@@ -169,16 +184,18 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <div style={{ background:'white', width:'100%', maxWidth:'650px', borderRadius:'12px', overflow:'hidden', height:'fit-content', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
                 
                 <div style={{ padding:'15px', background:'#1e3a8a', color:'white', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <h3 style={{margin:0, fontSize:'1.1rem'}}>🛡️ Gestión de Equipos y F21</h3>
+                    <h3 style={{margin:0, fontSize:'1.1rem'}}>🛡️ Gestión {categoria}</h3>
                     <button onClick={onClose} style={{ background:'none', border:'1px solid white', color:'white', padding:'4px 10px', borderRadius:'4px', cursor:'pointer' }}>Cerrar</button>
                 </div>
 
                 <div style={{ padding:'20px' }}>
                     {view === 'list' && (
                         <>
-                            <button onClick={() => setView('addTeam')} style={{ width:'100%', padding:'12px', background:'#10b981', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', marginBottom:'20px', cursor:'pointer' }}>+ REGISTRAR NUEVO EQUIPO</button>
+                            <button onClick={() => setView('addTeam')} style={{ width:'100%', padding:'12px', background:'#10b981', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', marginBottom:'20px', cursor:'pointer' }}>+ REGISTRAR NUEVO EQUIPO EN {categoria}</button>
                             <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-                                {loading ? <p style={{textAlign:'center'}}>Cargando equipos...</p> : equipos.map(eq => (
+                                {loading ? <p style={{textAlign:'center'}}>Cargando equipos...</p> : equipos.length === 0 ? (
+                                    <p style={{textAlign:'center', color:'#94a3b8'}}>No hay equipos en {categoria}.</p>
+                                ) : equipos.map(eq => (
                                     <div key={eq.id} style={{ padding:'15px', border:'1px solid #eee', borderRadius:'10px', background:'#f8fafc' }}>
                                         <div style={{ display:'flex', alignItems:'center', gap:'15px' }}>
                                             <div style={{ textAlign: 'center' }}>
@@ -205,7 +222,7 @@ const AdminEquipos: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
                     {view === 'addTeam' && (
                         <div style={{ display:'flex', flexDirection:'column', gap:'15px' }}>
-                            <h4 style={{margin:0}}>🆕 Nuevo Equipo</h4>
+                            <h4 style={{margin:0}}>🆕 Nuevo Equipo ({categoria})</h4>
                             <input type="text" placeholder="NOMBRE DEL EQUIPO" value={teamName} onChange={e => setTeamName(e.target.value.toUpperCase())} style={{ padding:'12px', borderRadius:'6px', border:'1px solid #ccc' }} />
                             
                             <div style={{ background: '#f1f5f9', padding: '15px', borderRadius: '10px', textAlign: 'center', border: '2px dashed #cbd5e1' }}>

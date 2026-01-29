@@ -21,10 +21,10 @@ interface PlayerStat {
     logoUrl?: string;
 }
 
-const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const [leaders, setLeaders] = useState<Record<string, PlayerStat[]>>({
-        mvp: [], puntos: [], rebotes: [], robos: [], bloqueos: [], triples: [], dobles: [], tirosLibres: []
-    });
+const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onClose, categoria }) => {
+    // Estado inicial vacío
+    const initialLeaders = { mvp: [], puntos: [], rebotes: [], robos: [], bloqueos: [], triples: [], dobles: [], tirosLibres: [] };
+    const [leaders, setLeaders] = useState<Record<string, PlayerStat[]>>(initialLeaders);
     
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('mvp');
@@ -44,51 +44,92 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
     useEffect(() => {
         let unsubscribe: () => void;
+        
+        // 1. LIMPIEZA TOTAL AL CAMBIAR CATEGORÍA (Esto evita que se vean datos viejos)
+        setLeaders(initialLeaders);
+        setLoading(true);
+
         const initStats = async () => {
             try {
+                // 2. OBTENER MAPA DE EQUIPOS Y SU CATEGORÍA REAL
                 const equiposSnap = await getDocs(collection(db, 'equipos'));
-                const teamLogos: Record<string, string> = {};
+                
+                // Mapa: { "LOBOS": "MASTER40", "JUVENILES": "U19" }
+                // Mapa Logo: { "LOBOS": "url..." }
+                const catMap: Record<string, string> = {};
+                const logoMap: Record<string, string> = {};
+
                 equiposSnap.forEach(d => {
                     const data = d.data();
-                    if (data.nombre) teamLogos[data.nombre.toUpperCase()] = data.logoUrl || DEFAULT_LOGO;
+                    if (data.nombre) {
+                        const nombreNorm = data.nombre.trim().toUpperCase();
+                        // Si no tiene categoría, asumimos que es NULL (para diferenciarlo luego)
+                        catMap[nombreNorm] = data.categoria || 'SIN_CAT'; 
+                        logoMap[nombreNorm] = data.logoUrl || DEFAULT_LOGO;
+                    }
                 });
 
+                // 3. ESCUCHAR STATS
                 const q = query(collection(db, 'stats_partido'));
                 unsubscribe = onSnapshot(q, (snapshot) => {
                     const aggregated: Record<string, any> = {};
 
                     snapshot.docs.forEach(doc => {
                         const stat = doc.data();
-                        const jId = stat.jugadorId;
-                        if (!aggregated[jId]) {
-                            aggregated[jId] = {
-                                id: jId, jugadorId: jId, nombre: stat.nombre, equipo: stat.equipo,
-                                totalPuntos: 0, totalRebotes: 0, totalRobos: 0, totalBloqueos: 0,
-                                totalTriples: 0, totalDobles: 0, totalTirosLibres: 0, 
-                                partidosJugados: 0, logoUrl: teamLogos[stat.equipo?.toUpperCase()] || DEFAULT_LOGO
-                            };
-                        }
+                        const equipoStatRaw = stat.equipo || stat.nombreEquipo || ''; 
+                        const equipoStat = equipoStatRaw.trim().toUpperCase();
                         
-                        const acc = aggregated[jId];
-                        const ptsLibres = Number(stat.tirosLibres) || 0;
-                        const ptsDobles = (Number(stat.dobles) || 0) * 2;
-                        const ptsTriples = (Number(stat.triples) || 0) * 3;
+                        // --- EL CEREBRO DE LA SEPARACIÓN ---
+                        let mostrar = false;
+                        
+                        // Obtenemos la categoría real del equipo desde la base de datos
+                        // Si el equipo no existe en la DB (es huérfano), le asignamos 'SIN_CAT'
+                        const categoriaRealDelEquipo = catMap[equipoStat] || 'SIN_CAT';
 
-                        acc.totalPuntos += (ptsLibres + ptsDobles + ptsTriples);
-                        acc.totalRebotes += (Number(stat.rebotes) || 0);
-                        acc.totalRobos += (Number(stat.robos) || 0);
-                        acc.totalBloqueos += (Number(stat.bloqueos) || 0);
-                        acc.totalTriples += (Number(stat.triples) || 0);
-                        acc.totalDobles += (Number(stat.dobles) || 0);
-                        acc.totalTirosLibres += (Number(stat.tirosLibres) || 0);
-                        acc.partidosJugados += 1;
+                        if (categoria === 'MASTER40') {
+                            // MODO LEGACY (MASTER 40):
+                            // Acepta equipos que son explícitamente MASTER40
+                            // O equipos que NO tienen categoría (los antiguos/huérfanos)
+                            if (categoriaRealDelEquipo === 'MASTER40' || categoriaRealDelEquipo === 'SIN_CAT') {
+                                mostrar = true;
+                            }
+                        } else {
+                            // MODO ESTRICTO (U19, FEMENINO, ETC):
+                            // SOLO acepta equipos que tengan EXACTAMENTE la etiqueta.
+                            // Aquí no entra basura, ni antiguos, ni huérfanos.
+                            if (categoriaRealDelEquipo === categoria) {
+                                mostrar = true;
+                            }
+                        }
+
+                        if (mostrar) {
+                            const jId = stat.jugadorId;
+                            if (!aggregated[jId]) {
+                                aggregated[jId] = {
+                                    id: jId, jugadorId: jId, nombre: stat.nombre, equipo: stat.equipo,
+                                    totalPuntos: 0, totalRebotes: 0, totalRobos: 0, totalBloqueos: 0,
+                                    totalTriples: 0, totalDobles: 0, totalTirosLibres: 0, 
+                                    partidosJugados: 0, logoUrl: logoMap[equipoStat] || DEFAULT_LOGO
+                                };
+                            }
+                            
+                            const acc = aggregated[jId];
+                            acc.totalPuntos += (Number(stat.tirosLibres)||0) + (Number(stat.dobles)||0)*2 + (Number(stat.triples)||0)*3;
+                            acc.totalRebotes += (Number(stat.rebotes)||0);
+                            acc.totalRobos += (Number(stat.robos)||0);
+                            acc.totalBloqueos += (Number(stat.bloqueos)||0);
+                            acc.totalTriples += (Number(stat.triples)||0);
+                            acc.totalDobles += (Number(stat.dobles) || 0);
+                            acc.totalTirosLibres += (Number(stat.tirosLibres) || 0);
+                            acc.partidosJugados += 1;
+                        }
                     });
 
                     const processedPlayers: PlayerStat[] = Object.values(aggregated).map((p: any) => {
                         const g = p.partidosJugados || 1; 
                         const val = (p.totalPuntos + p.totalRebotes + p.totalRobos + p.totalBloqueos);
                         return {
-                            ...p, totalValoracion: val,
+                            ...p, 
                             ppg: parseFloat((p.totalPuntos / g).toFixed(1)),
                             rpg: parseFloat((p.totalRebotes / g).toFixed(1)),
                             spg: parseFloat((p.totalRobos / g).toFixed(1)),
@@ -114,25 +155,29 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     });
                     setLoading(false);
                 });
-            } catch (error) { setLoading(false); }
+            } catch (error) { console.error(error); setLoading(false); }
         };
         initStats();
         return () => { if (unsubscribe) unsubscribe(); };
-    }, []);
+    }, [categoria]);
 
     const ActiveLeaderSection = () => {
         const cat = categories.find(c => c.id === activeTab)!;
         const data = leaders[activeTab as keyof typeof leaders];
-        if (!data || data.length === 0) return <div style={{textAlign:'center', padding:'40px', color:'#64748b'}}>No hay datos registrados aún.</div>;
+        
+        if (!data || data.length === 0) return (
+            <div style={{textAlign:'center', padding:'60px 20px', color:'#94a3b8'}}>
+                <div style={{fontSize:'2rem', marginBottom:'10px'}}>📭</div>
+                <p style={{fontWeight:'900', fontSize:'0.9rem', color:'#1e3a8a', textTransform:'uppercase'}}>Temporada {categoria} por iniciar</p>
+                <small style={{display:'block', marginTop:'5px'}}>Aún no hay estadísticas registradas para esta categoría.</small>
+            </div>
+        );
         
         const leader = data[0];
         const others = data.slice(1, 8);
 
         return (
             <div style={{background:'white', borderRadius:'24px', overflow:'hidden', boxShadow:'0 10px 25px rgba(0,0,0,0.05)', border:'1px solid #e2e8f0'}}>
-                {/* HEMOS QUITADO LA KEY Y LA CLASE DE ANIMACIÓN.
-                   Ahora los cambios de texto e imagen son instantáneos.
-                */}
                 <div>
                     <div style={{padding:'25px', textAlign:'center', background:`linear-gradient(to bottom, white, #f8fafc)`, position:'relative'}}>
                         <div style={{position:'absolute', top:15, right:15, background:cat.color, color:'white', padding:'4px 10px', borderRadius:'10px', fontSize:'0.6rem', fontWeight:'900'}}>LÍDER ACTUAL</div>
@@ -175,7 +220,7 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <div style={{maxWidth:'800px', margin:'0 auto', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                     <div>
                         <h2 style={{margin:0, fontWeight:900, fontSize:'1.5rem'}}>📊 LÍDERES</h2>
-                        <p style={{margin:0, opacity:0.8, fontSize:'0.7rem', fontWeight:'bold', textTransform:'uppercase'}}>Estadísticas Oficiales</p>
+                        <p style={{margin:0, opacity:0.8, fontSize:'0.7rem', fontWeight:'bold', textTransform:'uppercase'}}>Estadísticas {categoria}</p>
                     </div>
                     <button onClick={onClose} style={{background:'white', color:'#1e3a8a', border:'none', padding:'8px 15px', borderRadius:'10px', fontWeight:'900', fontSize:'0.7rem', cursor:'pointer'}}>CERRAR</button>
                 </div>
@@ -197,7 +242,7 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 fontWeight:'bold',
                                 fontSize:'0.7rem',
                                 cursor:'pointer',
-                                transition:'0.2s', // Transición suave de color de botón pero sin parpadeo
+                                transition:'0.2s',
                                 display:'flex',
                                 alignItems:'center',
                                 gap:'5px'
@@ -211,7 +256,7 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
             <div style={{padding:'20px', maxWidth:'600px', margin:'0 auto'}}>
                 {loading ? (
-                    <div style={{textAlign:'center', padding:'50px', color:'#1e3a8a', fontWeight:'bold'}}>PROCESANDO RÉCORDS...</div>
+                    <div style={{textAlign:'center', padding:'50px', color:'#1e3a8a', fontWeight:'bold'}}>Calculando...</div>
                 ) : (
                     <ActiveLeaderSection />
                 )}
@@ -219,7 +264,6 @@ const StatsViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
             <style>{`
                 .no-scrollbar::-webkit-scrollbar { display: none; }
-                /* Hemos eliminado las animaciones que causaban el parpadeo */
             `}</style>
         </div>
     );
