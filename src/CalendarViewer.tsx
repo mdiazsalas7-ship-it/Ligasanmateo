@@ -5,7 +5,7 @@ import MatchForm from './MatchForm';
 
 const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/451/451716.png";
 
-// --- COMPONENTE INTERNO: BOX SCORE (CORREGIDO Y MEJORADO) ---
+// --- COMPONENTE INTERNO: BOX SCORE (CORREGIDO) ---
 const BoxScoreModal = ({ match, onClose, getLogo }) => {
     const [stats, setStats] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -112,7 +112,8 @@ const BoxScoreModal = ({ match, onClose, getLogo }) => {
                     </div>
                 </div>
 
-                <div style={{ padding: '0 15px 15px 15px' }}>
+                {/* AQUÍ ESTÁ EL ARREGLO DEL SCROLL: padding-bottom 120px */}
+                <div style={{ padding: '0 15px 120px 15px' }}>
                     {loading ? <p style={{textAlign:'center', color: '#666', padding:'20px'}}>Cargando estadísticas...</p> : (
                         <>
                             {/* PASAMOS LOS IDs AQUÍ PARA QUE EL FILTRO FUNCIONE */}
