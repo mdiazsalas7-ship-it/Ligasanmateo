@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { collection, getDocs, onSnapshot, query } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 
+// Interfaz actualizada (no afecta la lógica visual, solo interna)
 interface PlayerStat {
     id: string; 
     jugadorId: string;
@@ -15,14 +16,15 @@ interface PlayerStat {
     totalDobles: number;
     totalTirosLibres: number;
     totalValoracion: number;
-    partidosJugados: number;
+    partidosJugados: number; // Partidos que jugó el jugador
+    juegosDelEquipo: number; // Partidos totales del equipo (NUEVO DENOMINADOR)
     ppg: number; rpg: number; spg: number; bpg: number;
     tpg: number; dpg: number; ftpg: number; valpg: number; 
     logoUrl?: string;
 }
 
 const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onClose, categoria }) => {
-    // Estado inicial vacío
+    
     const initialLeaders = { mvp: [], puntos: [], rebotes: [], robos: [], bloqueos: [], triples: [], dobles: [], tirosLibres: [] };
     const [leaders, setLeaders] = useState<Record<string, PlayerStat[]>>(initialLeaders);
     
@@ -45,17 +47,13 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
     useEffect(() => {
         let unsubscribe: () => void;
         
-        // 1. LIMPIEZA TOTAL AL CAMBIAR CATEGORÍA (Esto evita que se vean datos viejos)
         setLeaders(initialLeaders);
         setLoading(true);
 
         const initStats = async () => {
             try {
-                // 2. OBTENER MAPA DE EQUIPOS Y SU CATEGORÍA REAL
+                // 1. OBTENER MAPA DE EQUIPOS Y SU CATEGORÍA
                 const equiposSnap = await getDocs(collection(db, 'equipos'));
-                
-                // Mapa: { "LOBOS": "MASTER40", "JUVENILES": "U19" }
-                // Mapa Logo: { "LOBOS": "url..." }
                 const catMap: Record<string, string> = {};
                 const logoMap: Record<string, string> = {};
 
@@ -63,9 +61,25 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                     const data = d.data();
                     if (data.nombre) {
                         const nombreNorm = data.nombre.trim().toUpperCase();
-                        // Si no tiene categoría, asumimos que es NULL (para diferenciarlo luego)
                         catMap[nombreNorm] = data.categoria || 'SIN_CAT'; 
                         logoMap[nombreNorm] = data.logoUrl || DEFAULT_LOGO;
+                    }
+                });
+
+                // 2. NUEVO: CONTAR JUEGOS REALES POR EQUIPO DESDE EL CALENDARIO
+                // Esto nos da el denominador "Justo"
+                const calendarSnap = await getDocs(query(collection(db, 'calendario'), where('estatus', '==', 'finalizado')));
+                const teamGamesCount: Record<string, number> = {};
+
+                calendarSnap.forEach(doc => {
+                    const game = doc.data();
+                    if (game.equipoLocalNombre) {
+                        const local = game.equipoLocalNombre.trim().toUpperCase();
+                        teamGamesCount[local] = (teamGamesCount[local] || 0) + 1;
+                    }
+                    if (game.equipoVisitanteNombre) {
+                        const visit = game.equipoVisitanteNombre.trim().toUpperCase();
+                        teamGamesCount[visit] = (teamGamesCount[visit] || 0) + 1;
                     }
                 });
 
@@ -79,27 +93,14 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                         const equipoStatRaw = stat.equipo || stat.nombreEquipo || ''; 
                         const equipoStat = equipoStatRaw.trim().toUpperCase();
                         
-                        // --- EL CEREBRO DE LA SEPARACIÓN ---
+                        // --- FILTRO DE CATEGORÍA ---
                         let mostrar = false;
-                        
-                        // Obtenemos la categoría real del equipo desde la base de datos
-                        // Si el equipo no existe en la DB (es huérfano), le asignamos 'SIN_CAT'
                         const categoriaRealDelEquipo = catMap[equipoStat] || 'SIN_CAT';
 
                         if (categoria === 'MASTER40') {
-                            // MODO LEGACY (MASTER 40):
-                            // Acepta equipos que son explícitamente MASTER40
-                            // O equipos que NO tienen categoría (los antiguos/huérfanos)
-                            if (categoriaRealDelEquipo === 'MASTER40' || categoriaRealDelEquipo === 'SIN_CAT') {
-                                mostrar = true;
-                            }
+                            if (categoriaRealDelEquipo === 'MASTER40' || categoriaRealDelEquipo === 'SIN_CAT') mostrar = true;
                         } else {
-                            // MODO ESTRICTO (U19, FEMENINO, ETC):
-                            // SOLO acepta equipos que tengan EXACTAMENTE la etiqueta.
-                            // Aquí no entra basura, ni antiguos, ni huérfanos.
-                            if (categoriaRealDelEquipo === categoria) {
-                                mostrar = true;
-                            }
+                            if (categoriaRealDelEquipo === categoria) mostrar = true;
                         }
 
                         if (mostrar) {
@@ -109,7 +110,8 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                                     id: jId, jugadorId: jId, nombre: stat.nombre, equipo: stat.equipo,
                                     totalPuntos: 0, totalRebotes: 0, totalRobos: 0, totalBloqueos: 0,
                                     totalTriples: 0, totalDobles: 0, totalTirosLibres: 0, 
-                                    partidosJugados: 0, logoUrl: logoMap[equipoStat] || DEFAULT_LOGO
+                                    partidosJugados: 0, // Veces que aparece en stats
+                                    logoUrl: logoMap[equipoStat] || DEFAULT_LOGO
                                 };
                             }
                             
@@ -125,22 +127,31 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                         }
                     });
 
+                    // --- CÁLCULO DE PROMEDIOS CON "JUSTICIA" ---
                     const processedPlayers: PlayerStat[] = Object.values(aggregated).map((p: any) => {
-                        const g = p.partidosJugados || 1; 
+                        const nombreEquipo = p.equipo ? p.equipo.trim().toUpperCase() : '';
+                        
+                        // EL DENOMINADOR MAGICO:
+                        // Usamos la cantidad de juegos del equipo. Si por error es 0, usamos los que jugó el jugador.
+                        const juegosDelEquipo = teamGamesCount[nombreEquipo] || p.partidosJugados || 1;
+
                         const val = (p.totalPuntos + p.totalRebotes + p.totalRobos + p.totalBloqueos);
+                        
                         return {
                             ...p, 
-                            ppg: parseFloat((p.totalPuntos / g).toFixed(1)),
-                            rpg: parseFloat((p.totalRebotes / g).toFixed(1)),
-                            spg: parseFloat((p.totalRobos / g).toFixed(1)),
-                            bpg: parseFloat((p.totalBloqueos / g).toFixed(1)),
-                            tpg: parseFloat((p.totalTriples / g).toFixed(1)),
-                            dpg: parseFloat((p.totalDobles / g).toFixed(1)),
-                            ftpg: parseFloat((p.totalTirosLibres / g).toFixed(1)),
-                            valpg: parseFloat((val / g).toFixed(1))
+                            juegosDelEquipo: juegosDelEquipo, // Guardamos este dato por si quieres mostrarlo
+                            ppg: parseFloat((p.totalPuntos / juegosDelEquipo).toFixed(1)),
+                            rpg: parseFloat((p.totalRebotes / juegosDelEquipo).toFixed(1)),
+                            spg: parseFloat((p.totalRobos / juegosDelEquipo).toFixed(1)),
+                            bpg: parseFloat((p.totalBloqueos / juegosDelEquipo).toFixed(1)),
+                            tpg: parseFloat((p.totalTriples / juegosDelEquipo).toFixed(1)),
+                            dpg: parseFloat((p.totalDobles / juegosDelEquipo).toFixed(1)),
+                            ftpg: parseFloat((p.totalTirosLibres / juegosDelEquipo).toFixed(1)),
+                            valpg: parseFloat((val / juegosDelEquipo).toFixed(1))
                         };
                     });
 
+                    // Solo mostramos jugadores que hayan jugado al menos 1 vez (para no ensuciar la lista)
                     const active = processedPlayers.filter(p => p.partidosJugados > 0);
                     
                     setLeaders({
@@ -169,7 +180,7 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
             <div style={{textAlign:'center', padding:'60px 20px', color:'#94a3b8'}}>
                 <div style={{fontSize:'2rem', marginBottom:'10px'}}>📭</div>
                 <p style={{fontWeight:'900', fontSize:'0.9rem', color:'#1e3a8a', textTransform:'uppercase'}}>Temporada {categoria} por iniciar</p>
-                <small style={{display:'block', marginTop:'5px'}}>Aún no hay estadísticas registradas para esta categoría.</small>
+                <small style={{display:'block', marginTop:'5px'}}>Aún no hay estadísticas registradas.</small>
             </div>
         );
         
@@ -180,13 +191,16 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
             <div style={{background:'white', borderRadius:'24px', overflow:'hidden', boxShadow:'0 10px 25px rgba(0,0,0,0.05)', border:'1px solid #e2e8f0'}}>
                 <div>
                     <div style={{padding:'25px', textAlign:'center', background:`linear-gradient(to bottom, white, #f8fafc)`, position:'relative'}}>
-                        <div style={{position:'absolute', top:15, right:15, background:cat.color, color:'white', padding:'4px 10px', borderRadius:'10px', fontSize:'0.6rem', fontWeight:'900'}}>LÍDER ACTUAL</div>
+                        <div style={{position:'absolute', top:15, right:15, background:cat.color, color:'white', padding:'4px 10px', borderRadius:'10px', fontSize:'0.6rem', fontWeight:'900'}}>LÍDER</div>
                         
                         <div style={{display:'flex', justifyContent:'center', marginBottom:'12px'}}>
                             <img src={leader.logoUrl || DEFAULT_LOGO} style={{width:'65px', height:'65px', borderRadius:'50%', border:'3px solid white', boxShadow:'0 4px 10px rgba(0,0,0,0.1)', objectFit:'cover'}} alt="logo" />
                         </div>
                         
                         <div style={{fontWeight:'900', fontSize:'1.4rem', color:'#1e3a8a', textTransform:'uppercase'}}>{leader.nombre}</div>
+                        <div style={{fontSize:'0.65rem', fontWeight:'bold', color:'#64748b', marginTop:'4px'}}>
+                            {leader.equipo.toUpperCase()} • {leader.juegosDelEquipo} JUEGOS
+                        </div>
                         
                         <div style={{fontSize:'3.2rem', fontWeight:'900', color:cat.color, lineHeight:1, marginTop:'5px'}}>
                             {(leader as any)[cat.statKey]}
@@ -203,7 +217,10 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                             <div key={p.id} style={{padding:'12px 20px', display:'flex', alignItems:'center', fontSize:'0.9rem', borderBottom:'1px solid #f1f5f9'}}>
                                 <span style={{width:'25px', fontWeight:'900', color:'#cbd5e1'}}>{i+2}</span>
                                 <img src={p.logoUrl || DEFAULT_LOGO} style={{width:'30px', height:'30px', borderRadius:'50%', marginRight:'12px', objectFit:'cover'}} alt="t" />
-                                <span style={{flex:1, fontWeight:'700', color:'#334155'}}>{p.nombre}</span>
+                                <div style={{flex:1, display:'flex', flexDirection:'column'}}>
+                                    <span style={{fontWeight:'700', color:'#334155'}}>{p.nombre}</span>
+                                    <span style={{fontSize:'0.6rem', color:'#94a3b8'}}>JJ: {p.juegosDelEquipo}</span>
+                                </div>
                                 <span style={{fontWeight:'900', color:cat.color}}>{p[cat.statKey]}</span>
                             </div>
                         ))}
@@ -220,7 +237,7 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                 <div style={{maxWidth:'800px', margin:'0 auto', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                     <div>
                         <h2 style={{margin:0, fontWeight:900, fontSize:'1.5rem'}}>📊 LÍDERES</h2>
-                        <p style={{margin:0, opacity:0.8, fontSize:'0.7rem', fontWeight:'bold', textTransform:'uppercase'}}>Estadísticas {categoria}</p>
+                        <p style={{margin:0, opacity:0.8, fontSize:'0.7rem', fontWeight:'bold', textTransform:'uppercase'}}>Promedio Real ({categoria})</p>
                     </div>
                     <button onClick={onClose} style={{background:'white', color:'#1e3a8a', border:'none', padding:'8px 15px', borderRadius:'10px', fontWeight:'900', fontSize:'0.7rem', cursor:'pointer'}}>CERRAR</button>
                 </div>
@@ -256,7 +273,7 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
 
             <div style={{padding:'20px', maxWidth:'600px', margin:'0 auto'}}>
                 {loading ? (
-                    <div style={{textAlign:'center', padding:'50px', color:'#1e3a8a', fontWeight:'bold'}}>Calculando...</div>
+                    <div style={{textAlign:'center', padding:'50px', color:'#1e3a8a', fontWeight:'bold'}}>Calculando Estadísticas...</div>
                 ) : (
                     <ActiveLeaderSection />
                 )}

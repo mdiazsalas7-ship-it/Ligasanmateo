@@ -1,10 +1,9 @@
 import { useEffect, useState, memo } from 'react';
 import './App.css'; 
-// AGREGAMOS MESSAGING PARA LAS NOTIFICACIONES
 import { db, auth, messaging } from './firebase'; 
 import { doc, onSnapshot, collection, query, orderBy, getDocs, limit, setDoc } from 'firebase/firestore'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth'; 
-import { getToken } from 'firebase/messaging'; // IMPORTANTE
+import { getToken } from 'firebase/messaging'; 
 
 // Componentes
 import Login from './Login';
@@ -129,14 +128,14 @@ function App() {
   const [leaderIndex, setLeaderIndex] = useState(0);
   const [leadersList, setLeadersList] = useState<any[]>([]);
 
-  // 1. GESTIÓN DE NOTIFICACIONES (Permisos al abrir la app)
+  // 1. GESTIÓN DE NOTIFICACIONES
   useEffect(() => {
     const activarNotificaciones = async () => {
       try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-          // TU CLAVE VAPID (Cópiala de Firebase Console > Project Settings > Cloud Messaging > Web Push)
-          const VAPID_KEY = "BIq0eSg0F_yq40y-Z4F_Rk...."; // <--- PON TU CLAVE VAPID REAL AQUÍ
+          // TU CLAVE VAPID 
+          const VAPID_KEY = "BIq0eSg0F_yq40y-Z4F_Rk...."; 
           
           const token = await getToken(messaging, { vapidKey: VAPID_KEY });
           if (token) {
@@ -172,7 +171,7 @@ function App() {
     return () => unsubscribe();
   }, [activeView]);
 
-  // 3. CARGA DE DATOS (AQUÍ CORREGIMOS EL ORDEN DE LA TABLA)
+  // 3. CARGA DE DATOS (AQUÍ ESTÁ EL CAMBIO DE FÓRMULA)
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -184,24 +183,19 @@ function App() {
         const colStats = getCollectionName('stats_partido', categoriaActiva);
         const colCalendario = getCollectionName('calendario', categoriaActiva);
 
-        // --- CORRECCIÓN DE TABLA ---
-        // Obtenemos TODOS los equipos sin ordenar todavía
+        // A. EQUIPOS Y LOGOS
         const qEq = query(collection(db, colEquipos));
         const snapEq = await getDocs(qEq);
         let todosEq = snapEq.docs.map(d => ({ id: d.id, ...d.data() }));
         
-        // ORDENAMIENTO ESTRICTO EN JAVASCRIPT:
-        // 1. Más Puntos
-        // 2. Mayor Diferencia de Puntos (Goal Average)
+        // Ordenar Tabla: 1. Puntos, 2. Diferencia
         todosEq.sort((a, b) => {
-            if (b.puntos !== a.puntos) return b.puntos - a.puntos; // Primero Puntos
-            
+            if (b.puntos !== a.puntos) return b.puntos - a.puntos; 
             const diffA = (a.puntos_favor || 0) - (a.puntos_contra || 0);
             const diffB = (b.puntos_favor || 0) - (b.puntos_contra || 0);
-            return diffB - diffA; // Desempate por Diferencia
+            return diffB - diffA; 
         });
 
-        // Mapa de logos
         const logosMap: {[key: string]: string} = {};
         todosEq.forEach(eq => { if (eq.nombre) logosMap[eq.nombre] = eq.logoUrl || ""; });
         setTeamLogos(logosMap);
@@ -210,12 +204,36 @@ function App() {
              setEquiposA(todosEq); 
              setEquiposB([]);
         } else {
-             // Como ya están ordenados, al filtrar mantienen el orden correcto
              setEquiposA(todosEq.filter(e => e.grupo === 'A' || e.grupo === 'a'));
              setEquiposB(todosEq.filter(e => e.grupo === 'B' || e.grupo === 'b'));
         }
 
-        // STATS
+        // B. CALENDARIO Y CONTEO DE JUEGOS DE EQUIPO (NUEVO)
+        const qCal = query(collection(db, colCalendario), orderBy("fechaAsignada", "asc"));
+        const snapCal = await getDocs(qCal);
+        
+        // --- AQUÍ CALCULAMOS LOS JUEGOS DEL EQUIPO PARA LA FÓRMULA ---
+        const teamGamesCount: Record<string, number> = {};
+        const allMatches = snapCal.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        allMatches.forEach(game => {
+             // Solo contamos juegos FINALIZADOS para el promedio
+             if (game.estatus === 'finalizado') {
+                 if (game.equipoLocalNombre) {
+                    const local = game.equipoLocalNombre.trim().toUpperCase();
+                    teamGamesCount[local] = (teamGamesCount[local] || 0) + 1;
+                 }
+                 if (game.equipoVisitanteNombre) {
+                    const visit = game.equipoVisitanteNombre.trim().toUpperCase();
+                    teamGamesCount[visit] = (teamGamesCount[visit] || 0) + 1;
+                 }
+             }
+        });
+
+        // Filtramos para mostrar los próximos juegos (no finalizados)
+        setProximosJuegos(allMatches.filter(m => m.estatus !== 'finalizado').slice(0, 10));
+
+        // C. STATS (CALCULANDO CON LA NUEVA FÓRMULA)
         const qStats = query(collection(db, colStats));
         const snapStats = await getDocs(qStats);
         const aggregated: Record<string, any> = {};
@@ -238,15 +256,21 @@ function App() {
             acc.partidos += 1;
         });
 
-        const list = Object.values(aggregated).map((p: any) => ({
-            ...p,
-            ppg: (p.tPts / p.partidos).toFixed(1),
-            rpg: (p.tReb / p.partidos).toFixed(1),
-            spg: (p.tRob / p.partidos).toFixed(1),
-            bpg: (p.tBloq / p.partidos).toFixed(1),
-            tpg: (p.t3p / p.partidos).toFixed(1),
-            val: ((p.tPts + p.tReb + p.tRob + p.tBloq) / p.partidos).toFixed(1)
-        }));
+        const list = Object.values(aggregated).map((p: any) => {
+            const nombreEquipo = p.equipo ? p.equipo.trim().toUpperCase() : '';
+            // EL DENOMINADOR MAGICO: Juegos del Equipo
+            const juegosDelEquipo = teamGamesCount[nombreEquipo] || p.partidos || 1;
+
+            return {
+                ...p,
+                ppg: (p.tPts / juegosDelEquipo).toFixed(1),
+                rpg: (p.tReb / juegosDelEquipo).toFixed(1),
+                spg: (p.tRob / juegosDelEquipo).toFixed(1),
+                bpg: (p.tBloq / juegosDelEquipo).toFixed(1),
+                tpg: (p.t3p / juegosDelEquipo).toFixed(1),
+                val: ((p.tPts + p.tReb + p.tRob + p.tBloq) / juegosDelEquipo).toFixed(1)
+            };
+        });
 
         if (list.length > 0) {
             setLeadersList([
@@ -261,12 +285,7 @@ function App() {
             setLeadersList([]);
         }
 
-        // CALENDARIO
-        const qCal = query(collection(db, colCalendario), orderBy("fechaAsignada", "asc"));
-        const snapCal = await getDocs(qCal);
-        setProximosJuegos(snapCal.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.estatus !== 'finalizado').slice(0, 10));
-
-        // NOTICIAS
+        // D. NOTICIAS
         const qNews = query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5));
         const snapNews = await getDocs(qNews);
         setNoticias(snapNews.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -392,7 +411,7 @@ function App() {
                 </div>
               </div>
 
-              {/* LÍDERES */}
+              {/* LÍDERES (AHORA CON FÓRMULA CORREGIDA) */}
               <section style={{ height: '130px' }}>
                 <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>⭐ Rendimiento {categoriaActiva}</p>
                 <div onClick={() => setActiveView('stats')} style={{ cursor: 'pointer' }}>
@@ -409,7 +428,7 @@ function App() {
                 </div>
               </section>
 
-              {/* POSICIONES (CORREGIDAS) */}
+              {/* POSICIONES */}
               <section>
                   <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>🏆 Posiciones {categoriaActiva}</p>
                   <div onClick={() => setActiveView('tabla')} style={{ cursor: 'pointer' }}>
