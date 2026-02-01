@@ -5,14 +5,15 @@ import MatchForm from './MatchForm';
 
 const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/451/451716.png";
 
-// --- COMPONENTE INTERNO: BOX SCORE ---
-const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
-    const [stats, setStats] = useState<any[]>([]);
+// --- COMPONENTE INTERNO: BOX SCORE (CORREGIDO Y MEJORADO) ---
+const BoxScoreModal = ({ match, onClose, getLogo }) => {
+    const [stats, setStats] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchStats = async () => {
             try {
+                // Traemos TODAS las estadísticas de este partido
                 const q = query(collection(db, 'stats_partido'), where('partidoId', '==', match.id));
                 const snap = await getDocs(q);
                 setStats(snap.docs.map(d => d.data()));
@@ -22,11 +23,31 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
         fetchStats();
     }, [match.id]);
 
-    const renderTable = (teamName: string, teamColor: string) => {
-        const players = stats.filter(s => s.equipo === teamName);
+    // Función modificada para recibir el ID del equipo y usarlo como filtro principal
+    const renderTable = (teamName, teamId, teamColor) => {
+        
+        // --- FILTRO INTELIGENTE ---
+        // 1. Busca por ID de equipo (lo más exacto).
+        // 2. Si falla, busca por Nombre (ignorando mayúsculas y espacios extra).
+        const players = stats.filter(s => {
+            const porId = s.equipoId === teamId;
+            const porNombre = s.equipo && teamName && s.equipo.trim().toUpperCase() === teamName.trim().toUpperCase();
+            return porId || porNombre;
+        });
+
+        // Calculamos la suma real de los puntos de los jugadores listados
+        const totalPuntosJugadores = players.reduce((acc, p) => {
+            return acc + (Number(p.tirosLibres)||0) + (Number(p.dobles)||0)*2 + (Number(p.triples)||0)*3;
+        }, 0);
+
         return (
             <div style={{ marginBottom: '25px' }}>
-                <div style={{ background: teamColor, color: 'white', padding: '10px', fontWeight: 'bold', fontSize: '0.9rem', borderRadius: '12px 12px 0 0', textTransform: 'uppercase' }}>{teamName}</div>
+                <div style={{ background: teamColor, color: 'white', padding: '10px', fontWeight: 'bold', fontSize: '0.9rem', borderRadius: '12px 12px 0 0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <span style={{textTransform: 'uppercase'}}>{teamName}</span>
+                    <span style={{fontSize:'0.7rem', background:'rgba(255,255,255,0.2)', padding:'2px 8px', borderRadius:'4px'}}>
+                        SUMA REAL: {totalPuntosJugadores}
+                    </span>
+                </div>
                 <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'center', color: '#334155' }}>
                         <thead style={{ background: '#f8fafc', color: '#64748b', borderBottom: '2px solid #f1f5f9' }}>
@@ -37,7 +58,7 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
                             </tr>
                         </thead>
                         <tbody>
-                            {players.map((p, i) => {
+                            {players.length > 0 ? players.map((p, i) => {
                                 const pts = (Number(p.tirosLibres)||0) + (Number(p.dobles)||0)*2 + (Number(p.triples)||0)*3;
                                 return (
                                     <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -51,7 +72,11 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
                                         <td>{p.robos || 0}</td>
                                     </tr>
                                 );
-                            })}
+                            }) : (
+                                <tr>
+                                    <td colSpan={8} style={{padding:'20px', color:'#94a3b8'}}>No hay jugadores registrados.</td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -90,8 +115,9 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
                 <div style={{ padding: '0 15px 15px 15px' }}>
                     {loading ? <p style={{textAlign:'center', color: '#666', padding:'20px'}}>Cargando estadísticas...</p> : (
                         <>
-                            {renderTable(match.equipoLocalNombre, '#3b82f6')}
-                            {renderTable(match.equipoVisitanteNombre, '#ef4444')}
+                            {/* PASAMOS LOS IDs AQUÍ PARA QUE EL FILTRO FUNCIONE */}
+                            {renderTable(match.equipoLocalNombre, match.equipoLocalId, '#3b82f6')}
+                            {renderTable(match.equipoVisitanteNombre, match.equipoVisitanteId, '#ef4444')}
                         </>
                     )}
                 </div>
@@ -101,17 +127,16 @@ const BoxScoreModal = ({ match, onClose, getLogo }: any) => {
 };
 
 // --- COMPONENTE PRINCIPAL ---
-const CalendarViewer: React.FC<{ rol: string, onClose: () => void, categoria: string }> = ({ rol, onClose, categoria }) => {
-    const [matches, setMatches] = useState<any[]>([]);
-    const [equipos, setEquipos] = useState<any[]>([]);
+const CalendarViewer = ({ rol, onClose, categoria }) => {
+    const [matches, setMatches] = useState([]);
+    const [equipos, setEquipos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showMatchForm, setShowMatchForm] = useState(false); 
-    const [selectedBoxScore, setSelectedBoxScore] = useState<any | null>(null);
-    const [activeFilter, setActiveFilter] = useState<'TODOS' | 'A' | 'B'>('TODOS');
-    const [matchToEdit, setMatchToEdit] = useState<any | null>(null);
+    const [selectedBoxScore, setSelectedBoxScore] = useState(null);
+    const [activeFilter, setActiveFilter] = useState('TODOS');
+    const [matchToEdit, setMatchToEdit] = useState(null);
 
     // CATEGORÍAS QUE SON "NUEVAS" Y DEBEN EMPEZAR DE CERO
-    // Todo lo que NO esté aquí, se mostrará en Master 40
     const NUEVAS_CATEGORIAS = ['U19', 'FEMENINO', 'LIBRE']; 
 
     useEffect(() => {
@@ -121,20 +146,16 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void, categoria: st
         const unsubMatches = onSnapshot(qM, (snap) => {
             const allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             
-            // --- FILTRO DE HIERRO PARA QUE NO FALLE ---
+            // --- FILTRO DE HIERRO ---
             const filteredByCat = allMatches.filter(m => {
-                // Normalizamos la categoría del juego (si no existe, es string vacío)
                 const catJuego = (m.categoria || '').trim().toUpperCase();
                 const categoriaActual = categoria.trim().toUpperCase();
 
                 if (categoriaActual === 'MASTER40') {
-                    // SI ESTAMOS EN MASTER 40:
-                    // Mostramos el juego SI es explícitamente Master 40
-                    // O SI NO pertenece a ninguna de las categorías nuevas (así rescatamos los viejos)
+                    // Muestra si es MASTER40 o si no tiene etiqueta (viejos)
                     return catJuego === 'MASTER40' || !NUEVAS_CATEGORIAS.includes(catJuego);
                 } else {
-                    // SI ESTAMOS EN U19 / FEMENINO / ETC:
-                    // El juego debe tener la etiqueta exacta. Si no, no entra.
+                    // Categoría estricta para el resto
                     return catJuego === categoriaActual;
                 }
             });
@@ -150,11 +171,11 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void, categoria: st
         });
         
         return () => { unsubMatches(); unsubEquipos(); };
-    }, [categoria]); // Se recarga si cambia la categoría
+    }, [categoria]); 
 
-    const getLogo = (teamId: string) => equipos.find(e => e.id === teamId)?.logoUrl || DEFAULT_LOGO;
+    const getLogo = (teamId) => equipos.find(e => e.id === teamId)?.logoUrl || DEFAULT_LOGO;
 
-    const handleDeleteMatch = async (id: string) => {
+    const handleDeleteMatch = async (id) => {
         if (window.confirm("⚠️ ¿Estás seguro de ELIMINAR este juego? Se borrará permanentemente del calendario.")) {
             try {
                 await deleteDoc(doc(db, 'calendario', id));
@@ -165,15 +186,14 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void, categoria: st
         }
     };
 
-    const handleEditMatch = (match: any) => {
+    const handleEditMatch = (match) => {
         setMatchToEdit(match);
         setShowMatchForm(true);
     };
 
-    // Filtro visual por Grupo A/B dentro de los juegos ya filtrados por categoría
+    // Filtro visual por Grupo A/B
     const filteredMatches = matches.filter(m => {
         if (activeFilter === 'TODOS') return true;
-        // Normalizamos también el grupo por si acaso (algunos pueden ser 'a' o 'A')
         const grupoJuego = (m.grupo || '').toUpperCase();
         return grupoJuego === activeFilter;
     });
@@ -194,7 +214,7 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void, categoria: st
             </div>
 
             <div style={{ background:'white', padding:'10px', display:'flex', justifyContent:'center', gap:'10px', boxShadow:'0 2px 10px rgba(0,0,0,0.05)' }}>
-                {['TODOS', 'A', 'B'].map((f: any) => (
+                {['TODOS', 'A', 'B'].map((f) => (
                     <button 
                         key={f} 
                         onClick={() => setActiveFilter(f)}
@@ -282,7 +302,6 @@ const CalendarViewer: React.FC<{ rol: string, onClose: () => void, categoria: st
             {showMatchForm && (
                 <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.8)', zIndex:2000, display:'flex', justifyContent:'center', alignItems:'center', padding:'20px'}}>
                     <div style={{width:'100%', maxWidth:'450px', background:'white', borderRadius:'20px', overflow:'hidden'}}>
-                        {/* IMPORTANTE: PASAMOS LA CATEGORÍA PARA QUE EL JUEGO SE CREE EN LA LIGA CORRECTA */}
                         <MatchForm 
                             matchToEdit={matchToEdit}
                             categoriaActiva={categoria} 

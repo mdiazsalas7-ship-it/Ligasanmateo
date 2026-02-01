@@ -1,8 +1,10 @@
 import { useEffect, useState, memo } from 'react';
 import './App.css'; 
-import { db, auth } from './firebase'; 
-import { doc, onSnapshot, collection, query, orderBy, getDocs, limit } from 'firebase/firestore'; 
+// AGREGAMOS MESSAGING PARA LAS NOTIFICACIONES
+import { db, auth, messaging } from './firebase'; 
+import { doc, onSnapshot, collection, query, orderBy, getDocs, limit, setDoc } from 'firebase/firestore'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth'; 
+import { getToken } from 'firebase/messaging'; // IMPORTANTE
 
 // Componentes
 import Login from './Login';
@@ -32,19 +34,18 @@ const getCollectionName = (baseName, cat) => {
 // --- HELPER PARA FORMATEAR FECHA CON DÍA ---
 const formatFechaConDia = (fechaStr) => {
   if (!fechaStr) return '';
+  if (!fechaStr.includes('/')) return fechaStr;
+
   try {
-      // Asumimos formato DD/MM/YYYY
       const [dia, mes, anio] = fechaStr.split('/').map(Number);
-      const dateObj = new Date(anio, mes - 1, dia); // Meses en JS son 0-11
+      if (!dia || !mes || !anio) return fechaStr;
       
-      if (isNaN(dateObj.getTime())) return fechaStr; // Si falla, devuelve la original
+      const dateObj = new Date(anio, mes - 1, dia); 
+      if (isNaN(dateObj.getTime())) return fechaStr; 
 
       const opciones = { weekday: 'long' };
       let nombreDia = new Intl.DateTimeFormat('es-ES', opciones).format(dateObj);
-      // Capitalizar primera letra
-      nombreDia = nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1);
-
-      return `${nombreDia}, ${fechaStr}`;
+      return `${nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1)}, ${fechaStr}`;
   } catch (e) {
       return fechaStr;
   }
@@ -128,7 +129,32 @@ function App() {
   const [leaderIndex, setLeaderIndex] = useState(0);
   const [leadersList, setLeadersList] = useState<any[]>([]);
 
-  // Auth
+  // 1. GESTIÓN DE NOTIFICACIONES (Permisos al abrir la app)
+  useEffect(() => {
+    const activarNotificaciones = async () => {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          // TU CLAVE VAPID (Cópiala de Firebase Console > Project Settings > Cloud Messaging > Web Push)
+          const VAPID_KEY = "BIq0eSg0F_yq40y-Z4F_Rk...."; // <--- PON TU CLAVE VAPID REAL AQUÍ
+          
+          const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+          if (token) {
+            await setDoc(doc(db, "tokens_notificaciones", token), {
+              token: token,
+              fecha: new Date()
+            });
+            console.log("✅ Token registrado para notificaciones");
+          }
+        }
+      } catch (error) {
+        console.log("Error activando notificaciones:", error);
+      }
+    };
+    activarNotificaciones();
+  }, []);
+
+  // 2. AUTH
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
@@ -146,7 +172,7 @@ function App() {
     return () => unsubscribe();
   }, [activeView]);
 
-  // --- CARGA DE DATOS DINÁMICA ---
+  // 3. CARGA DE DATOS (AQUÍ CORREGIMOS EL ORDEN DE LA TABLA)
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -154,16 +180,28 @@ function App() {
         
         setEquiposA([]); setEquiposB([]); setProximosJuegos([]); setLeadersList([]);
 
-        // 1. OBTENER NOMBRES DE COLECCIONES
         const colEquipos = getCollectionName('equipos', categoriaActiva);
         const colStats = getCollectionName('stats_partido', categoriaActiva);
         const colCalendario = getCollectionName('calendario', categoriaActiva);
 
-        // 2. EQUIPOS
-        const qEq = query(collection(db, colEquipos), orderBy("puntos", "desc"));
+        // --- CORRECCIÓN DE TABLA ---
+        // Obtenemos TODOS los equipos sin ordenar todavía
+        const qEq = query(collection(db, colEquipos));
         const snapEq = await getDocs(qEq);
-        const todosEq = snapEq.docs.map(d => ({ id: d.id, ...d.data() }));
+        let todosEq = snapEq.docs.map(d => ({ id: d.id, ...d.data() }));
         
+        // ORDENAMIENTO ESTRICTO EN JAVASCRIPT:
+        // 1. Más Puntos
+        // 2. Mayor Diferencia de Puntos (Goal Average)
+        todosEq.sort((a, b) => {
+            if (b.puntos !== a.puntos) return b.puntos - a.puntos; // Primero Puntos
+            
+            const diffA = (a.puntos_favor || 0) - (a.puntos_contra || 0);
+            const diffB = (b.puntos_favor || 0) - (b.puntos_contra || 0);
+            return diffB - diffA; // Desempate por Diferencia
+        });
+
+        // Mapa de logos
         const logosMap: {[key: string]: string} = {};
         todosEq.forEach(eq => { if (eq.nombre) logosMap[eq.nombre] = eq.logoUrl || ""; });
         setTeamLogos(logosMap);
@@ -172,11 +210,12 @@ function App() {
              setEquiposA(todosEq); 
              setEquiposB([]);
         } else {
+             // Como ya están ordenados, al filtrar mantienen el orden correcto
              setEquiposA(todosEq.filter(e => e.grupo === 'A' || e.grupo === 'a'));
              setEquiposB(todosEq.filter(e => e.grupo === 'B' || e.grupo === 'b'));
         }
 
-        // 3. STATS
+        // STATS
         const qStats = query(collection(db, colStats));
         const snapStats = await getDocs(qStats);
         const aggregated: Record<string, any> = {};
@@ -222,12 +261,12 @@ function App() {
             setLeadersList([]);
         }
 
-        // 4. CALENDARIO
+        // CALENDARIO
         const qCal = query(collection(db, colCalendario), orderBy("fechaAsignada", "asc"));
         const snapCal = await getDocs(qCal);
         setProximosJuegos(snapCal.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.estatus !== 'finalizado').slice(0, 10));
 
-        // 5. NOTICIAS
+        // NOTICIAS
         const qNews = query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5));
         const snapNews = await getDocs(qNews);
         setNoticias(snapNews.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -239,6 +278,7 @@ function App() {
     fetchData();
   }, [activeView, categoriaActiva]); 
 
+  // INTERVALOS (Carrusel)
   useEffect(() => {
     const newsInterval = setInterval(() => setNoticiaIndex((prev) => (prev + 1) % (noticias.length || 1)), 5000);
     const gameInterval = setInterval(() => setJuegoIndex((prev) => (prev + 1) % (proximosJuegos.length || 1)), 4000);
@@ -331,24 +371,20 @@ function App() {
                   </div>
                 </div>
 
-                {/* PRÓXIMOS JUEGOS - TAMAÑO AJUSTADO Y CON DÍA */}
+                {/* PRÓXIMOS JUEGOS */}
                 <div style={{ height: '165px' }}>
                   <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>📅 Juegos {categoriaActiva}</p>
                   <div onClick={() => setActiveView('calendario')} style={{ background: '#1e3a8a', borderRadius: '18px', padding: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid white', cursor: 'pointer', height: '130px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                     {proximosJuegos.length > 0 ? (
                       <div key={juegoIndex} className="fade-in" style={{ textAlign: 'center' }}>
-                        {/* FECHA CON DÍA Y TAMAÑO MEDIANO */}
                         <p style={{ color: '#f59e0b', fontSize: '0.75rem', fontWeight: '900', margin: '0 0 5px 0' }}>
                             {formatFechaConDia(proximosJuegos[juegoIndex].fechaAsignada)}
                         </p>
-                        
                         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
                           <img src={teamLogos[proximosJuegos[juegoIndex].equipoLocalNombre]} style={{ width: '40px', height: '40px', borderRadius: '50%', background:'white', padding:'2px' }} />
                           <p style={{ color: 'white', fontSize: '1rem', fontWeight: 900 }}>VS</p>
                           <img src={teamLogos[proximosJuegos[juegoIndex].equipoVisitanteNombre]} style={{ width: '40px', height: '40px', borderRadius: '50%', background:'white', padding:'2px' }} />
                         </div>
-                        
-                        {/* HORA */}
                         <p style={{ color: 'white', fontSize: '0.7rem', fontWeight: 'bold', marginTop: '5px' }}>🕒 {proximosJuegos[juegoIndex].hora || 'POR DEFINIR'}</p>
                       </div>
                     ) : <div style={{textAlign:'center', color:'rgba(255,255,255,0.7)', fontSize:'0.7rem'}}>Temporada Nueva<br/>Sin juegos aún</div>}
@@ -356,6 +392,7 @@ function App() {
                 </div>
               </div>
 
+              {/* LÍDERES */}
               <section style={{ height: '130px' }}>
                 <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>⭐ Rendimiento {categoriaActiva}</p>
                 <div onClick={() => setActiveView('stats')} style={{ cursor: 'pointer' }}>
@@ -372,6 +409,7 @@ function App() {
                 </div>
               </section>
 
+              {/* POSICIONES (CORREGIDAS) */}
               <section>
                   <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>🏆 Posiciones {categoriaActiva}</p>
                   <div onClick={() => setActiveView('tabla')} style={{ cursor: 'pointer' }}>
@@ -401,7 +439,7 @@ function App() {
           </>
         )}
 
-        {/* MODAL DE VISTAS (PASANDO LA CATEGORÍA A TODOS) */}
+        {/* MODAL DE VISTAS */}
         {activeView === 'noticias' && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'equipos' && (isAdmin ? <AdminEquipos onClose={() => setActiveView('dashboard')} categoria={categoriaActiva} /> : <TeamsPublicViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />)}
         {activeView === 'calendario' && <CalendarViewer categoria={categoriaActiva} rol={isAdmin ? 'admin' : 'fan'} onClose={() => setActiveView('dashboard')} />}
@@ -417,6 +455,7 @@ function App() {
         )}
       </main>
 
+      {/* FOOTER NAV */}
       <nav style={{ position: 'fixed', bottom: '15px', left: '15px', right: '15px', background: '#1e3a8a', height: '70px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderRadius: '20px', border: '2px solid white', boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 1000 }}>
           {[
             { v: 'calendario', i: '📅', l: 'Calendario' },
