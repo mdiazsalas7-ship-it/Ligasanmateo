@@ -128,20 +128,21 @@ function App() {
   const [leaderIndex, setLeaderIndex] = useState(0);
   const [leadersList, setLeadersList] = useState<any[]>([]);
 
-  // 1. GESTIÓN DE NOTIFICACIONES
+  // 1. GESTIÓN DE NOTIFICACIONES (CORREGIDO)
   useEffect(() => {
     const activarNotificaciones = async () => {
       try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-          // TU CLAVE VAPID 
-          const VAPID_KEY = "BIq0eSg0F_yq40y-Z4F_Rk...."; 
+          // TU CLAVE VAPID REAL
+          const VAPID_KEY = "BCIo9OadymsSrPl7ByiJ-MFXyunwbesFbKOw8ZTOaVRQInFVbTzQgfHSZaJx05vfdUZZZsv9XLdCKxtdvg3LNkg"; 
           
           const token = await getToken(messaging, { vapidKey: VAPID_KEY });
           if (token) {
             await setDoc(doc(db, "tokens_notificaciones", token), {
               token: token,
-              fecha: new Date()
+              fecha: new Date(),
+              plataforma: 'web'
             });
             console.log("✅ Token registrado para notificaciones");
           }
@@ -171,7 +172,7 @@ function App() {
     return () => unsubscribe();
   }, [activeView]);
 
-  // 3. CARGA DE DATOS (AQUÍ ESTÁ EL CAMBIO DE FÓRMULA)
+  // 3. CARGA DE DATOS
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -188,7 +189,6 @@ function App() {
         const snapEq = await getDocs(qEq);
         let todosEq = snapEq.docs.map(d => ({ id: d.id, ...d.data() }));
         
-        // Ordenar Tabla: 1. Puntos, 2. Diferencia
         todosEq.sort((a, b) => {
             if (b.puntos !== a.puntos) return b.puntos - a.puntos; 
             const diffA = (a.puntos_favor || 0) - (a.puntos_contra || 0);
@@ -208,16 +208,14 @@ function App() {
              setEquiposB(todosEq.filter(e => e.grupo === 'B' || e.grupo === 'b'));
         }
 
-        // B. CALENDARIO Y CONTEO DE JUEGOS DE EQUIPO (NUEVO)
+        // B. CALENDARIO Y CONTEO DE JUEGOS
         const qCal = query(collection(db, colCalendario), orderBy("fechaAsignada", "asc"));
         const snapCal = await getDocs(qCal);
         
-        // --- AQUÍ CALCULAMOS LOS JUEGOS DEL EQUIPO PARA LA FÓRMULA ---
         const teamGamesCount: Record<string, number> = {};
         const allMatches = snapCal.docs.map(d => ({ id: d.id, ...d.data() }));
 
         allMatches.forEach(game => {
-             // Solo contamos juegos FINALIZADOS para el promedio
              if (game.estatus === 'finalizado') {
                  if (game.equipoLocalNombre) {
                     const local = game.equipoLocalNombre.trim().toUpperCase();
@@ -230,10 +228,9 @@ function App() {
              }
         });
 
-        // Filtramos para mostrar los próximos juegos (no finalizados)
         setProximosJuegos(allMatches.filter(m => m.estatus !== 'finalizado').slice(0, 10));
 
-        // C. STATS (CALCULANDO CON LA NUEVA FÓRMULA)
+        // C. STATS
         const qStats = query(collection(db, colStats));
         const snapStats = await getDocs(qStats);
         const aggregated: Record<string, any> = {};
@@ -258,7 +255,6 @@ function App() {
 
         const list = Object.values(aggregated).map((p: any) => {
             const nombreEquipo = p.equipo ? p.equipo.trim().toUpperCase() : '';
-            // EL DENOMINADOR MAGICO: Juegos del Equipo
             const juegosDelEquipo = teamGamesCount[nombreEquipo] || p.partidos || 1;
 
             return {
@@ -297,7 +293,7 @@ function App() {
     fetchData();
   }, [activeView, categoriaActiva]); 
 
-  // INTERVALOS (Carrusel)
+  // INTERVALOS
   useEffect(() => {
     const newsInterval = setInterval(() => setNoticiaIndex((prev) => (prev + 1) % (noticias.length || 1)), 5000);
     const gameInterval = setInterval(() => setJuegoIndex((prev) => (prev + 1) % (proximosJuegos.length || 1)), 4000);
@@ -315,7 +311,6 @@ function App() {
   return (
     <div style={{ minHeight: '100vh', backgroundImage: `linear-gradient(rgba(241, 245, 249, 0.35), rgba(241, 245, 249, 0.5)), url('https://i.postimg.cc/wjPRcBLL/download.jpg')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: '110px' }}>
       
-      {/* HEADER */}
       <header style={{ background: '#f8fafc', padding: '10px 15px', borderBottom: '2px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 1000 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom:'5px' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
@@ -328,7 +323,6 @@ function App() {
           {user && <button onClick={() => { signOut(auth); setUser(null); setActiveView('dashboard'); }} style={{background:'#fef2f2', border:'1px solid #fee2e2', color:'#ef4444', padding:'6px 12px', borderRadius:'10px', fontSize:'0.65rem', fontWeight:'bold'}}>SALIR</button>}
         </div>
 
-        {/* SELECTOR DESPLEGABLE */}
         <div style={{ position: 'relative', width: '100%' }}>
             <button 
                 onClick={() => setMenuAbierto(!menuAbierto)}
@@ -377,7 +371,6 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: '12px' }}>
-                {/* PRENSA */}
                 <div style={{ height: '165px' }}>
                   <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>📢 Prensa</p>
                   <div onClick={() => setActiveView('noticias')} style={{ background: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid #1e3a8a', cursor: 'pointer', height: '130px' }}>
@@ -390,7 +383,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* PRÓXIMOS JUEGOS */}
                 <div style={{ height: '165px' }}>
                   <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>📅 Juegos {categoriaActiva}</p>
                   <div onClick={() => setActiveView('calendario')} style={{ background: '#1e3a8a', borderRadius: '18px', padding: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid white', cursor: 'pointer', height: '130px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -411,7 +403,6 @@ function App() {
                 </div>
               </div>
 
-              {/* LÍDERES (AHORA CON FÓRMULA CORREGIDA) */}
               <section style={{ height: '130px' }}>
                 <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>⭐ Rendimiento {categoriaActiva}</p>
                 <div onClick={() => setActiveView('stats')} style={{ cursor: 'pointer' }}>
@@ -428,7 +419,6 @@ function App() {
                 </div>
               </section>
 
-              {/* POSICIONES */}
               <section>
                   <p style={{ fontSize: '0.65rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '8px', textTransform: 'uppercase' }}>🏆 Posiciones {categoriaActiva}</p>
                   <div onClick={() => setActiveView('tabla')} style={{ cursor: 'pointer' }}>
@@ -474,7 +464,6 @@ function App() {
         )}
       </main>
 
-      {/* FOOTER NAV */}
       <nav style={{ position: 'fixed', bottom: '15px', left: '15px', right: '15px', background: '#1e3a8a', height: '70px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderRadius: '20px', border: '2px solid white', boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 1000 }}>
           {[
             { v: 'calendario', i: '📅', l: 'Calendario' },

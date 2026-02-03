@@ -94,7 +94,6 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const fetchRecentMatches = async () => {
         setLoadingMatches(true);
         try {
-            // Buscamos juegos finalizados sin límite estricto para no perder resultados
             const q = query(collection(db, 'calendario'), where('estatus', '==', 'finalizado'));
             const snap = await getDocs(q);
             
@@ -103,7 +102,6 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 let mvpNombre = "Figura destacada";
                 let mvpPuntos = 0;
 
-                // Entramos al Boxscore para sacar al MVP real (el que más puntos hizo)
                 const statsSnap = await getDocs(query(collection(db, 'stats_partido'), where('partidoId', '==', docSnap.id)));
                 statsSnap.forEach(s => {
                     const stat = s.data();
@@ -120,7 +118,6 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 } as PartidoFinalizado;
             }));
 
-            // Ordenamos por los más recientes
             setRecentMatches(matchesData.sort((a, b) => b.fecha.localeCompare(a.fecha)));
             setShowMatchSelector(true);
         } catch (e) {
@@ -130,8 +127,10 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         }
     };
 
+    // --- FUNCIÓN DE PUBLICACIÓN CON NOTIFICACIÓN AUTOMÁTICA ---
     const handlePublicar = async (e: React.FormEvent) => {
-        e.preventDefault(); setLoading(true);
+        e.preventDefault(); 
+        setLoading(true);
         try {
             let imageUrl = '';
             if (imageFile) {
@@ -139,13 +138,44 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 await uploadBytes(storageRef, imageFile);
                 imageUrl = await getDownloadURL(storageRef);
             }
+
+            // 1. Guardar en Firestore
             await addDoc(collection(db, 'noticias'), {
                 titulo: titulo.toUpperCase(), cuerpo, tipo, fecha: Timestamp.now(), imageUrl: imageUrl || null
             });
+
+            // 2. ENVIAR NOTIFICACIÓN AUTOMÁTICA
+            const tokensSnap = await getDocs(collection(db, "tokens_notificaciones"));
+            const tokens = tokensSnap.docs.map(d => d.data().token).filter(t => t);
+
+            if (tokens.length > 0) {
+                await fetch('https://fcm.googleapis.com/fcm/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'BCIo9OadymsSrPl7ByiJ-MFXyunwbesFbKOw8ZTOaVRQInFVbTzQgfHSZaJx05vfdUZZZsv9XLdCKxtdvg3LNkg' // <--- PEGA AQUÍ TU CLAVE
+                    },
+                    body: JSON.stringify({
+                        registration_ids: tokens,
+                        notification: {
+                            title: `🏀 ${titulo.toUpperCase()}`,
+                            body: cuerpo.substring(0, 100) + "...",
+                            icon: "https://i.postimg.cc/hhF5fTPn/image.png",
+                            click_action: window.location.origin
+                        }
+                    })
+                });
+            }
+
             setTitulo(''); setCuerpo(''); setImageFile(null); 
             fetchNews();
-            alert("✅ Noticia publicada con éxito."); 
-        } catch (e) { alert("Error al publicar."); } finally { setLoading(false); }
+            alert("✅ Publicada y Notificada a todos los fans."); 
+        } catch (e) { 
+            console.error(e);
+            alert("Error al publicar."); 
+        } finally { 
+            setLoading(false); 
+        }
     };
 
     const fetchNews = async () => {
@@ -192,7 +222,7 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     </div>
 
                     <button disabled={loading} style={{width:'100%', padding:'16px', background: '#10b981', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '900', fontSize: '0.9rem', cursor: 'pointer', borderBottom: '4px solid #059669'}}>
-                        {loading ? 'SINCRONIZANDO...' : 'PUBLICAR EN EL TABLÓN'}
+                        {loading ? 'ENVIANDO ALERTAS...' : 'PUBLICAR Y NOTIFICAR'}
                     </button>
                 </form>
 
