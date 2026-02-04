@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 
-// Interfaz actualizada (no afecta la lógica visual, solo interna)
 interface PlayerStat {
     id: string; 
     jugadorId: string;
@@ -16,8 +15,8 @@ interface PlayerStat {
     totalDobles: number;
     totalTirosLibres: number;
     totalValoracion: number;
-    partidosJugados: number; // Partidos que jugó el jugador
-    juegosDelEquipo: number; // Partidos totales del equipo (NUEVO DENOMINADOR)
+    partidosJugados: number;
+    juegosDelEquipo: number; 
     ppg: number; rpg: number; spg: number; bpg: number;
     tpg: number; dpg: number; ftpg: number; valpg: number; 
     logoUrl?: string;
@@ -27,7 +26,6 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
     
     const initialLeaders = { mvp: [], puntos: [], rebotes: [], robos: [], bloqueos: [], triples: [], dobles: [], tirosLibres: [] };
     const [leaders, setLeaders] = useState<Record<string, PlayerStat[]>>(initialLeaders);
-    
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('mvp');
 
@@ -46,13 +44,11 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
 
     useEffect(() => {
         let unsubscribe: () => void;
-        
         setLeaders(initialLeaders);
         setLoading(true);
 
         const initStats = async () => {
             try {
-                // 1. OBTENER MAPA DE EQUIPOS Y SU CATEGORÍA
                 const equiposSnap = await getDocs(collection(db, 'equipos'));
                 const catMap: Record<string, string> = {};
                 const logoMap: Record<string, string> = {};
@@ -61,13 +57,11 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                     const data = d.data();
                     if (data.nombre) {
                         const nombreNorm = data.nombre.trim().toUpperCase();
-                        catMap[nombreNorm] = data.categoria || 'SIN_CAT'; 
+                        catMap[nombreNorm] = data.categoria || 'MASTER40'; 
                         logoMap[nombreNorm] = data.logoUrl || DEFAULT_LOGO;
                     }
                 });
 
-                // 2. NUEVO: CONTAR JUEGOS REALES POR EQUIPO DESDE EL CALENDARIO
-                // Esto nos da el denominador "Justo"
                 const calendarSnap = await getDocs(query(collection(db, 'calendario'), where('estatus', '==', 'finalizado')));
                 const teamGamesCount: Record<string, number> = {};
 
@@ -83,25 +77,18 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                     }
                 });
 
-                // 3. ESCUCHAR STATS
                 const q = query(collection(db, 'stats_partido'));
                 unsubscribe = onSnapshot(q, (snapshot) => {
                     const aggregated: Record<string, any> = {};
 
                     snapshot.docs.forEach(doc => {
                         const stat = doc.data();
-                        const equipoStatRaw = stat.equipo || stat.nombreEquipo || ''; 
-                        const equipoStat = equipoStatRaw.trim().toUpperCase();
-                        
-                        // --- FILTRO DE CATEGORÍA ---
-                        let mostrar = false;
-                        const categoriaRealDelEquipo = catMap[equipoStat] || 'SIN_CAT';
+                        const equipoStat = (stat.equipo || stat.nombreEquipo || '').trim().toUpperCase();
+                        const catReal = catMap[equipoStat];
 
-                        if (categoria === 'MASTER40') {
-                            if (categoriaRealDelEquipo === 'MASTER40' || categoriaRealDelEquipo === 'SIN_CAT') mostrar = true;
-                        } else {
-                            if (categoriaRealDelEquipo === categoria) mostrar = true;
-                        }
+                        const mostrar = (categoria === 'MASTER40') 
+                            ? (catReal === 'MASTER40' || !catReal) 
+                            : (catReal === categoria);
 
                         if (mostrar) {
                             const jId = stat.jugadorId;
@@ -110,11 +97,9 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                                     id: jId, jugadorId: jId, nombre: stat.nombre, equipo: stat.equipo,
                                     totalPuntos: 0, totalRebotes: 0, totalRobos: 0, totalBloqueos: 0,
                                     totalTriples: 0, totalDobles: 0, totalTirosLibres: 0, 
-                                    partidosJugados: 0, // Veces que aparece en stats
-                                    logoUrl: logoMap[equipoStat] || DEFAULT_LOGO
+                                    partidosJugados: 0, logoUrl: logoMap[equipoStat] || DEFAULT_LOGO
                                 };
                             }
-                            
                             const acc = aggregated[jId];
                             acc.totalPuntos += (Number(stat.tirosLibres)||0) + (Number(stat.dobles)||0)*2 + (Number(stat.triples)||0)*3;
                             acc.totalRebotes += (Number(stat.rebotes)||0);
@@ -127,19 +112,14 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                         }
                     });
 
-                    // --- CÁLCULO DE PROMEDIOS CON "JUSTICIA" ---
                     const processedPlayers: PlayerStat[] = Object.values(aggregated).map((p: any) => {
                         const nombreEquipo = p.equipo ? p.equipo.trim().toUpperCase() : '';
-                        
-                        // EL DENOMINADOR MAGICO:
-                        // Usamos la cantidad de juegos del equipo. Si por error es 0, usamos los que jugó el jugador.
                         const juegosDelEquipo = teamGamesCount[nombreEquipo] || p.partidosJugados || 1;
-
                         const val = (p.totalPuntos + p.totalRebotes + p.totalRobos + p.totalBloqueos);
                         
                         return {
                             ...p, 
-                            juegosDelEquipo: juegosDelEquipo, // Guardamos este dato por si quieres mostrarlo
+                            juegosDelEquipo,
                             ppg: parseFloat((p.totalPuntos / juegosDelEquipo).toFixed(1)),
                             rpg: parseFloat((p.totalRebotes / juegosDelEquipo).toFixed(1)),
                             spg: parseFloat((p.totalRobos / juegosDelEquipo).toFixed(1)),
@@ -151,7 +131,6 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                         };
                     });
 
-                    // Solo mostramos jugadores que hayan jugado al menos 1 vez (para no ensuciar la lista)
                     const active = processedPlayers.filter(p => p.partidosJugados > 0);
                     
                     setLeaders({
@@ -180,7 +159,7 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
             <div style={{textAlign:'center', padding:'60px 20px', color:'#94a3b8'}}>
                 <div style={{fontSize:'2rem', marginBottom:'10px'}}>📭</div>
                 <p style={{fontWeight:'900', fontSize:'0.9rem', color:'#1e3a8a', textTransform:'uppercase'}}>Temporada {categoria} por iniciar</p>
-                <small style={{display:'block', marginTop:'5px'}}>Aún no hay estadísticas registradas.</small>
+                <small style={{display:'block', marginTop:'5px'}}>No hay estadísticas en esta categoría.</small>
             </div>
         );
         
@@ -188,81 +167,89 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
         const others = data.slice(1, 8);
 
         return (
-            <div style={{background:'white', borderRadius:'24px', overflow:'hidden', boxShadow:'0 10px 25px rgba(0,0,0,0.05)', border:'1px solid #e2e8f0'}}>
-                <div>
-                    <div style={{padding:'25px', textAlign:'center', background:`linear-gradient(to bottom, white, #f8fafc)`, position:'relative'}}>
-                        <div style={{position:'absolute', top:15, right:15, background:cat.color, color:'white', padding:'4px 10px', borderRadius:'10px', fontSize:'0.6rem', fontWeight:'900'}}>LÍDER</div>
-                        
-                        <div style={{display:'flex', justifyContent:'center', marginBottom:'12px'}}>
-                            <img src={leader.logoUrl || DEFAULT_LOGO} style={{width:'65px', height:'65px', borderRadius:'50%', border:'3px solid white', boxShadow:'0 4px 10px rgba(0,0,0,0.1)', objectFit:'cover'}} alt="logo" />
-                        </div>
-                        
-                        <div style={{fontWeight:'900', fontSize:'1.4rem', color:'#1e3a8a', textTransform:'uppercase'}}>{leader.nombre}</div>
-                        <div style={{fontSize:'0.65rem', fontWeight:'bold', color:'#64748b', marginTop:'4px'}}>
-                            {leader.equipo.toUpperCase()} • {leader.juegosDelEquipo} JUEGOS
-                        </div>
-                        
-                        <div style={{fontSize:'3.2rem', fontWeight:'900', color:cat.color, lineHeight:1, marginTop:'5px'}}>
-                            {(leader as any)[cat.statKey]}
-                            <span style={{fontSize:'1rem', marginLeft:'5px', color:'#94a3b8'}}>{cat.unit}</span>
+            <div style={{background:'white', borderRadius:'28px', overflow:'hidden', boxShadow:'0 15px 35px rgba(0,0,0,0.1)', border:'1px solid #e2e8f0'}}>
+                <div style={{
+                    padding: '40px 25px', 
+                    textAlign: 'center', 
+                    background: `radial-gradient(circle at top right, ${cat.color}dd, ${cat.color}), url('https://www.transparenttextures.com/patterns/carbon-fibre.png')`,
+                    position: 'relative',
+                    color: 'white'
+                }}>
+                    <div style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.2)', padding: '6px 15px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '900', border: '1px solid rgba(255,255,255,0.3)' }}>
+                        RANKING #1
+                    </div>
+                    
+                    <div style={{display:'flex', justifyContent:'center', marginBottom:'15px'}}>
+                        <div style={{ width: '95px', height: '95px', borderRadius: '50%', border: '4px solid white', boxShadow: '0 8px 20px rgba(0,0,0,0.2)', background: 'white', overflow: 'hidden' }}>
+                            <img src={leader.logoUrl || DEFAULT_LOGO} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="logo" />
                         </div>
                     </div>
                     
-                    <div style={{background:'#f8fafc', padding:'10px 20px', borderTop:'1px solid #e2e8f0', borderBottom:'1px solid #e2e8f0'}}>
-                        <span style={{fontSize:'0.7rem', fontWeight:'900', color:'#1e3a8a'}}>TOP PERSEGUIDORES</span>
+                    <div style={{fontWeight:'900', fontSize:'1.9rem', textTransform:'uppercase', lineHeight: 1.1, textShadow: '0 2px 4px rgba(0,0,0,0.1)'}}>
+                        {leader.nombre}
                     </div>
+                    <div style={{fontSize:'0.75rem', fontWeight:'700', opacity: 0.9, marginTop:'5px', textTransform: 'uppercase'}}>
+                        {leader.equipo} • {leader.juegosDelEquipo} PARTIDOS
+                    </div>
+                    
+                    <div style={{marginTop: '20px'}}>
+                        <span style={{fontSize:'5rem', fontWeight:'900', lineHeight: 1, textShadow: '2px 4px 10px rgba(0,0,0,0.2)'}}>
+                            {(leader as any)[cat.statKey]}
+                        </span>
+                        <span style={{fontSize:'1.3rem', marginLeft:'8px', fontWeight: '800', opacity: 0.8}}>
+                            {cat.unit}
+                        </span>
+                    </div>
+                </div>
+                
+                <div style={{background:'#f8fafc', padding:'12px 20px', borderBottom:'1px solid #f1f5f9'}}>
+                    <span style={{fontSize:'0.75rem', fontWeight:'900', color: cat.color, textTransform: 'uppercase', letterSpacing: '1px'}}>Top Perseguidores</span>
+                </div>
 
-                    <div style={{minHeight:'200px'}}>
-                        {others.map((p: any, i: number) => (
-                            <div key={p.id} style={{padding:'12px 20px', display:'flex', alignItems:'center', fontSize:'0.9rem', borderBottom:'1px solid #f1f5f9'}}>
-                                <span style={{width:'25px', fontWeight:'900', color:'#cbd5e1'}}>{i+2}</span>
-                                <img src={p.logoUrl || DEFAULT_LOGO} style={{width:'30px', height:'30px', borderRadius:'50%', marginRight:'12px', objectFit:'cover'}} alt="t" />
-                                <div style={{flex:1, display:'flex', flexDirection:'column'}}>
-                                    <span style={{fontWeight:'700', color:'#334155'}}>{p.nombre}</span>
-                                    <span style={{fontSize:'0.6rem', color:'#94a3b8'}}>JJ: {p.juegosDelEquipo}</span>
-                                </div>
-                                <span style={{fontWeight:'900', color:cat.color}}>{p[cat.statKey]}</span>
+                <div style={{minHeight:'200px'}}>
+                    {others.map((p: any, i: number) => (
+                        <div key={p.id} style={{ padding:'15px 20px', display:'flex', alignItems:'center', fontSize:'0.9rem', borderBottom:'1px solid #f1f5f9' }}>
+                            <span style={{width:'30px', fontWeight:'900', color:'#cbd5e1', fontSize: '1.1rem'}}>{i+2}</span>
+                            <img src={p.logoUrl || DEFAULT_LOGO} style={{width:'38px', height:'38px', borderRadius:'50%', marginRight:'15px', border: '1px solid #f1f5f9', objectFit:'cover'}} alt="t" />
+                            <div style={{flex:1, display:'flex', flexDirection:'column'}}>
+                                <span style={{fontWeight:'800', color:'#1e3a8a', fontSize: '1rem'}}>{p.nombre}</span>
+                                <span style={{fontSize:'0.65rem', color:'#94a3b8', fontWeight: 'bold'}}>{p.equipo.toUpperCase()}</span>
                             </div>
-                        ))}
-                    </div>
+                            <div style={{textAlign: 'right'}}>
+                                <span style={{fontWeight:'900', color:cat.color, fontSize: '1.1rem'}}>{p[cat.statKey]}</span>
+                                <div style={{fontSize:'0.6rem', color:'#94a3b8', fontWeight: 'bold'}}>{cat.unit}</div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
         );
     };
 
     return (
-        <div style={{ minHeight:'100vh', background:'#f1f5f9', paddingBottom:'100px' }}>
-            
-            <div style={{background:'#1e3a8a', padding:'20px', color:'white', boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}>
+        <div style={{ minHeight:'100vh', background:'#f8fafc', paddingBottom:'120px' }}>
+            <div style={{background:'#1e3a8a', padding:'25px 20px', color:'white', boxShadow:'0 4px 15px rgba(0,0,0,0.1)', borderRadius: '0 0 30px 30px'}}>
                 <div style={{maxWidth:'800px', margin:'0 auto', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                     <div>
-                        <h2 style={{margin:0, fontWeight:900, fontSize:'1.5rem'}}>📊 LÍDERES</h2>
-                        <p style={{margin:0, opacity:0.8, fontSize:'0.7rem', fontWeight:'bold', textTransform:'uppercase'}}>Promedio Real ({categoria})</p>
+                        <h2 style={{margin:0, fontWeight:900, fontSize:'1.6rem', letterSpacing: '-0.5px'}}>📊 LÍDERES</h2>
+                        <p style={{margin:0, opacity:0.8, fontSize:'0.75rem', fontWeight:'bold', textTransform:'uppercase', color: '#fbbf24'}}>Promedios Reales • {categoria}</p>
                     </div>
-                    <button onClick={onClose} style={{background:'white', color:'#1e3a8a', border:'none', padding:'8px 15px', borderRadius:'10px', fontWeight:'900', fontSize:'0.7rem', cursor:'pointer'}}>CERRAR</button>
+                    <button onClick={onClose} style={{background:'white', color:'#1e3a8a', border:'none', padding:'10px 20px', borderRadius:'15px', fontWeight:'900', fontSize:'0.75rem', cursor:'pointer', boxShadow:'0 4px 10px rgba(0,0,0,0.1)'}}>CERRAR</button>
                 </div>
             </div>
 
             <div style={{ background:'white', borderBottom:'1px solid #e2e8f0', position:'sticky', top:0, zIndex:10 }}>
-                <div className="no-scrollbar" style={{ display:'flex', overflowX:'auto', padding:'10px', gap:'10px', maxWidth:'800px', margin:'0 auto' }}>
+                <div className="no-scrollbar" style={{ display:'flex', overflowX:'auto', padding:'15px', gap:'12px', maxWidth:'800px', margin:'0 auto' }}>
                     {categories.map(cat => (
                         <button 
                             key={cat.id} 
                             onClick={() => setActiveTab(cat.id)}
                             style={{
-                                flexShrink:0,
-                                padding:'10px 15px',
-                                borderRadius:'15px',
-                                border:'none',
+                                flexShrink:0, padding:'10px 20px', borderRadius:'18px', border:'none',
                                 background: activeTab === cat.id ? cat.color : '#f1f5f9',
                                 color: activeTab === cat.id ? 'white' : '#64748b',
-                                fontWeight:'bold',
-                                fontSize:'0.7rem',
-                                cursor:'pointer',
-                                transition:'0.2s',
-                                display:'flex',
-                                alignItems:'center',
-                                gap:'5px'
+                                fontWeight:'800', fontSize:'0.75rem', cursor:'pointer', transition:'0.3s',
+                                display:'flex', alignItems:'center', gap:'8px', boxShadow: activeTab === cat.id ? `0 4px 12px ${cat.color}44` : 'none'
                             }}
                         >
                             <span>{cat.icon}</span> {cat.label}
@@ -271,16 +258,18 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                 </div>
             </div>
 
-            <div style={{padding:'20px', maxWidth:'600px', margin:'0 auto'}}>
+            <div style={{padding:'20px', maxWidth:'650px', margin:'0 auto'}}>
                 {loading ? (
-                    <div style={{textAlign:'center', padding:'50px', color:'#1e3a8a', fontWeight:'bold'}}>Calculando Estadísticas...</div>
-                ) : (
-                    <ActiveLeaderSection />
-                )}
+                    <div style={{textAlign:'center', padding:'100px', color:'#1e3a8a', fontWeight:'bold'}}>
+                        <div style={{fontSize:'2rem', marginBottom:'10px'}}>🏀</div>
+                        Calculando promedios...
+                    </div>
+                ) : <ActiveLeaderSection />}
             </div>
 
             <style>{`
                 .no-scrollbar::-webkit-scrollbar { display: none; }
+                .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
             `}</style>
         </div>
     );
