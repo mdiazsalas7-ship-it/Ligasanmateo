@@ -15,6 +15,7 @@ import StandingsViewer from './StandingsViewer';
 import TeamsPublicViewer from './TeamsPublicViewer';
 import NewsAdmin from './NewsAdmin'; 
 import NewsFeed from './NewsFeed';
+import PlayoffViewer from './PlayoffViewer'; // IMPORTANTE: Importamos el Playoff
 
 const CATEGORIAS_DISPONIBLES = [
   { id: 'MASTER40', label: '🍷 MASTER 40' },
@@ -85,6 +86,18 @@ function App() {
   const [leaderIndex, setLeaderIndex] = useState(0);
   const [leadersList, setLeadersList] = useState([]);
 
+  // --- LÓGICA DE NOMBRES DE GRUPO (NBA STYLE) ---
+  const getGroupLabel = (grupo, cat) => {
+      const g = (grupo || '').toUpperCase();
+      const c = (cat || '').toUpperCase();
+      
+      if (c === 'LIBRE') {
+          if (g === 'A') return 'CONF. ESTE';
+          if (g === 'B') return 'CONF. OESTE';
+      }
+      return `GRUPO ${g}`;
+  };
+
   useEffect(() => {
     onAuthStateChanged(auth, (u) => {
       if (u) {
@@ -125,12 +138,12 @@ function App() {
 
         // 2. CARGA DE CALENDARIO Y ORDENAMIENTO CRONOLÓGICO
         const colCal = getCollectionName('calendario', categoriaActiva);
-        const calendarSnap = await getDocs(query(collection(db, colCal), orderBy("fechaAsignada", "desc")));
+        const calendarSnap = await getDocs(query(collection(db, colCal), orderBy("fechaAsignada", "asc")));
         const allMatches = calendarSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         setAllMatchesGlobal(allMatches);
 
         // Resultados: finalizados, más recientes primero
-        setResultadosRecientes(allMatches.filter(m => m.estatus === 'finalizado').slice(0, 5));
+        setResultadosRecientes(allMatches.filter(m => m.estatus === 'finalizado').reverse().slice(0, 5));
 
         // PRÓXIMOS JUEGOS: ORDENADOS POR FECHA ASCENDENTE Y HORA ASCENDENTE
         const proximosOrdenados = allMatches
@@ -138,7 +151,7 @@ function App() {
             .sort((a, b) => {
                 const fComp = (a.fechaAsignada || "").localeCompare(b.fechaAsignada || "");
                 if (fComp !== 0) return fComp;
-                return (a.hora || "").localeCompare(b.hora || "");
+                return (a.hora || "00:00").localeCompare(b.hora || "00:00");
             });
         setProximosJuegos(proximosOrdenados);
 
@@ -239,8 +252,26 @@ function App() {
             <h1 style={{ fontSize: '0.85rem', fontWeight: 900, color: '#1e3a8a', margin:0, textTransform:'uppercase' }}>Liga Metropolitana</h1>
             <p style={{ fontSize: '0.5rem', color: '#94a3b8', margin:0, fontWeight:'bold' }}>EJE ESTE • 2026</p>
           </div>
+          
           <div style={{ flex: 1, textAlign: 'right' }}>
-             <div style={{ fontSize:'0.45rem', color:'#cbd5e1', fontWeight:'900', border:'1px dashed #cbd5e1', padding:'5px', borderRadius:'8px', lineHeight:'1' }}>PATROCINIO<br/>DISPONIBLE</div>
+             <button 
+                onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/REGLAMENTO%20INTERNO.pdf?alt=media', '_blank')} 
+                style={{ 
+                    background: 'white', 
+                    border: '1px solid #e2e8f0', 
+                    padding: '6px 8px', 
+                    borderRadius: '10px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    float: 'right',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
+                }}
+             >
+                <span style={{ fontSize:'1.2rem', lineHeight:'1' }}>📜</span>
+                <span style={{ fontSize:'0.35rem', fontWeight:'900', color:'#1e3a8a', marginTop:'2px', lineHeight:'1' }}>REGLAMENTO<br/>INTERNO</span>
+             </button>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '10px' }} className="no-scrollbar">
@@ -282,13 +313,13 @@ function App() {
               </section>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <div onClick={() => setActiveView('noticias')} style={{ height: '220px', background: 'white', borderRadius: '24px', border: '2.5px solid #1e3a8a', cursor: 'pointer', overflow:'hidden' }}>
+                <div onClick={() => setActiveView('noticias')} style={{ height: '220px', background: 'white', borderRadius: '24px', border: '2.5px solid #1e3a8a', cursor: 'pointer', overflow:'hidden', boxShadow:'0 8px 25px rgba(30,58,138,0.1)' }}>
                   <div style={{ background: '#1e3a8a', padding: '6px 12px' }}><p style={{ fontSize: '0.6rem', fontWeight: '900', color: 'white', margin: 0 }}>📢 PRENSA LIGA</p></div>
                   <div style={{ height: '110px', display:'flex', alignItems:'center', justifyContent:'center', background:'#f8fafc', padding:'5px' }}>{noticias.length > 0 && <img key={noticiaIndex} src={noticias[noticiaIndex].imageUrl} className="fade-in" style={{ maxWidth: '100%', maxHeight:'100%', objectFit: 'contain' }} />}</div>
                   <p style={{ fontSize: '0.6rem', fontWeight: '800', padding: '8px 12px', textAlign:'center', color:'#1e293b' }}>{noticias[noticiaIndex]?.titulo?.toUpperCase()}</p>
                 </div>
 
-                <div onClick={() => setActiveView('stats')} style={{ height: '220px', background: '#ffffff', borderRadius: '24px', border: `2.5px solid ${leadersList[leaderIndex]?.color || '#eee'}`, cursor: 'pointer', textAlign: 'center', display: 'flex', flexDirection:'column', position:'relative', overflow:'hidden' }}>
+                <div onClick={() => setActiveView('stats')} style={{ height: '220px', background: '#ffffff', borderRadius: '24px', border: `2.5px solid ${leadersList[leaderIndex]?.color || '#eee'}`, cursor: 'pointer', textAlign: 'center', display: 'flex', flexDirection:'column', position:'relative', overflow:'hidden', boxShadow:`0 8px 25px ${leadersList[leaderIndex]?.color}20` }}>
                   {leadersList.length > 0 ? (
                     <div key={leaderIndex} className="fade-in" style={{ height:'100%', display:'flex', flexDirection:'column' }}>
                       <div style={{ background: leadersList[leaderIndex].color, padding: '6px 12px', color:'white', fontSize:'0.6rem', fontWeight:'900' }}>{leadersList[leaderIndex].icon} LÍDER {leadersList[leaderIndex].label}</div>
@@ -305,7 +336,9 @@ function App() {
               <section>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px' }}>
                   <h2 style={{ fontSize: '0.75rem', fontWeight: '900', color: '#1e3a8a', margin: 0 }}>🏆 Clasificación {categoriaActiva}</h2>
-                  <span style={{ fontSize:'0.55rem', fontWeight:'900', color:'#94a3b8', background:'#f1f5f9', padding:'3px 10px', borderRadius:'12px' }}>{tablaIndex === 0 ? 'GRUPO A' : 'GRUPO B'}</span>
+                  <span style={{ fontSize:'0.55rem', fontWeight:'900', color:'#94a3b8', background:'#f1f5f9', padding:'3px 10px', borderRadius:'12px', textTransform:'uppercase' }}>
+                    {getGroupLabel(tablaIndex === 0 ? 'A' : 'B', categoriaActiva)}
+                  </span>
                 </div>
                 <div onClick={() => setActiveView('tabla')} style={{ cursor: 'pointer' }}><RenderTableSummary title={`TABLA OFICIAL`} data={tablaIndex === 0 ? equiposA : equiposB} color={tablaIndex === 0 ? "#1e3a8a" : "#d97706"} /></div>
               </section>
@@ -324,6 +357,9 @@ function App() {
                           <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'white', border: '1px solid #eee', overflow: 'hidden', flexShrink: 0 }}><img src={teamLogos[j.equipoLocalNombre?.trim().toUpperCase()]} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="L" /></div>
                         </div>
                         <div style={{ flex: 0.8, textAlign: 'center', margin: '0 5px' }}>
+                          <span style={{ fontSize:'0.45rem', fontWeight:'900', color:'#94a3b8', display:'block', marginBottom:'2px' }}>
+                            {getGroupLabel(j.grupo, categoriaActiva)}
+                          </span>
                           <span style={{ background: '#1e3a8a', color: 'white', padding: '3px 10px', borderRadius: '10px', fontSize: '0.55rem', fontWeight: '900' }}>{j.hora || 'VS'}</span>
                           <p style={{ fontSize: '0.45rem', color: '#94a3b8', marginTop: '3px', fontWeight: 'bold' }}>{j.fechaAsignada}</p>
                         </div>
@@ -338,7 +374,7 @@ function App() {
               </section>
 
               {isAdmin && (
-                <div style={{ padding: '15px', background: '#1e3a8a', borderRadius: '24px', color: 'white', textAlign: 'center' }}>
+                <div style={{ padding: '15px', background: '#1e3a8a', borderRadius: '24px', color: 'white', textAlign: 'center', boxShadow:'0 10px 25px rgba(0,0,0,0.1)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <button onClick={() => setActiveView('mesa')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid white', padding: '10px', borderRadius: '15px', fontSize: '0.6rem', fontWeight: 'bold' }}>⏱ MESA</button>
                     <button onClick={() => setActiveView('equipos')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid white', padding: '10px', borderRadius: '15px', fontSize: '0.6rem', fontWeight:'bold' }}>🛡 EQUIPOS</button>
@@ -351,7 +387,8 @@ function App() {
           <>
             {activeView === 'noticias' && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
             {activeView === 'stats' && <StatsViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
-            {activeView === 'tabla' && <StandingsViewer equipos={[...equiposA, ...equiposB]} partidos={allMatchesGlobal} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'playoff' && <PlayoffViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'tabla' && <StandingsViewer equipos={[...equiposA, ...equiposB]} partidos={allMatchesGlobal} categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
             {activeView === 'calendario' && <CalendarViewer categoria={categoriaActiva} rol={user?.rol} onClose={() => setActiveView('dashboard')} />}
             {activeView === 'mesa' && isAdmin && <MesaTecnica categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
             {activeView === 'equipos' && isAdmin && <AdminEquipos categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
@@ -360,7 +397,7 @@ function App() {
       </main>
 
       <nav style={{ position: 'fixed', bottom: '20px', left: '20px', right: '20px', background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(10px)', height: '75px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderRadius: '35px', boxShadow: '0 15px 40px rgba(0,0,0,0.12)', border: '1.5px solid #f1f5f9', zIndex: 1000 }}>
-          {[{v:'calendario',i:'📅',l:'Juegos'},{v:'tabla',i:'🏆',l:'Tablas'},{v:'dashboard',i:'🏠',l:'Inicio'},{v:'stats',i:'📊',l:'Líderes'},{v:'noticias',i:'📰',l:'Noticias'}].map(item => (
+          {[{v:'calendario',i:'📅',l:'Juegos'},{v:'tabla',i:'🏆',l:'Tablas'},{v:'dashboard',i:'🏠',l:'Inicio'},{v:'playoff',i:'🔥',l:'Playoff'},{v:'stats',i:'📊',l:'Líderes'},{v:'noticias',i:'📰',l:'Noticias'}].map(item => (
             <button key={item.v} onClick={() => setActiveView(item.v as any)} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: activeView === item.v ? '#1e3a8a' : '#94a3b8', cursor: 'pointer', transition:'0.3s' }}>
               <span style={{ fontSize: '1.3rem', transform: activeView === item.v ? 'scale(1.25)' : 'scale(1)' }}>{item.i}</span>
               <span style={{ fontSize: '0.55rem', fontWeight: '900', textTransform:'uppercase' }}>{item.l}</span>

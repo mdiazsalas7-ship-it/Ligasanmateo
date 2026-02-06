@@ -12,12 +12,14 @@ interface MatchFormProps {
 const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActiva, matchToEdit }) => {
     const [equipos, setEquipos] = useState<any[]>([]);
     
+    // AÑADIMOS 'fase' AL ESTADO
     const [form, setForm] = useState({ 
         localId: matchToEdit?.equipoLocalId || '', 
         visitId: matchToEdit?.equipoVisitanteId || '', 
         fecha: matchToEdit?.fechaAsignada || '', 
         hora: matchToEdit?.hora || '', 
-        cancha: matchToEdit?.cancha || '' 
+        cancha: matchToEdit?.cancha || '',
+        fase: matchToEdit?.fase || 'REGULAR' // Por defecto es temporada regular
     });
     
     const [grupoSeleccionado, setGrupoSeleccionado] = useState<string | null>(matchToEdit?.grupo || null);
@@ -36,7 +38,7 @@ const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActi
             try {
                 // Ahora buscamos dinámicamente: equipos_LIBRE, equipos_U19, etc.
                 const nombreColeccion = getCollectionName('equipos');
-                console.log(`Cargando equipos desde: ${nombreColeccion}`); // Para depuración
+                console.log(`Cargando equipos desde: ${nombreColeccion}`); 
 
                 const q = query(collection(db, nombreColeccion), orderBy('nombre', 'asc'));
                 const s = await getDocs(q);
@@ -94,6 +96,7 @@ const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActi
                 fechaAsignada: form.fecha,
                 hora: form.hora,
                 cancha: form.cancha.toUpperCase(),
+                fase: form.fase, // GUARDAMOS LA FASE (REGULAR, SEMIS, FINAL...)
                 estatus: matchToEdit ? matchToEdit.estatus : 'programado',
                 marcadorLocal: matchToEdit ? matchToEdit.marcadorLocal : 0,
                 marcadorVisitante: matchToEdit ? matchToEdit.marcadorVisitante : 0,
@@ -110,7 +113,7 @@ const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActi
             } else {
                 // CREAR
                 await addDoc(collection(db, nombreColCalendario), matchData);
-                alert(`📅 Juego creado en ${categoriaActiva} (Colección: ${nombreColCalendario}).`);
+                alert(`📅 Juego de ${form.fase} creado en ${categoriaActiva}.`);
             }
 
             onSuccess();
@@ -133,6 +136,22 @@ const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActi
 
             <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
                 
+                {/* SELECTOR DE FASE - ¡NUEVO! */}
+                <div style={{background:'#eff6ff', padding:'10px', borderRadius:'8px', border:'1px solid #1e3a8a'}}>
+                    <label style={{fontSize: '0.7rem', fontWeight: 'bold', color: '#1e3a8a'}}>TIPO DE JUEGO (FASE)</label>
+                    <select 
+                        value={form.fase} 
+                        onChange={e => setForm({...form, fase: e.target.value})} 
+                        style={{width: '100%', padding: '10px', marginTop: '5px', borderRadius: '8px', border: '1px solid #1e3a8a', fontWeight:'bold', color:'#1e3a8a', cursor:'pointer'}}
+                    >
+                        <option value="REGULAR">📅 TEMPORADA REGULAR</option>
+                        <option value="OCTAVOS">🔥 OCTAVOS DE FINAL</option>
+                        <option value="CUARTOS">⚔️ CUARTOS DE FINAL</option>
+                        <option value="SEMIS">🏆 SEMIFINAL</option>
+                        <option value="FINAL">👑 GRAN FINAL</option>
+                    </select>
+                </div>
+
                 <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
                     <div>
                         <label style={{fontSize: '0.7rem', fontWeight: 'bold', color: '#64748b'}}>LOCAL</label>
