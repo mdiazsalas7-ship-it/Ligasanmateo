@@ -3,7 +3,8 @@ import { db, storage } from './firebase';
 import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc, query, where, orderBy, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; 
 
-interface Player { id?: string; nombre: string; cedula?: string; }
+// INTERFAZ ACTUALIZADA: Incluye el 'numero' de la camisa
+interface Player { id?: string; nombre: string; cedula?: string; numero?: number; }
 interface Equipo { 
     id: string; 
     nombre: string; 
@@ -37,9 +38,10 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
     // ESTADOS CUERPO TÉCNICO
     const [staff, setStaff] = useState({ entrenador: '', asistente: '' });
 
-    // Inputs Jugador
+    // Inputs Jugador (AHORA CON NÚMERO)
     const [newPlayerName, setNewPlayerName] = useState('');
     const [newPlayerCedula, setNewPlayerCedula] = useState('');
+    const [newPlayerNumber, setNewPlayerNumber] = useState(''); // <--- NUEVO
 
     const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/166/166344.png";
     const LOGO_LIGA = "https://i.postimg.cc/hhF5fTPn/image.png"; 
@@ -78,9 +80,9 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
             if (teamId) {
                 await updateDoc(doc(db, colEquipos, teamId), { logoUrl: downloadURL });
                 alert("✅ Logo actualizado.");
-                fetchEquipos(); // Refresca la lista general
+                fetchEquipos();
                 
-                // ACTUALIZACIÓN EN CALIENTE: Si estamos editando este equipo, actualizamos la vista actual
+                // Actualizar en caliente si estamos editando
                 if (selectedTeam && selectedTeam.id === teamId) {
                     setSelectedTeam({ ...selectedTeam, logoUrl: downloadURL });
                 }
@@ -98,7 +100,8 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
             const q = query(collection(db, colJugadores), where('equipoId', '==', teamId));
             const snap = await getDocs(q);
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Player));
-            setPlayers(list.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+            // Ordenamos por número de camiseta para facilitar a la mesa
+            setPlayers(list.sort((a, b) => (a.numero || 0) - (b.numero || 0)));
         } catch (error) { console.error(error); }
         setLoadingPlayers(false);
     };
@@ -157,14 +160,18 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
     };
 
     const handleAddPlayer = async () => {
-        if (!newPlayerName.trim() || !newPlayerCedula.trim()) return alert("Falta Nombre o Cédula");
+        if (!newPlayerName.trim() || !newPlayerCedula.trim() || !newPlayerNumber.trim()) return alert("Faltan datos (Nombre, Cédula o Número)");
         if (players.length >= 15) return alert("Nómina llena (Máx 15)");
+        
+        // Validaciones dobles
         if (players.some(p => p.cedula === newPlayerCedula)) return alert("Cédula repetida en este equipo.");
+        if (players.some(p => p.numero === parseInt(newPlayerNumber))) return alert(`El número ${newPlayerNumber} ya está en uso.`);
 
         try {
             const playerDoc = {
                 nombre: newPlayerName.toUpperCase(),
                 cedula: newPlayerCedula,
+                numero: parseInt(newPlayerNumber), // Guardamos el número
                 equipoId: selectedTeam!.id,
                 equipoNombre: selectedTeam!.nombre,
                 categoria: categoria,
@@ -173,8 +180,12 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
             const docRef = await addDoc(collection(db, colJugadores), playerDoc);
             
             const newList = [...players, { id: docRef.id, ...playerDoc }];
-            setPlayers(newList.sort((a, b) => a.nombre.localeCompare(b.nombre)));
-            setNewPlayerName(''); setNewPlayerCedula('');
+            // Ordenar por número al agregar
+            setPlayers(newList.sort((a, b) => (a.numero || 0) - (b.numero || 0)));
+            
+            setNewPlayerName(''); 
+            setNewPlayerCedula('');
+            setNewPlayerNumber('');
         } catch (error) { alert("Error al registrar"); }
     };
 
@@ -243,7 +254,7 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     <button onClick={handlePrint} style={{background:'#10b981', color:'white', border:'none', padding:'8px 15px', borderRadius:'6px', fontWeight:'bold', cursor:'pointer'}}>🖨 IMPRIMIR</button>
                                 </div>
 
-                                {/* --- NUEVO: GESTIÓN DE LOGO DENTRO DE LA FORMA 21 --- */}
+                                {/* LOGO GESTIÓN */}
                                 <div style={{display:'flex', alignItems:'center', gap:'15px', marginBottom:'20px', background:'white', padding:'10px', borderRadius:'8px', border:'1px solid #e2e8f0'}}>
                                     <div style={{width:'60px', height:'60px', borderRadius:'50%', border:'1px solid #cbd5e1', overflow:'hidden', display:'flex', justifyContent:'center', alignItems:'center'}}>
                                         <img src={selectedTeam.logoUrl || DEFAULT_LOGO} style={{width:'100%', height:'100%', objectFit:'contain'}} alt="Logo" />
@@ -253,11 +264,10 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                             {uploadingId === selectedTeam.id ? 'SUBIENDO...' : '📸 CAMBIAR LOGO'}
                                             <input type="file" accept="image/*" style={{display:'none'}} onChange={(e) => handleFileUpload(e, selectedTeam.id)} />
                                         </label>
-                                        <p style={{fontSize:'0.65rem', color:'#64748b', margin:'5px 0 0 0'}}>Actualiza el logo y se reflejará en la impresión.</p>
                                     </div>
                                 </div>
 
-                                {/* STAFF TÉCNICO */}
+                                {/* STAFF */}
                                 <div style={{display:'flex', gap:'10px', marginBottom:'15px', background:'white', padding:'10px', borderRadius:'8px'}}>
                                     <div style={{flex:1}}>
                                         <label style={{fontSize:'0.7rem', fontWeight:'bold', color:'#64748b'}}>ENTRENADOR</label>
@@ -270,8 +280,9 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     <button onClick={handleSaveStaff} style={{marginTop:'auto', padding:'8px 15px', background:'#3b82f6', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', height:'35px', fontWeight:'bold'}}>💾</button>
                                 </div>
 
-                                {/* AGREGAR JUGADOR */}
+                                {/* AGREGAR JUGADOR (CON NÚMERO) */}
                                 <div style={{display:'flex', gap:'10px'}}>
+                                    <input type="number" placeholder="N°" value={newPlayerNumber} onChange={e => setNewPlayerNumber(e.target.value)} style={{width:'60px', padding:'10px', borderRadius:'6px', border:'1px solid #ccc', textAlign:'center', fontWeight:'bold'}} />
                                     <input type="text" placeholder="Nombre y Apellido" value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} style={{flex:2, padding:'10px', borderRadius:'6px', border:'1px solid #ccc'}} />
                                     <input type="number" placeholder="Cédula" value={newPlayerCedula} onChange={e => setNewPlayerCedula(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleAddPlayer()} style={{flex:1, padding:'10px', borderRadius:'6px', border:'1px solid #ccc'}} />
                                     <button onClick={handleAddPlayer} style={{background:'#0369a1', color:'white', border:'none', padding:'0 20px', borderRadius:'6px', fontWeight:'bold', cursor:'pointer'}}>AGREGAR</button>
@@ -296,15 +307,15 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     </div>
                                 </div>
 
-                                {/* 2. DATOS DEL EQUIPO (CON LOGO REINTEGRADO Y ARREGLADO) */}
+                                {/* 2. DATOS DEL EQUIPO */}
                                 <div style={{ display:'flex', alignItems:'center', gap:'20px', background:'#f8fafc', padding:'15px', borderRadius:'8px', border:'1px solid #e2e8f0', marginBottom:'15px' }}>
                                     
-                                    {/* LOGO DEL EQUIPO (Con overflow:hidden para que no se salgan las puntas) */}
+                                    {/* LOGO */}
                                     <div style={{ width:'80px', height:'80px', borderRadius:'50%', background:'white', border:'1px solid #cbd5e1', display:'flex', alignItems:'center', justifyContent:'center', padding:'5px', flexShrink:0, overflow:'hidden' }}>
                                         <img src={selectedTeam.logoUrl || DEFAULT_LOGO} style={{ width:'100%', height:'100%', objectFit:'contain' }} alt="Logo Equipo" />
                                     </div>
 
-                                    {/* DATOS TÉCNICOS */}
+                                    {/* DATOS */}
                                     <div style={{ flex:1 }}>
                                         <div style={{ display:'flex', justifyContent:'space-between', borderBottom:'1px solid #cbd5e1', paddingBottom:'8px', marginBottom:'8px' }}>
                                             <div style={{flex:1}}>
@@ -329,11 +340,12 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     </div>
                                 </div>
 
-                                {/* 3. TABLA DE JUGADORES */}
+                                {/* 3. TABLA DE JUGADORES (CON NÚMERO DE CAMISA) */}
                                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'0.85rem' }}>
                                     <thead>
                                         <tr style={{ background:'#1e3a8a', color:'white' }}>
-                                            <th style={{ padding:'8px', border:'1px solid #1e3a8a', width:'40px' }}>N°</th>
+                                            <th style={{ padding:'8px', border:'1px solid #1e3a8a', width:'30px', fontSize:'0.7rem' }}>#</th> {/* Contador */}
+                                            <th style={{ padding:'8px', border:'1px solid #1e3a8a', width:'50px', textAlign:'center' }}>No.</th> {/* DORSAL */}
                                             <th style={{ padding:'8px', border:'1px solid #1e3a8a', textAlign:'left' }}>APELLIDOS Y NOMBRES</th>
                                             <th style={{ padding:'8px', border:'1px solid #1e3a8a', width:'100px' }}>CÉDULA</th>
                                             <th style={{ padding:'8px', border:'1px solid #1e3a8a', width:'150px' }}>FIRMA JUGADOR</th>
@@ -343,7 +355,8 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     <tbody>
                                         {players.map((p, i) => (
                                             <tr key={p.id} style={{ borderBottom:'1px solid #cbd5e1' }}>
-                                                <td style={{ padding:'10px', textAlign:'center', borderRight:'1px solid #cbd5e1', fontWeight:'bold' }}>{i + 1}</td>
+                                                <td style={{ padding:'10px', textAlign:'center', borderRight:'1px solid #cbd5e1', fontSize:'0.7rem', color:'#64748b' }}>{i + 1}</td>
+                                                <td style={{ padding:'10px', textAlign:'center', borderRight:'1px solid #cbd5e1', fontWeight:'900', fontSize:'1rem' }}>{p.numero}</td>
                                                 <td style={{ padding:'10px', borderRight:'1px solid #cbd5e1', fontWeight:'600' }}>{p.nombre}</td>
                                                 <td style={{ padding:'10px', textAlign:'center', borderRight:'1px solid #cbd5e1' }}>{p.cedula}</td>
                                                 <td style={{ padding:'10px', borderRight:'1px solid #cbd5e1' }}></td>
@@ -355,7 +368,8 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                         {/* RELLENO HASTA 15 */}
                                         {Array.from({ length: Math.max(0, 15 - players.length) }).map((_, i) => (
                                             <tr key={`empty-${i}`} style={{ borderBottom:'1px solid #cbd5e1', height:'40px' }}>
-                                                <td style={{ borderRight:'1px solid #cbd5e1', textAlign:'center', color:'#cbd5e1' }}>{players.length + i + 1}</td>
+                                                <td style={{ borderRight:'1px solid #cbd5e1', textAlign:'center', color:'#cbd5e1', fontSize:'0.7rem' }}>{players.length + i + 1}</td>
+                                                <td style={{ borderRight:'1px solid #cbd5e1' }}></td>
                                                 <td style={{ borderRight:'1px solid #cbd5e1' }}></td>
                                                 <td style={{ borderRight:'1px solid #cbd5e1' }}></td>
                                                 <td style={{ borderRight:'1px solid #cbd5e1' }}></td>
@@ -365,7 +379,7 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     </tbody>
                                 </table>
 
-                                {/* 4. PIE DE PÁGINA (SOLO 2 FIRMAS) */}
+                                {/* 4. PIE DE PÁGINA (BILATERAL) */}
                                 <div style={{ marginTop:'60px', display:'flex', justifyContent:'space-around', textAlign:'center', pageBreakInside:'avoid' }}>
                                     <div style={{ width:'250px' }}>
                                         <div style={{ borderTop:'2px solid black', paddingTop:'5px', fontWeight:'bold', fontSize:'0.8rem' }}>DELEGADO DE EQUIPO</div>
