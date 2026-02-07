@@ -15,7 +15,7 @@ import StandingsViewer from './StandingsViewer';
 import TeamsPublicViewer from './TeamsPublicViewer';
 import NewsAdmin from './NewsAdmin'; 
 import NewsFeed from './NewsFeed';
-import PlayoffViewer from './PlayoffViewer'; // IMPORTANTE: Importamos el Playoff
+import PlayoffViewer from './PlayoffViewer'; 
 
 const CATEGORIAS_DISPONIBLES = [
   { id: 'MASTER40', label: '🍷 MASTER 40' },
@@ -44,13 +44,13 @@ const RenderTableSummary = memo(({ title, data, color }) => (
           </tr>
         </thead>
         <tbody>
-          {data.slice(0, 4).map((eq) => {
+          {data.length > 0 ? data.slice(0, 4).map((eq) => {
              const difGlobal = (eq.puntos_favor || 0) - (eq.puntos_contra || 0);
              return (
               <tr key={eq.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                 <td style={{ padding: '8px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', overflow: 'hidden', border: '1px solid #eee', background: 'white', flexShrink: 0 }}>
-                      <img src={eq.logoUrl || ""} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="L" />
+                      <img src={eq.logoUrl || "https://cdn-icons-png.flaticon.com/512/166/166344.png"} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="L" />
                   </div>
                   <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.65rem' }}>{eq.nombre.toUpperCase()}</span>
                 </td>
@@ -60,7 +60,9 @@ const RenderTableSummary = memo(({ title, data, color }) => (
                 <td style={{ textAlign: 'center', fontWeight: '900', color: color }}>{eq.puntos || 0}</td>
               </tr>
              );
-          })}
+          }) : (
+             <tr><td colSpan="5" style={{textAlign:'center', padding:'10px', color:'#94a3b8', fontStyle:'italic'}}>Registrando equipos...</td></tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -117,9 +119,10 @@ function App() {
         setLoading(true); 
         setLeadersList([]);
 
-        // 1. CARGA DE EQUIPOS Y MAPA DE CATEGORÍAS
-        const equiposSnap = await getDocs(collection(db, 'equipos'));
-        const catMap = {};
+        // 1. CARGA DE EQUIPOS (CORREGIDO: Confianza en la Colección)
+        const nombreColEquipos = getCollectionName('equipos', categoriaActiva);
+        const equiposSnap = await getDocs(collection(db, nombreColEquipos));
+        
         const logoMap = {};
         const equiposDelMundo = [];
 
@@ -127,25 +130,29 @@ function App() {
             const data = d.data();
             const n = data.nombre?.trim().toUpperCase();
             if (n) {
-                catMap[n] = data.categoria || 'MASTER40';
-                logoMap[n] = data.logoUrl || "";
-                if (categoriaActiva === 'MASTER40' ? (!data.categoria || data.categoria === 'MASTER40') : (data.categoria === categoriaActiva)) {
+                logoMap[n] = data.logoUrl || "https://cdn-icons-png.flaticon.com/512/166/166344.png";
+                
+                // --- LÓGICA DE FILTRADO FLEXIBLE ---
+                // Si la categoría es MASTER40 (colección compartida 'equipos'), filtramos.
+                // Si es LIBRE, U19, etc. (colección propia 'equipos_LIBRE'), TOMAMOS TODO.
+                const esColeccionEspecifica = categoriaActiva !== 'MASTER40';
+                const pertenece = esColeccionEspecifica ? true : (!data.categoria || data.categoria === 'MASTER40');
+
+                if (pertenece) {
                     equiposDelMundo.push({ id: d.id, ...data });
                 }
             }
         });
         setTeamLogos(logoMap);
 
-        // 2. CARGA DE CALENDARIO Y ORDENAMIENTO CRONOLÓGICO
-        const colCal = getCollectionName('calendario', categoriaActiva);
-        const calendarSnap = await getDocs(query(collection(db, colCal), orderBy("fechaAsignada", "asc")));
+        // 2. CALENDARIO CON ORDEN CRONOLÓGICO
+        const nombreColCalendario = getCollectionName('calendario', categoriaActiva);
+        const calendarSnap = await getDocs(query(collection(db, nombreColCalendario), orderBy("fechaAsignada", "asc")));
         const allMatches = calendarSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         setAllMatchesGlobal(allMatches);
 
-        // Resultados: finalizados, más recientes primero
         setResultadosRecientes(allMatches.filter(m => m.estatus === 'finalizado').reverse().slice(0, 5));
 
-        // PRÓXIMOS JUEGOS: ORDENADOS POR FECHA ASCENDENTE Y HORA ASCENDENTE
         const proximosOrdenados = allMatches
             .filter(m => m.estatus !== 'finalizado')
             .sort((a, b) => {
@@ -155,7 +162,7 @@ function App() {
             });
         setProximosJuegos(proximosOrdenados);
 
-        // --- LÓGICA DE ORDENAMIENTO TABLA FIBA ---
+        // 3. LÓGICA FIBA D.1.3 (ORDENAMIENTO)
         const sortTeamsFIBA = (teams) => {
             return [...teams].sort((a, b) => {
                 if ((b.puntos || 0) !== (a.puntos || 0)) return (b.puntos || 0) - (a.puntos || 0);
@@ -180,10 +187,9 @@ function App() {
         setEquiposA(sortTeamsFIBA(equiposDelMundo.filter(e => e.grupo === 'A' || e.grupo === 'a' || categoriaActiva === 'U19')));
         setEquiposB(sortTeamsFIBA(equiposDelMundo.filter(e => e.grupo === 'B' || e.grupo === 'b')));
 
-        // 3. LÍDERES (MUNDOS SEPARADOS)
-        const finishedMatches = allMatches.filter(m => m.estatus === 'finalizado');
+        // 4. LÍDERES
         const teamGamesCount = {};
-        finishedMatches.forEach(game => {
+        allMatches.filter(m => m.estatus === 'finalizado').forEach(game => {
             const loc = game.equipoLocalNombre?.trim().toUpperCase();
             const vis = game.equipoVisitanteNombre?.trim().toUpperCase();
             if (loc) teamGamesCount[loc] = (teamGamesCount[loc] || 0) + 1;
@@ -192,14 +198,15 @@ function App() {
 
         const statsSnap = await getDocs(collection(db, 'stats_partido'));
         const aggregated = {};
+        const nombresEquiposValidos = equiposDelMundo.map(e => e.nombre);
+
         statsSnap.forEach(docSnap => {
             const stat = docSnap.data();
             const eqStat = (stat.equipo || stat.nombreEquipo || '').trim().toUpperCase();
-            const catReal = catMap[eqStat];
-            const pertenece = (categoriaActiva === 'MASTER40') ? (catReal === 'MASTER40' || !catReal) : (catReal === categoriaActiva);
-            if (pertenece) {
+            
+            if (nombresEquiposValidos.includes(eqStat)) {
                 const jId = stat.jugadorId;
-                if (!aggregated[jId]) aggregated[jId] = { nombre: stat.nombre, equipo: eqStat, pts: 0, reb: 0, pj: 0, rob:0, bloq:0, ast:0 };
+                if (!aggregated[jId]) aggregated[jId] = { nombre: stat.nombre, equipo: eqStat, pts: 0, reb: 0, pj: 0 };
                 const acc = aggregated[jId];
                 acc.pts += (Number(stat.tirosLibres)||0) + (Number(stat.dobles)||0)*2 + (Number(stat.triples)||0)*3;
                 acc.reb += (Number(stat.rebotes)||0);

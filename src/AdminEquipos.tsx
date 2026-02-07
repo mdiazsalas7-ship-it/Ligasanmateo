@@ -78,7 +78,12 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
             if (teamId) {
                 await updateDoc(doc(db, colEquipos, teamId), { logoUrl: downloadURL });
                 alert("✅ Logo actualizado.");
-                fetchEquipos();
+                fetchEquipos(); // Refresca la lista general
+                
+                // ACTUALIZACIÓN EN CALIENTE: Si estamos editando este equipo, actualizamos la vista actual
+                if (selectedTeam && selectedTeam.id === teamId) {
+                    setSelectedTeam({ ...selectedTeam, logoUrl: downloadURL });
+                }
             } else {
                 setNewLogoUrl(downloadURL);
                 alert("✅ Imagen cargada.");
@@ -200,7 +205,7 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:'15px' }}>
                                 {loading ? <p>Cargando...</p> : equipos.map(eq => (
                                     <div key={eq.id} style={{ padding:'15px', border:'1px solid #e2e8f0', borderRadius:'12px', background:'white', boxShadow:'0 2px 5px rgba(0,0,0,0.05)', display:'flex', alignItems:'center', gap:'15px' }}>
-                                        <img src={eq.logoUrl || DEFAULT_LOGO} style={{ width:'50px', height:'50px', borderRadius:'50%', objectFit:'cover', border:'1px solid #eee' }} />
+                                        <img src={eq.logoUrl || DEFAULT_LOGO} style={{ width:'50px', height:'50px', borderRadius:'50%', objectFit:'contain', border:'1px solid #eee' }} />
                                         <div style={{flex:1}}>
                                             <div style={{fontWeight:'900', color:'#1e293b'}}>{eq.nombre}</div>
                                             <span style={{fontSize:'0.7rem', background:'#eff6ff', color:'#1e3a8a', padding:'2px 8px', borderRadius:'4px'}}>GRUPO {eq.grupo}</span>
@@ -228,7 +233,7 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                         </div>
                     )}
 
-                    {/* --- VISTA DE NÓMINA --- */}
+                    {/* --- VISTA DE NÓMINA (EDITABLE) --- */}
                     {view === 'forma21' && selectedTeam && (
                         <div>
                             {/* CONTROLES (NO SE IMPRIMEN) */}
@@ -238,6 +243,21 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     <button onClick={handlePrint} style={{background:'#10b981', color:'white', border:'none', padding:'8px 15px', borderRadius:'6px', fontWeight:'bold', cursor:'pointer'}}>🖨 IMPRIMIR</button>
                                 </div>
 
+                                {/* --- NUEVO: GESTIÓN DE LOGO DENTRO DE LA FORMA 21 --- */}
+                                <div style={{display:'flex', alignItems:'center', gap:'15px', marginBottom:'20px', background:'white', padding:'10px', borderRadius:'8px', border:'1px solid #e2e8f0'}}>
+                                    <div style={{width:'60px', height:'60px', borderRadius:'50%', border:'1px solid #cbd5e1', overflow:'hidden', display:'flex', justifyContent:'center', alignItems:'center'}}>
+                                        <img src={selectedTeam.logoUrl || DEFAULT_LOGO} style={{width:'100%', height:'100%', objectFit:'contain'}} alt="Logo" />
+                                    </div>
+                                    <div style={{flex:1}}>
+                                        <label style={{background:'#e2e8f0', color:'#1e293b', padding:'6px 12px', borderRadius:'6px', fontSize:'0.75rem', fontWeight:'bold', cursor:'pointer', display:'inline-block'}}>
+                                            {uploadingId === selectedTeam.id ? 'SUBIENDO...' : '📸 CAMBIAR LOGO'}
+                                            <input type="file" accept="image/*" style={{display:'none'}} onChange={(e) => handleFileUpload(e, selectedTeam.id)} />
+                                        </label>
+                                        <p style={{fontSize:'0.65rem', color:'#64748b', margin:'5px 0 0 0'}}>Actualiza el logo y se reflejará en la impresión.</p>
+                                    </div>
+                                </div>
+
+                                {/* STAFF TÉCNICO */}
                                 <div style={{display:'flex', gap:'10px', marginBottom:'15px', background:'white', padding:'10px', borderRadius:'8px'}}>
                                     <div style={{flex:1}}>
                                         <label style={{fontSize:'0.7rem', fontWeight:'bold', color:'#64748b'}}>ENTRENADOR</label>
@@ -250,6 +270,7 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     <button onClick={handleSaveStaff} style={{marginTop:'auto', padding:'8px 15px', background:'#3b82f6', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', height:'35px', fontWeight:'bold'}}>💾</button>
                                 </div>
 
+                                {/* AGREGAR JUGADOR */}
                                 <div style={{display:'flex', gap:'10px'}}>
                                     <input type="text" placeholder="Nombre y Apellido" value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} style={{flex:2, padding:'10px', borderRadius:'6px', border:'1px solid #ccc'}} />
                                     <input type="number" placeholder="Cédula" value={newPlayerCedula} onChange={e => setNewPlayerCedula(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleAddPlayer()} style={{flex:1, padding:'10px', borderRadius:'6px', border:'1px solid #ccc'}} />
