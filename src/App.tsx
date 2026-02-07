@@ -119,7 +119,7 @@ function App() {
         setLoading(true); 
         setLeadersList([]);
 
-        // 1. CARGA DE EQUIPOS (CORREGIDO: Confianza en la Colección)
+        // 1. CARGA DE EQUIPOS (Confianza en la Colección)
         const nombreColEquipos = getCollectionName('equipos', categoriaActiva);
         const equiposSnap = await getDocs(collection(db, nombreColEquipos));
         
@@ -132,9 +132,7 @@ function App() {
             if (n) {
                 logoMap[n] = data.logoUrl || "https://cdn-icons-png.flaticon.com/512/166/166344.png";
                 
-                // --- LÓGICA DE FILTRADO FLEXIBLE ---
-                // Si la categoría es MASTER40 (colección compartida 'equipos'), filtramos.
-                // Si es LIBRE, U19, etc. (colección propia 'equipos_LIBRE'), TOMAMOS TODO.
+                // LÓGICA DE FILTRADO FLEXIBLE
                 const esColeccionEspecifica = categoriaActiva !== 'MASTER40';
                 const pertenece = esColeccionEspecifica ? true : (!data.categoria || data.categoria === 'MASTER40');
 
@@ -187,7 +185,7 @@ function App() {
         setEquiposA(sortTeamsFIBA(equiposDelMundo.filter(e => e.grupo === 'A' || e.grupo === 'a' || categoriaActiva === 'U19')));
         setEquiposB(sortTeamsFIBA(equiposDelMundo.filter(e => e.grupo === 'B' || e.grupo === 'b')));
 
-        // 4. LÍDERES
+        // 4. LÍDERES (CORREGIDO: FILTRADO ESTRICTO POR CATEGORÍA)
         const teamGamesCount = {};
         allMatches.filter(m => m.estatus === 'finalizado').forEach(game => {
             const loc = game.equipoLocalNombre?.trim().toUpperCase();
@@ -196,15 +194,23 @@ function App() {
             if (vis) teamGamesCount[vis] = (teamGamesCount[vis] || 0) + 1;
         });
 
-        const statsSnap = await getDocs(collection(db, 'stats_partido'));
+        // Leemos stats globales (o específicas si existen)
+        const statsSnap = await getDocs(collection(db, 'stats_partido')); 
         const aggregated = {};
         const nombresEquiposValidos = equiposDelMundo.map(e => e.nombre);
 
         statsSnap.forEach(docSnap => {
             const stat = docSnap.data();
             const eqStat = (stat.equipo || stat.nombreEquipo || '').trim().toUpperCase();
-            
-            if (nombresEquiposValidos.includes(eqStat)) {
+            const statCat = (stat.categoria || '').toUpperCase(); // Leemos la categoría de la estadística
+
+            // VERIFICACIÓN DOBLE: 
+            // 1. Que el equipo exista en esta liga.
+            // 2. Que la estadística pertenezca a la categoría activa (O sea Master si es Master, Libre si es Libre)
+            // (Si no tiene categoría, asumimos Master por compatibilidad antigua)
+            const esMismaCategoria = statCat === categoriaActiva || (!statCat && categoriaActiva === 'MASTER40');
+
+            if (nombresEquiposValidos.includes(eqStat) && esMismaCategoria) {
                 const jId = stat.jugadorId;
                 if (!aggregated[jId]) aggregated[jId] = { nombre: stat.nombre, equipo: eqStat, pts: 0, reb: 0, pj: 0 };
                 const acc = aggregated[jId];
