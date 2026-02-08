@@ -185,7 +185,7 @@ function App() {
         setEquiposA(sortTeamsFIBA(equiposDelMundo.filter(e => e.grupo === 'A' || e.grupo === 'a' || categoriaActiva === 'U19')));
         setEquiposB(sortTeamsFIBA(equiposDelMundo.filter(e => e.grupo === 'B' || e.grupo === 'b')));
 
-        // 4. LÍDERES (CORREGIDO: FILTRADO ESTRICTO POR CATEGORÍA)
+        // 4. LÍDERES
         const teamGamesCount = {};
         allMatches.filter(m => m.estatus === 'finalizado').forEach(game => {
             const loc = game.equipoLocalNombre?.trim().toUpperCase();
@@ -202,12 +202,11 @@ function App() {
         statsSnap.forEach(docSnap => {
             const stat = docSnap.data();
             const eqStat = (stat.equipo || stat.nombreEquipo || '').trim().toUpperCase();
-            const statCat = (stat.categoria || '').toUpperCase(); // Leemos la categoría de la estadística
+            const statCat = (stat.categoria || '').toUpperCase(); // LEEMOS LA CATEGORÍA
 
-            // VERIFICACIÓN DOBLE: 
-            // 1. Que el equipo exista en esta liga.
-            // 2. Que la estadística pertenezca a la categoría activa (O sea Master si es Master, Libre si es Libre)
-            // (Si no tiene categoría, asumimos Master por compatibilidad antigua)
+            // --- FILTRADO ESTRICTO (CORREGIDO) ---
+            // Solo procesamos la estadística si la categoría coincide con la activa
+            // O si es estadística antigua (sin categoría) y estamos en MASTER40 (retrocompatibilidad)
             const esMismaCategoria = statCat === categoriaActiva || (!statCat && categoriaActiva === 'MASTER40');
 
             if (nombresEquiposValidos.includes(eqStat) && esMismaCategoria) {
@@ -268,7 +267,7 @@ function App() {
           
           <div style={{ flex: 1, textAlign: 'right' }}>
              <button 
-                onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/REGLAMENTO%20INTERNO.pdf?alt=media', '_blank')} 
+                onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=907097ad-6740-4123-a961-106929de366e', '_blank')} 
                 style={{ 
                     background: 'white', 
                     border: '1px solid #e2e8f0', 
