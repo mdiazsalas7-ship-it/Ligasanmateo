@@ -15,7 +15,8 @@ import StandingsViewer from './StandingsViewer';
 import TeamsPublicViewer from './TeamsPublicViewer';
 import NewsAdmin from './NewsAdmin'; 
 import NewsFeed from './NewsFeed';
-import PlayoffViewer from './PlayoffViewer'; 
+import PlayoffViewer from './PlayoffViewer';
+import AdminVideos from './AdminVideos'; // <--- ESTA LÍNEA FALTABA Y CAUSABA LA PANTALLA BLANCA
 
 const CATEGORIAS_DISPONIBLES = [
   { id: 'MASTER40', label: '🍷 MASTER 40' },
@@ -25,6 +26,14 @@ const CATEGORIAS_DISPONIBLES = [
 ];
 
 const getCollectionName = (baseName, cat) => (cat === 'MASTER40' ? baseName : `${baseName}_${cat}`);
+
+// Función para obtener el ID de video de YouTube
+const getYouTubeID = (url) => {
+    if (!url) return null;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+};
 
 // 1. TABLA RESUMIDA CON JG/JP Y LÓGICA FIBA
 const RenderTableSummary = memo(({ title, data, color }) => (
@@ -75,6 +84,7 @@ function App() {
   const [equiposA, setEquiposA] = useState([]); 
   const [equiposB, setEquiposB] = useState([]); 
   const [noticias, setNoticias] = useState([]);
+  const [entrevistas, setEntrevistas] = useState([]); // Estado para videos MP4
   const [proximosJuegos, setProximosJuegos] = useState([]); 
   const [resultadosRecientes, setResultadosRecientes] = useState([]); 
   const [teamLogos, setTeamLogos] = useState({});
@@ -204,9 +214,6 @@ function App() {
             const eqStat = (stat.equipo || stat.nombreEquipo || '').trim().toUpperCase();
             const statCat = (stat.categoria || '').toUpperCase(); // LEEMOS LA CATEGORÍA
 
-            // --- FILTRADO ESTRICTO (CORREGIDO) ---
-            // Solo procesamos la estadística si la categoría coincide con la activa
-            // O si es estadística antigua (sin categoría) y estamos en MASTER40 (retrocompatibilidad)
             const esMismaCategoria = statCat === categoriaActiva || (!statCat && categoriaActiva === 'MASTER40');
 
             if (nombresEquiposValidos.includes(eqStat) && esMismaCategoria) {
@@ -233,6 +240,11 @@ function App() {
 
         const newsSnap = await getDocs(query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5)));
         setNoticias(newsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+        // CARGA DE ENTREVISTAS
+        const interviewsSnap = await getDocs(query(collection(db, "entrevistas"), orderBy("fecha", "desc"), limit(6)));
+        setEntrevistas(interviewsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
         setLoading(false);
       } catch (e) { console.error(e); setLoading(false); }
     };
@@ -276,7 +288,7 @@ function App() {
                     display: 'flex', 
                     flexDirection: 'column', 
                     alignItems: 'center', 
-                    float: 'right',
+                    float: 'right', 
                     cursor: 'pointer',
                     boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
                 }}
@@ -385,11 +397,41 @@ function App() {
                 </div>
               </section>
 
+              {/* --- ZONA DE ENTREVISTAS (2 Columnas, Video pequeño 260px, Título visible) --- */}
+              <section>
+                <h2 style={{ fontSize: '0.75rem', fontWeight: '900', color: '#1e3a8a', marginBottom:'15px', textTransform: 'uppercase' }}>🎙️ Zona de Entrevistas</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    {entrevistas.length > 0 ? entrevistas.map(video => (
+                      <div key={video.id} style={{ background: 'white', borderRadius: '15px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+                         <div style={{ width: '100%', background: '#000', display: 'flex', justifyContent: 'center' }}>
+                            <video 
+                                src={video.videoUrl} 
+                                controls 
+                                playsInline
+                                preload="metadata" 
+                                poster={video.thumbnailUrl || ""}
+                                style={{ height: '260px', width: '100%', objectFit: 'contain' }}
+                            >
+                                Tu navegador no soporta el video.
+                            </video>
+                         </div>
+                         <div style={{ padding: '8px', borderTop: '1px solid #f1f5f9', background:'#fff' }}>
+                            <p style={{ fontSize: '0.55rem', fontWeight: '900', color: '#1e3a8a', margin: 0, textTransform: 'uppercase', lineHeight:'1.2' }}>{video.titulo}</p>
+                            <p style={{ fontSize: '0.4rem', color: '#94a3b8', marginTop: '2px' }}>{video.fecha || 'Reciente'}</p>
+                         </div>
+                      </div>
+                    )) : <p style={{textAlign:'center', fontSize:'0.6rem', color:'#94a3b8', gridColumn:'span 2'}}>Subiendo nuevas entrevistas...</p>}
+                </div>
+              </section>
+
               {isAdmin && (
                 <div style={{ padding: '15px', background: '#1e3a8a', borderRadius: '24px', color: 'white', textAlign: 'center', boxShadow:'0 10px 25px rgba(0,0,0,0.1)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <button onClick={() => setActiveView('mesa')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid white', padding: '10px', borderRadius: '15px', fontSize: '0.6rem', fontWeight: 'bold' }}>⏱ MESA</button>
                     <button onClick={() => setActiveView('equipos')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid white', padding: '10px', borderRadius: '15px', fontSize: '0.6rem', fontWeight:'bold' }}>🛡 EQUIPOS</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px', marginTop:'10px' }}>
+                    <button onClick={() => setActiveView('adminVideos')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid white', padding: '10px', borderRadius: '15px', fontSize: '0.6rem', fontWeight: 'bold' }}>🎥 VIDEOS</button>
                   </div>
                   <button onClick={() => signOut(auth)} style={{ marginTop:'10px', background:'none', border:'none', color:'rgba(255,255,255,0.5)', fontSize:'0.5rem', fontWeight:'bold', cursor:'pointer' }}>SALIR ADMIN</button>
                 </div>
@@ -404,6 +446,7 @@ function App() {
             {activeView === 'calendario' && <CalendarViewer categoria={categoriaActiva} rol={user?.rol} onClose={() => setActiveView('dashboard')} />}
             {activeView === 'mesa' && isAdmin && <MesaTecnica categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
             {activeView === 'equipos' && isAdmin && <AdminEquipos categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+            {activeView === 'adminVideos' && isAdmin && <AdminVideos onClose={() => setActiveView('dashboard')} />}
           </>
         )}
       </main>
