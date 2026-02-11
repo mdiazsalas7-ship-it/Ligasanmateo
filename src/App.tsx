@@ -16,7 +16,7 @@ import TeamsPublicViewer from './TeamsPublicViewer';
 import NewsAdmin from './NewsAdmin'; 
 import NewsFeed from './NewsFeed';
 import PlayoffViewer from './PlayoffViewer';
-import AdminVideos from './AdminVideos'; // <--- ESTA LÍNEA FALTABA Y CAUSABA LA PANTALLA BLANCA
+import AdminVideos from './AdminVideos'; 
 
 const CATEGORIAS_DISPONIBLES = [
   { id: 'MASTER40', label: '🍷 MASTER 40' },
@@ -84,7 +84,7 @@ function App() {
   const [equiposA, setEquiposA] = useState([]); 
   const [equiposB, setEquiposB] = useState([]); 
   const [noticias, setNoticias] = useState([]);
-  const [entrevistas, setEntrevistas] = useState([]); // Estado para videos MP4
+  const [entrevistas, setEntrevistas] = useState([]); 
   const [proximosJuegos, setProximosJuegos] = useState([]); 
   const [resultadosRecientes, setResultadosRecientes] = useState([]); 
   const [teamLogos, setTeamLogos] = useState({});
@@ -98,11 +98,10 @@ function App() {
   const [leaderIndex, setLeaderIndex] = useState(0);
   const [leadersList, setLeadersList] = useState([]);
 
-  // --- LÓGICA DE NOMBRES DE GRUPO (NBA STYLE) ---
+  // --- LÓGICA DE NOMBRES DE GRUPO ---
   const getGroupLabel = (grupo, cat) => {
       const g = (grupo || '').toUpperCase();
       const c = (cat || '').toUpperCase();
-      
       if (c === 'LIBRE') {
           if (g === 'A') return 'CONF. ESTE';
           if (g === 'B') return 'CONF. OESTE';
@@ -129,10 +128,9 @@ function App() {
         setLoading(true); 
         setLeadersList([]);
 
-        // 1. CARGA DE EQUIPOS (Confianza en la Colección)
+        // 1. CARGA DE EQUIPOS
         const nombreColEquipos = getCollectionName('equipos', categoriaActiva);
         const equiposSnap = await getDocs(collection(db, nombreColEquipos));
-        
         const logoMap = {};
         const equiposDelMundo = [];
 
@@ -141,11 +139,8 @@ function App() {
             const n = data.nombre?.trim().toUpperCase();
             if (n) {
                 logoMap[n] = data.logoUrl || "https://cdn-icons-png.flaticon.com/512/166/166344.png";
-                
-                // LÓGICA DE FILTRADO FLEXIBLE
                 const esColeccionEspecifica = categoriaActiva !== 'MASTER40';
                 const pertenece = esColeccionEspecifica ? true : (!data.categoria || data.categoria === 'MASTER40');
-
                 if (pertenece) {
                     equiposDelMundo.push({ id: d.id, ...data });
                 }
@@ -153,7 +148,7 @@ function App() {
         });
         setTeamLogos(logoMap);
 
-        // 2. CALENDARIO CON ORDEN CRONOLÓGICO
+        // 2. CALENDARIO
         const nombreColCalendario = getCollectionName('calendario', categoriaActiva);
         const calendarSnap = await getDocs(query(collection(db, nombreColCalendario), orderBy("fechaAsignada", "asc")));
         const allMatches = calendarSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -170,7 +165,7 @@ function App() {
             });
         setProximosJuegos(proximosOrdenados);
 
-        // 3. LÓGICA FIBA D.1.3 (ORDENAMIENTO)
+        // 3. LÓGICA FIBA D.1.3
         const sortTeamsFIBA = (teams) => {
             return [...teams].sort((a, b) => {
                 if ((b.puntos || 0) !== (a.puntos || 0)) return (b.puntos || 0) - (a.puntos || 0);
@@ -204,7 +199,6 @@ function App() {
             if (vis) teamGamesCount[vis] = (teamGamesCount[vis] || 0) + 1;
         });
 
-        // Leemos stats globales (o específicas si existen)
         const statsSnap = await getDocs(collection(db, 'stats_partido')); 
         const aggregated = {};
         const nombresEquiposValidos = equiposDelMundo.map(e => e.nombre);
@@ -212,7 +206,7 @@ function App() {
         statsSnap.forEach(docSnap => {
             const stat = docSnap.data();
             const eqStat = (stat.equipo || stat.nombreEquipo || '').trim().toUpperCase();
-            const statCat = (stat.categoria || '').toUpperCase(); // LEEMOS LA CATEGORÍA
+            const statCat = (stat.categoria || '').toUpperCase(); 
 
             const esMismaCategoria = statCat === categoriaActiva || (!statCat && categoriaActiva === 'MASTER40');
 
@@ -241,7 +235,7 @@ function App() {
         const newsSnap = await getDocs(query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5)));
         setNoticias(newsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-        // CARGA DE ENTREVISTAS
+        // CARGA ENTREVISTAS (Límite 6)
         const interviewsSnap = await getDocs(query(collection(db, "entrevistas"), orderBy("fecha", "desc"), limit(6)));
         setEntrevistas(interviewsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
@@ -276,25 +270,13 @@ function App() {
             <h1 style={{ fontSize: '0.85rem', fontWeight: 900, color: '#1e3a8a', margin:0, textTransform:'uppercase' }}>Liga Metropolitana</h1>
             <p style={{ fontSize: '0.5rem', color: '#94a3b8', margin:0, fontWeight:'bold' }}>EJE ESTE • 2026</p>
           </div>
-          
           <div style={{ flex: 1, textAlign: 'right' }}>
              <button 
                 onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=907097ad-6740-4123-a961-106929de366e', '_blank')} 
-                style={{ 
-                    background: 'white', 
-                    border: '1px solid #e2e8f0', 
-                    padding: '6px 8px', 
-                    borderRadius: '10px', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'center', 
-                    float: 'right', 
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
-                }}
+                style={{ background: 'white', border: '1px solid #e2e8f0', padding: '6px 8px', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', float: 'right', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}
              >
-                <span style={{ fontSize:'1.2rem', lineHeight:'1' }}>📜</span>
-                <span style={{ fontSize:'0.35rem', fontWeight:'900', color:'#1e3a8a', marginTop:'2px', lineHeight:'1' }}>REGLAMENTO<br/>INTERNO</span>
+                <span style={{ fontSize:'1.2rem' }}>📜</span>
+                <span style={{ fontSize:'0.35rem', fontWeight:'900', color:'#1e3a8a' }}>REGLAMENTO</span>
              </button>
           </div>
         </div>
@@ -311,6 +293,7 @@ function App() {
         ) : activeView === 'dashboard' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
               
+              {/* MARCADORES */}
               <section>
                 <h2 style={{ fontSize: '0.7rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '10px', textTransform:'uppercase' }}>🏀 Marcadores {categoriaActiva}</h2>
                 <div style={{ position: 'relative', height: '180px', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(30,58,138,0.12)' }}>
@@ -318,7 +301,7 @@ function App() {
                     <div key={juegoIndex} className="fade-in" style={{ height: '100%', background: 'linear-gradient(135deg, #1e3a8a, #1e40af)', color: 'white', padding: '20px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                         <div style={{ textAlign: 'center', flex: 1 }}>
-                          <div style={{ width:'50px', height:'50px', borderRadius:'50%', background:'white', margin:'0 auto', overflow:'hidden', border:'2px solid white' }}><img src={teamLogos[resultadosRecientes[juegoIndex].equipoLocalNombre?.trim().toUpperCase()]} style={{ width:'100%', height:'100%', objectFit:'contain' }} /></div>
+                          <img src={teamLogos[resultadosRecientes[juegoIndex].equipoLocalNombre?.trim().toUpperCase()] || DEFAULT_LOGO} onError={(e) => e.currentTarget.src = DEFAULT_LOGO} style={{ width:'40px', height:'40px', objectFit:'contain', borderRadius:'50%', background:'white' }} />
                           <p style={{ fontSize: '0.55rem', fontWeight: '900', marginTop: '5px' }}>{resultadosRecientes[juegoIndex].equipoLocalNombre}</p>
                         </div>
                         <div style={{ textAlign: 'center', flex: 1 }}>
@@ -336,9 +319,10 @@ function App() {
                 </div>
               </section>
 
+              {/* NOTICIAS Y LÍDERES */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 <div onClick={() => setActiveView('noticias')} style={{ height: '220px', background: 'white', borderRadius: '24px', border: '2.5px solid #1e3a8a', cursor: 'pointer', overflow:'hidden', boxShadow:'0 8px 25px rgba(30,58,138,0.1)' }}>
-                  <div style={{ background: '#1e3a8a', padding: '6px 12px' }}><p style={{ fontSize: '0.6rem', fontWeight: '900', color: 'white', margin: 0 }}>📢 PRENSA LIGA</p></div>
+                  <div style={{ background: '#1e3a8a', padding: '6px 12px' }}><p style={{ fontSize: '0.6rem', fontWeight: '900', color: 'white', margin: 0, textAlign:'center' }}>📢 PRENSA LIGA</p></div>
                   <div style={{ height: '110px', display:'flex', alignItems:'center', justifyContent:'center', background:'#f8fafc', padding:'5px' }}>{noticias.length > 0 && <img key={noticiaIndex} src={noticias[noticiaIndex].imageUrl} className="fade-in" style={{ maxWidth: '100%', maxHeight:'100%', objectFit: 'contain' }} />}</div>
                   <p style={{ fontSize: '0.6rem', fontWeight: '800', padding: '8px 12px', textAlign:'center', color:'#1e293b' }}>{noticias[noticiaIndex]?.titulo?.toUpperCase()}</p>
                 </div>
@@ -357,6 +341,7 @@ function App() {
                 </div>
               </div>
 
+              {/* CLASIFICACIÓN */}
               <section>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px' }}>
                   <h2 style={{ fontSize: '0.75rem', fontWeight: '900', color: '#1e3a8a', margin: 0 }}>🏆 Clasificación {categoriaActiva}</h2>
@@ -367,7 +352,7 @@ function App() {
                 <div onClick={() => setActiveView('tabla')} style={{ cursor: 'pointer' }}><RenderTableSummary title={`TABLA OFICIAL`} data={tablaIndex === 0 ? equiposA : equiposB} color={tablaIndex === 0 ? "#1e3a8a" : "#d97706"} /></div>
               </section>
 
-              {/* PRÓXIMOS JUEGOS: ORDENADOS POR HORA Y CON BORDE AZUL */}
+              {/* PRÓXIMOS JUEGOS */}
               <section>
                 <div style={{ background: 'white', borderRadius: '24px', border: '2.5px solid #1e3a8a', overflow: 'hidden', boxShadow: '0 10px 30px rgba(30,58,138,0.1)' }}>
                   <div style={{ background: '#1e3a8a', padding: '10px 15px' }}>
@@ -397,12 +382,27 @@ function App() {
                 </div>
               </section>
 
-              {/* --- ZONA DE ENTREVISTAS (2 Columnas, Video pequeño 260px, Título visible) --- */}
+              {/* --- ZONA DE ENTREVISTAS (CARRUSEL VERTICAL COMPACTO) --- */}
               <section>
-                <h2 style={{ fontSize: '0.75rem', fontWeight: '900', color: '#1e3a8a', marginBottom:'15px', textTransform: 'uppercase' }}>🎙️ Zona de Entrevistas</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <h2 style={{ fontSize: '0.75rem', fontWeight: '900', color: '#1e3a8a', marginBottom:'10px', textTransform:'uppercase' }}>🎙️ Zona de Entrevistas</h2>
+                <div style={{ 
+                    display: 'flex', 
+                    overflowX: 'auto', 
+                    gap: '12px', 
+                    paddingBottom: '10px', 
+                    scrollSnapType: 'x mandatory' 
+                }} className="no-scrollbar">
                     {entrevistas.length > 0 ? entrevistas.map(video => (
-                      <div key={video.id} style={{ background: 'white', borderRadius: '15px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+                      <div key={video.id} style={{ 
+                          minWidth: '40%', // Estilo Reel (Vertical delgado)
+                          background: 'white', 
+                          borderRadius: '15px', 
+                          border: '1px solid #e2e8f0', 
+                          overflow: 'hidden', 
+                          boxShadow: '0 4px 10px rgba(0,0,0,0.05)',
+                          scrollSnapAlign: 'start',
+                          flexShrink: 0
+                      }}>
                          <div style={{ width: '100%', background: '#000', display: 'flex', justifyContent: 'center' }}>
                             <video 
                                 src={video.videoUrl} 
@@ -410,17 +410,16 @@ function App() {
                                 playsInline
                                 preload="metadata" 
                                 poster={video.thumbnailUrl || ""}
-                                style={{ height: '260px', width: '100%', objectFit: 'contain' }}
+                                style={{ height: '260px', width: '100%', objectFit: 'cover' }}
                             >
                                 Tu navegador no soporta el video.
                             </video>
                          </div>
-                         <div style={{ padding: '8px', borderTop: '1px solid #f1f5f9', background:'#fff' }}>
-                            <p style={{ fontSize: '0.55rem', fontWeight: '900', color: '#1e3a8a', margin: 0, textTransform: 'uppercase', lineHeight:'1.2' }}>{video.titulo}</p>
-                            <p style={{ fontSize: '0.4rem', color: '#94a3b8', marginTop: '2px' }}>{video.fecha || 'Reciente'}</p>
+                         <div style={{ padding: '8px', borderTop: '1px solid #f1f5f9', background:'#fff', minHeight:'40px' }}>
+                            <p style={{ fontSize: '0.5rem', fontWeight: '900', color: '#1e3a8a', margin: 0, textTransform: 'uppercase', lineHeight:'1.1' }}>{video.titulo}</p>
                          </div>
                       </div>
-                    )) : <p style={{textAlign:'center', fontSize:'0.6rem', color:'#94a3b8', gridColumn:'span 2'}}>Subiendo nuevas entrevistas...</p>}
+                    )) : <p style={{textAlign:'center', fontSize:'0.6rem', color:'#94a3b8', width:'100%'}}>Cargando entrevistas...</p>}
                 </div>
               </section>
 
@@ -428,7 +427,7 @@ function App() {
                 <div style={{ padding: '15px', background: '#1e3a8a', borderRadius: '24px', color: 'white', textAlign: 'center', boxShadow:'0 10px 25px rgba(0,0,0,0.1)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <button onClick={() => setActiveView('mesa')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid white', padding: '10px', borderRadius: '15px', fontSize: '0.6rem', fontWeight: 'bold' }}>⏱ MESA</button>
-                    <button onClick={() => setActiveView('equipos')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid white', padding: '10px', borderRadius: '15px', fontSize: '0.6rem', fontWeight:'bold' }}>🛡 EQUIPOS</button>
+                    <button onClick={() => setActiveView('equipos')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid white', padding: '10px', borderRadius: '15px', fontSize: '0.6rem', fontWeight: 'bold' }}>🛡 EQUIPOS</button>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px', marginTop:'10px' }}>
                     <button onClick={() => setActiveView('adminVideos')} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid white', padding: '10px', borderRadius: '15px', fontSize: '0.6rem', fontWeight: 'bold' }}>🎥 VIDEOS</button>
