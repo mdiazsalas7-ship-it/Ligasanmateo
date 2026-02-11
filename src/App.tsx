@@ -27,6 +27,9 @@ const CATEGORIAS_DISPONIBLES = [
 
 const getCollectionName = (baseName, cat) => (cat === 'MASTER40' ? baseName : `${baseName}_${cat}`);
 
+// Imagen de respaldo por si falla el logo
+const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/15568/15568903.png";
+
 // Función para obtener el ID de video de YouTube
 const getYouTubeID = (url) => {
     if (!url) return null;
@@ -59,7 +62,7 @@ const RenderTableSummary = memo(({ title, data, color }) => (
               <tr key={eq.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                 <td style={{ padding: '8px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', overflow: 'hidden', border: '1px solid #eee', background: 'white', flexShrink: 0 }}>
-                      <img src={eq.logoUrl || "https://cdn-icons-png.flaticon.com/512/166/166344.png"} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="L" />
+                      <img src={eq.logoUrl || DEFAULT_LOGO} onError={(e) => e.currentTarget.src = DEFAULT_LOGO} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="L" />
                   </div>
                   <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.65rem' }}>{eq.nombre.toUpperCase()}</span>
                 </td>
@@ -85,6 +88,7 @@ function App() {
   const [equiposB, setEquiposB] = useState([]); 
   const [noticias, setNoticias] = useState([]);
   const [entrevistas, setEntrevistas] = useState([]); 
+  const [videoSeleccionado, setVideoSeleccionado] = useState(null); 
   const [proximosJuegos, setProximosJuegos] = useState([]); 
   const [resultadosRecientes, setResultadosRecientes] = useState([]); 
   const [teamLogos, setTeamLogos] = useState({});
@@ -138,7 +142,7 @@ function App() {
             const data = d.data();
             const n = data.nombre?.trim().toUpperCase();
             if (n) {
-                logoMap[n] = data.logoUrl || "https://cdn-icons-png.flaticon.com/512/166/166344.png";
+                logoMap[n] = data.logoUrl || DEFAULT_LOGO;
                 const esColeccionEspecifica = categoriaActiva !== 'MASTER40';
                 const pertenece = esColeccionEspecifica ? true : (!data.categoria || data.categoria === 'MASTER40');
                 if (pertenece) {
@@ -165,7 +169,7 @@ function App() {
             });
         setProximosJuegos(proximosOrdenados);
 
-        // 3. LÓGICA FIBA D.1.3
+        // 3. LÓGICA FIBA
         const sortTeamsFIBA = (teams) => {
             return [...teams].sort((a, b) => {
                 if ((b.puntos || 0) !== (a.puntos || 0)) return (b.puntos || 0) - (a.puntos || 0);
@@ -235,8 +239,8 @@ function App() {
         const newsSnap = await getDocs(query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5)));
         setNoticias(newsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-        // CARGA ENTREVISTAS (Límite 6)
-        const interviewsSnap = await getDocs(query(collection(db, "entrevistas"), orderBy("fecha", "desc"), limit(6)));
+        // CARGA ENTREVISTAS (Límite 8 para carrusel)
+        const interviewsSnap = await getDocs(query(collection(db, "entrevistas"), orderBy("fecha", "desc"), limit(8)));
         setEntrevistas(interviewsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
         setLoading(false);
@@ -270,6 +274,7 @@ function App() {
             <h1 style={{ fontSize: '0.85rem', fontWeight: 900, color: '#1e3a8a', margin:0, textTransform:'uppercase' }}>Liga Metropolitana</h1>
             <p style={{ fontSize: '0.5rem', color: '#94a3b8', margin:0, fontWeight:'bold' }}>EJE ESTE • 2026</p>
           </div>
+          
           <div style={{ flex: 1, textAlign: 'right' }}>
              <button 
                 onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=907097ad-6740-4123-a961-106929de366e', '_blank')} 
@@ -305,11 +310,10 @@ function App() {
                           <p style={{ fontSize: '0.55rem', fontWeight: '900', marginTop: '5px' }}>{resultadosRecientes[juegoIndex].equipoLocalNombre}</p>
                         </div>
                         <div style={{ textAlign: 'center', flex: 1 }}>
-                          <p style={{ fontSize: '1.8rem', fontWeight: 900, margin: 0 }}>{resultadosRecientes[juegoIndex].marcadorLocal ?? 0} - {resultadosRecientes[juegoIndex].marcadorVisitante ?? 0}</p>
-                          <span style={{ fontSize: '0.45rem', background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px' }}>FINALIZADO</span>
+                          <p style={{ fontSize: '1.8rem', fontWeight: 900, margin: 0 }}>{resultadosRecientes[juegoIndex].marcadorLocal} - {resultadosRecientes[juegoIndex].marcadorVisitante}</p>
                         </div>
                         <div style={{ textAlign: 'center', flex: 1 }}>
-                          <div style={{ width:'50px', height:'50px', borderRadius:'50%', background:'white', margin:'0 auto', overflow:'hidden', border:'2px solid white' }}><img src={teamLogos[resultadosRecientes[juegoIndex].equipoVisitanteNombre?.trim().toUpperCase()]} style={{ width:'100%', height:'100%', objectFit:'contain' }} /></div>
+                          <img src={teamLogos[resultadosRecientes[juegoIndex].equipoVisitanteNombre?.trim().toUpperCase()] || DEFAULT_LOGO} onError={(e) => e.currentTarget.src = DEFAULT_LOGO} style={{ width:'40px', height:'40px', objectFit:'contain', borderRadius:'50%', background:'white' }} />
                           <p style={{ fontSize: '0.55rem', fontWeight: '900', marginTop: '5px' }}>{resultadosRecientes[juegoIndex].equipoVisitanteNombre}</p>
                         </div>
                       </div>
@@ -366,9 +370,6 @@ function App() {
                           <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'white', border: '1px solid #eee', overflow: 'hidden', flexShrink: 0 }}><img src={teamLogos[j.equipoLocalNombre?.trim().toUpperCase()]} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="L" /></div>
                         </div>
                         <div style={{ flex: 0.8, textAlign: 'center', margin: '0 5px' }}>
-                          <span style={{ fontSize:'0.45rem', fontWeight:'900', color:'#94a3b8', display:'block', marginBottom:'2px' }}>
-                            {getGroupLabel(j.grupo, categoriaActiva)}
-                          </span>
                           <span style={{ background: '#1e3a8a', color: 'white', padding: '3px 10px', borderRadius: '10px', fontSize: '0.55rem', fontWeight: '900' }}>{j.hora || 'VS'}</span>
                           <p style={{ fontSize: '0.45rem', color: '#94a3b8', marginTop: '3px', fontWeight: 'bold' }}>{j.fechaAsignada}</p>
                         </div>
@@ -382,46 +383,58 @@ function App() {
                 </div>
               </section>
 
-              {/* --- ZONA DE ENTREVISTAS (CARRUSEL VERTICAL COMPACTO) --- */}
+              {/* --- ZONA DE ENTREVISTAS (CARRUSEL DE MINIATURAS DEL VIDEO) --- */}
               <section>
                 <h2 style={{ fontSize: '0.75rem', fontWeight: '900', color: '#1e3a8a', marginBottom:'10px', textTransform:'uppercase' }}>🎙️ Zona de Entrevistas</h2>
-                <div style={{ 
-                    display: 'flex', 
-                    overflowX: 'auto', 
-                    gap: '12px', 
-                    paddingBottom: '10px', 
-                    scrollSnapType: 'x mandatory' 
-                }} className="no-scrollbar">
+                <div style={{ display: 'flex', overflowX: 'auto', gap: '12px', paddingBottom: '10px', scrollSnapType: 'x mandatory' }} className="no-scrollbar">
                     {entrevistas.length > 0 ? entrevistas.map(video => (
-                      <div key={video.id} style={{ 
-                          minWidth: '40%', // Estilo Reel (Vertical delgado)
-                          background: 'white', 
-                          borderRadius: '15px', 
-                          border: '1px solid #e2e8f0', 
-                          overflow: 'hidden', 
-                          boxShadow: '0 4px 10px rgba(0,0,0,0.05)',
+                      <div key={video.id} onClick={() => setVideoSeleccionado(video)} style={{ 
+                          minWidth: '100px', 
+                          cursor: 'pointer',
                           scrollSnapAlign: 'start',
+                          textAlign: 'center',
                           flexShrink: 0
                       }}>
-                         <div style={{ width: '100%', background: '#000', display: 'flex', justifyContent: 'center' }}>
+                         <div style={{ width: '100px', height: '140px', borderRadius: '15px', overflow: 'hidden', border: '2px solid #1e3a8a', position:'relative', background:'#000' }}>
+                            {/* MINIATURA: VIDEO PAUSADO EN MUTE PARA EXTRAER LA IMAGEN REAL */}
                             <video 
-                                src={video.videoUrl} 
-                                controls 
-                                playsInline
+                                src={`${video.videoUrl}#t=0.1`} 
+                                muted 
                                 preload="metadata" 
-                                poster={video.thumbnailUrl || ""}
-                                style={{ height: '260px', width: '100%', objectFit: 'cover' }}
-                            >
-                                Tu navegador no soporta el video.
-                            </video>
+                                playsInline
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                            />
+                            {/* Icono de Play encima */}
+                            <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.3)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                                <span style={{ fontSize:'1.5rem', color:'white', background:'rgba(255,255,255,0.2)', borderRadius:'50%', width:'35px', height:'35px', display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid white' }}>▶</span>
+                            </div>
                          </div>
-                         <div style={{ padding: '8px', borderTop: '1px solid #f1f5f9', background:'#fff', minHeight:'40px' }}>
-                            <p style={{ fontSize: '0.5rem', fontWeight: '900', color: '#1e3a8a', margin: 0, textTransform: 'uppercase', lineHeight:'1.1' }}>{video.titulo}</p>
-                         </div>
+                         <p style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#1e293b', marginTop: '6px', lineHeight:'1.1', textTransform:'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth:'100px' }}>{video.titulo}</p>
                       </div>
                     )) : <p style={{textAlign:'center', fontSize:'0.6rem', color:'#94a3b8', width:'100%'}}>Cargando entrevistas...</p>}
                 </div>
               </section>
+
+              {/* MODAL REPRODUCTOR DE VIDEO FULLSCREEN */}
+              {videoSeleccionado && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.95)', zIndex: 5000, display: 'flex', flexDirection:'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <button onClick={() => setVideoSeleccionado(null)} style={{ position: 'absolute', top: '20px', right: '20px', background:'rgba(255,255,255,0.2)', color:'white', border:'none', borderRadius:'50%', width:'40px', height:'40px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', zIndex:5001 }}>✕</button>
+                    
+                    <div style={{ width:'100%', maxWidth:'500px', height:'80vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                        <video 
+                            src={videoSeleccionado.videoUrl} 
+                            controls 
+                            autoPlay 
+                            playsInline
+                            style={{ maxWidth: '100%', maxHeight: '100%', borderRadius:'10px', boxShadow:'0 0 30px rgba(0,0,0,0.5)' }}
+                        />
+                    </div>
+                    <div style={{ color:'white', textAlign:'center', padding:'10px' }}>
+                        <h3 style={{ margin:0, fontSize:'1rem' }}>{videoSeleccionado.titulo}</h3>
+                        <p style={{ margin:'5px 0 0 0', fontSize:'0.7rem', color:'#ccc' }}>{videoSeleccionado.fecha}</p>
+                    </div>
+                </div>
+              )}
 
               {isAdmin && (
                 <div style={{ padding: '15px', background: '#1e3a8a', borderRadius: '24px', color: 'white', textAlign: 'center', boxShadow:'0 10px 25px rgba(0,0,0,0.1)' }}>
