@@ -29,6 +29,7 @@ const getCollectionName = (baseName, cat) => (cat === 'MASTER40' ? baseName : `$
 
 // Imagen de respaldo por si falla el logo
 const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/15568/15568903.png";
+const DEFAULT_VIDEO_THUMB = "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&q=80&w=300";
 
 // Función para obtener el ID de video de YouTube
 const getYouTubeID = (url) => {
@@ -239,8 +240,8 @@ function App() {
         const newsSnap = await getDocs(query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5)));
         setNoticias(newsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-        // CARGA ENTREVISTAS (Límite 8 para carrusel)
-        const interviewsSnap = await getDocs(query(collection(db, "entrevistas"), orderBy("fecha", "desc"), limit(8)));
+        // --- CARGA DE ENTREVISTAS (LÍMITE 5 VIDEOS) ---
+        const interviewsSnap = await getDocs(query(collection(db, "entrevistas"), orderBy("fecha", "desc"), limit(5)));
         setEntrevistas(interviewsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
         setLoading(false);
@@ -323,7 +324,6 @@ function App() {
                 </div>
               </section>
 
-              {/* NOTICIAS Y LÍDERES */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 <div onClick={() => setActiveView('noticias')} style={{ height: '220px', background: 'white', borderRadius: '24px', border: '2.5px solid #1e3a8a', cursor: 'pointer', overflow:'hidden', boxShadow:'0 8px 25px rgba(30,58,138,0.1)' }}>
                   <div style={{ background: '#1e3a8a', padding: '6px 12px' }}><p style={{ fontSize: '0.6rem', fontWeight: '900', color: 'white', margin: 0, textAlign:'center' }}>📢 PRENSA LIGA</p></div>
@@ -345,7 +345,6 @@ function App() {
                 </div>
               </div>
 
-              {/* CLASIFICACIÓN */}
               <section>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px' }}>
                   <h2 style={{ fontSize: '0.75rem', fontWeight: '900', color: '#1e3a8a', margin: 0 }}>🏆 Clasificación {categoriaActiva}</h2>
