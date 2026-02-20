@@ -5,7 +5,7 @@ import MatchForm from './MatchForm';
 
 const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/451/451716.png";
 
-// --- COMPONENTE INTERNO: BOX SCORE (AJUSTADO: LOGOS DENTRO DEL CÍRCULO) ---
+// --- COMPONENTE INTERNO: BOX SCORE ---
 const BoxScoreModal = ({ match, onClose, getLogo, rol }) => {
     const [stats, setStats] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -137,10 +137,9 @@ const BoxScoreModal = ({ match, onClose, getLogo, rol }) => {
                         <button onClick={onClose} style={{ color: 'white', background: '#ef4444', border: 'none', borderRadius: '10px', padding: '8px 15px', cursor: 'pointer', fontWeight: 'bold', fontSize:'0.7rem' }}>CERRAR</button>
                     </div>
                 </div>
-
+                {/* Visualización de marcador */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '30px 15px', background: '#fff' }}>
                     <div style={{ textAlign: 'center', flex: 1 }}>
-                        {/* LOGO LOCAL: AJUSTADO DENTRO DEL CÍRCULO */}
                         <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'white', border: '2px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', overflow: 'hidden', padding: '5px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                             <img src={getLogo(match.equipoLocalId)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="L" />
                         </div>
@@ -148,14 +147,12 @@ const BoxScoreModal = ({ match, onClose, getLogo, rol }) => {
                     </div>
                     <div style={{ fontSize: '1.2rem', color: '#cbd5e1', fontWeight: '900' }}>VS</div>
                     <div style={{ textAlign: 'center', flex: 1 }}>
-                        {/* LOGO VISITANTE: AJUSTADO DENTRO DEL CÍRCULO */}
                         <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'white', border: '2px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', overflow: 'hidden', padding: '5px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                             <img src={getLogo(match.equipoVisitanteId)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="V" />
                         </div>
                         <div style={{ color: '#ef4444', fontWeight: '900', fontSize: '2.2rem', marginTop: '10px' }}>{match.marcadorVisitante}</div>
                     </div>
                 </div>
-
                 <div style={{ padding: '0 15px 120px 15px' }}>
                     {loading ? <p style={{textAlign:'center', padding:'40px'}}>Calculando estadísticas...</p> : (
                         <>
@@ -169,7 +166,7 @@ const BoxScoreModal = ({ match, onClose, getLogo, rol }) => {
     );
 };
 
-// --- COMPONENTE PRINCIPAL (CALENDARIO CON BORDES DE COLORES Y ORDEN CRONOLÓGICO) ---
+// --- COMPONENTE PRINCIPAL ---
 const CalendarViewer = ({ rol, onClose, categoria }) => {
     const [matches, setMatches] = useState([]);
     const [equipos, setEquipos] = useState([]);
@@ -197,7 +194,6 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
                 }
             });
 
-            // --- ORDENAMIENTO POR FECHA Y LUEGO POR HORA (MENOR A MAYOR) ---
             const sorted = filteredByCat.sort((a, b) => {
                 if (a.fechaAsignada !== b.fechaAsignada) {
                     return a.fechaAsignada.localeCompare(b.fechaAsignada);
@@ -230,8 +226,12 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
         setShowMatchForm(true);
     };
 
+    // --- LÓGICA DE FILTRADO ACTUALIZADA PARA CRUCES ---
     const filteredMatches = matches.filter(m => {
         if (activeFilter === 'TODOS') return true;
+        // Si el filtro es PLAYOFFS, mostrar solo juegos con fase playoff
+        if (activeFilter === 'PLAYOFFS') return m.fase === 'playoff';
+        // En temporada regular, filtrar por grupo
         return (m.grupo || '').toUpperCase() === activeFilter;
     });
 
@@ -249,9 +249,26 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
                 <button onClick={onClose} style={{background:'white', color:'#1e3a8a', border:'none', padding:'8px 15px', borderRadius:'12px', fontWeight:'bold', fontSize:'0.7rem', cursor:'pointer'}}>VOLVER</button>
             </div>
 
-            <div style={{ background:'white', padding:'12px', display:'flex', justifyContent:'center', gap:'10px', boxShadow:'0 2px 10px rgba(0,0,0,0.05)' }}>
-                {['TODOS', 'A', 'B'].map((f) => (
-                    <button key={f} onClick={() => setActiveFilter(f)} style={{ padding:'8px 20px', borderRadius:'20px', border: activeFilter === f ? '2px solid transparent' : '2px solid #1e3a8a', background: activeFilter === f ? '#1e3a8a' : 'white', color: activeFilter === f ? 'white' : '#1e3a8a', fontSize:'0.75rem', fontWeight:'bold', cursor:'pointer', transition:'0.2s' }}>{f === 'TODOS' ? 'VER TODOS' : `GRUPO ${f}`}</button>
+            {/* BARRA DE FILTROS ACTUALIZADA */}
+            <div style={{ background:'white', padding:'12px', display:'flex', justifyContent:'center', gap:'8px', boxShadow:'0 2px 10px rgba(0,0,0,0.05)', flexWrap:'wrap' }}>
+                {['TODOS', 'A', 'B', 'PLAYOFFS'].map((f) => (
+                    <button 
+                        key={f} 
+                        onClick={() => setActiveFilter(f)} 
+                        style={{ 
+                            padding:'8px 16px', 
+                            borderRadius:'20px', 
+                            border: activeFilter === f ? '2px solid transparent' : (f === 'PLAYOFFS' ? '2px solid #ef4444' : '2px solid #1e3a8a'), 
+                            background: activeFilter === f ? (f === 'PLAYOFFS' ? '#ef4444' : '#1e3a8a') : 'white', 
+                            color: activeFilter === f ? 'white' : (f === 'PLAYOFFS' ? '#ef4444' : '#1e3a8a'), 
+                            fontSize:'0.7rem', 
+                            fontWeight:'900', 
+                            cursor:'pointer', 
+                            transition:'0.2s' 
+                        }}
+                    >
+                        {f === 'TODOS' ? 'TODOS' : f === 'PLAYOFFS' ? '🏆 PLAYOFFS' : `GRUPO ${f}`}
+                    </button>
                 ))}
             </div>
 
@@ -266,8 +283,10 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
                     <div style={{display:'flex', flexDirection:'column', gap:'18px', paddingBottom:'120px'}}>
                         {filteredMatches.length > 0 ? filteredMatches.map(m => {
                             const isFinished = m.estatus === 'finalizado';
-                            // DEFINICIÓN DE COLOR DE BORDE SEGÚN ESTADO/GRUPO
-                            const borderColor = isFinished ? '#1e3a8a' : (m.grupo === 'A' ? '#3b82f6' : '#f59e0b');
+                            const isPlayoff = m.fase === 'playoff';
+                            
+                            // Color dinámico según fase o grupo
+                            const borderColor = isPlayoff ? '#ef4444' : (isFinished ? '#1e3a8a' : (m.grupo === 'A' ? '#3b82f6' : '#f59e0b'));
 
                             return (
                                 <div key={m.id} style={{ 
@@ -275,10 +294,13 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
                                     borderRadius:'20px', 
                                     overflow:'hidden', 
                                     boxShadow:'0 6px 20px rgba(0,0,0,0.06)', 
-                                    border: `3px solid ${borderColor}` // BORDE DE COLOR RESALTADO
+                                    border: `3px solid ${borderColor}`
                                 }}>
-                                    <div style={{ background: isFinished ? '#f1f5f9' : (m.grupo === 'A' ? '#eff6ff' : '#fffbeb'), padding:'10px 15px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:`1px solid ${borderColor}` }}>
-                                        <span style={{ fontSize:'0.65rem', fontWeight:'900', color: borderColor }}>GRUPO {m.grupo}</span>
+                                    <div style={{ background: isPlayoff ? '#fef2f2' : (isFinished ? '#f1f5f9' : (m.grupo === 'A' ? '#eff6ff' : '#fffbeb')), padding:'10px 15px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:`1px solid ${borderColor}` }}>
+                                        {/* CABECERA DINÁMICA PARA CRUCES */}
+                                        <span style={{ fontSize:'0.65rem', fontWeight:'900', color: borderColor }}>
+                                            {isPlayoff ? `🏆 PLAYOFF - ${m.tituloCruce || 'CRUCE DE GRUPOS'}` : `GRUPO ${m.grupo}`}
+                                        </span>
                                         <div style={{ display:'flex', gap:'10px', alignItems:'center' }}>
                                             <span style={{ fontSize:'0.7rem', fontWeight:'bold', color:'#475569' }}>📅 {m.fechaAsignada}</span>
                                             <span style={{ fontSize:'0.7rem', fontWeight:'900', color:'white', background: borderColor, padding:'2px 8px', borderRadius:'6px' }}>⏰ {m.hora || 'S.H'}</span>
@@ -321,7 +343,7 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
                                     )}
                                 </div>
                             );
-                        }) : <div style={{textAlign:'center', padding:'60px', color:'#94a3b8', fontSize:'0.85rem', fontWeight:'bold'}}>No hay juegos programados en este grupo.</div>}
+                        }) : <div style={{textAlign:'center', padding:'60px', color:'#94a3b8', fontSize:'0.85rem', fontWeight:'bold'}}>No hay juegos programados en esta sección.</div>}
                     </div>
                 </div>
             </div>
