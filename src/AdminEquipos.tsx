@@ -3,7 +3,7 @@ import { db, storage } from './firebase';
 import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc, query, where, orderBy, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; 
 
-// INTERFAZ ACTUALIZADA: Incluye el 'numero' de la camisa
+// INTERFAZ ACTUALIZADA
 interface Player { id?: string; nombre: string; cedula?: string; numero?: number; }
 interface Equipo { 
     id: string; 
@@ -26,27 +26,28 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
     const [loadingPlayers, setLoadingPlayers] = useState(false);
     const [uploadingId, setUploadingId] = useState<string | null>(null); 
     
-    // Estados para crear equipo
     const [teamName, setTeamName] = useState('');
     const [teamGroup, setTeamGroup] = useState('A'); 
     const [newLogoUrl, setNewLogoUrl] = useState('');
 
-    // Estados para nómina (Forma 21)
     const [selectedTeam, setSelectedTeam] = useState<Equipo | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
     
-    // ESTADOS CUERPO TÉCNICO
     const [staff, setStaff] = useState({ entrenador: '', asistente: '' });
 
-    // Inputs Jugador (AHORA CON NÚMERO)
     const [newPlayerName, setNewPlayerName] = useState('');
     const [newPlayerCedula, setNewPlayerCedula] = useState('');
-    const [newPlayerNumber, setNewPlayerNumber] = useState(''); // <--- NUEVO
+    const [newPlayerNumber, setNewPlayerNumber] = useState('');
+
+    // --- NUEVOS ESTADOS PARA EDICIÓN ---
+    const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+    const [editName, setEditName] = useState('');
+    const [editCedula, setEditCedula] = useState('');
+    const [editNumber, setEditNumber] = useState('');
 
     const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/166/166344.png";
     const LOGO_LIGA = "https://i.postimg.cc/hhF5fTPn/image.png"; 
 
-    // --- LÓGICA MULTICOLECCIÓN ---
     const colEquipos = categoria === 'MASTER40' ? 'equipos' : `equipos_${categoria}`;
     const colJugadores = categoria === 'MASTER40' ? 'jugadores' : `jugadores_${categoria}`;
 
@@ -81,8 +82,6 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                 await updateDoc(doc(db, colEquipos, teamId), { logoUrl: downloadURL });
                 alert("✅ Logo actualizado.");
                 fetchEquipos();
-                
-                // Actualizar en caliente si estamos editando
                 if (selectedTeam && selectedTeam.id === teamId) {
                     setSelectedTeam({ ...selectedTeam, logoUrl: downloadURL });
                 }
@@ -100,7 +99,6 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
             const q = query(collection(db, colJugadores), where('equipoId', '==', teamId));
             const snap = await getDocs(q);
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Player));
-            // Ordenamos por número de camiseta para facilitar a la mesa
             setPlayers(list.sort((a, b) => (a.numero || 0) - (b.numero || 0)));
         } catch (error) { console.error(error); }
         setLoadingPlayers(false);
@@ -124,10 +122,7 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
 
     const handleOpenForma21 = (eq: Equipo) => {
         setSelectedTeam(eq);
-        setStaff({
-            entrenador: eq.entrenador || '',
-            asistente: eq.asistente || ''
-        });
+        setStaff({ entrenador: eq.entrenador || '', asistente: eq.asistente || '' });
         fetchPlayers(eq.id);
         setView('forma21');
     };
@@ -162,8 +157,6 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
     const handleAddPlayer = async () => {
         if (!newPlayerName.trim() || !newPlayerCedula.trim() || !newPlayerNumber.trim()) return alert("Faltan datos (Nombre, Cédula o Número)");
         if (players.length >= 15) return alert("Nómina llena (Máx 15)");
-        
-        // Validaciones dobles
         if (players.some(p => p.cedula === newPlayerCedula)) return alert("Cédula repetida en este equipo.");
         if (players.some(p => p.numero === parseInt(newPlayerNumber))) return alert(`El número ${newPlayerNumber} ya está en uso.`);
 
@@ -171,21 +164,16 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
             const playerDoc = {
                 nombre: newPlayerName.toUpperCase(),
                 cedula: newPlayerCedula,
-                numero: parseInt(newPlayerNumber), // Guardamos el número
+                numero: parseInt(newPlayerNumber),
                 equipoId: selectedTeam!.id,
                 equipoNombre: selectedTeam!.nombre,
                 categoria: categoria,
                 puntos: 0, triples: 0, rebotes: 0, asistencias: 0, faltas: 0
             };
             const docRef = await addDoc(collection(db, colJugadores), playerDoc);
-            
             const newList = [...players, { id: docRef.id, ...playerDoc }];
-            // Ordenar por número al agregar
             setPlayers(newList.sort((a, b) => (a.numero || 0) - (b.numero || 0)));
-            
-            setNewPlayerName(''); 
-            setNewPlayerCedula('');
-            setNewPlayerNumber('');
+            setNewPlayerName(''); setNewPlayerCedula(''); setNewPlayerNumber('');
         } catch (error) { alert("Error al registrar"); }
     };
 
@@ -197,13 +185,38 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
         } catch (error) { alert("Error"); }
     };
 
+    // --- NUEVAS FUNCIONES DE EDICIÓN ---
+    const startEditing = (p: Player) => {
+        setEditingPlayerId(p.id!);
+        setEditName(p.nombre);
+        setEditCedula(p.cedula || '');
+        setEditNumber(p.numero?.toString() || '');
+    };
+
+    const handleUpdatePlayer = async (playerId: string) => {
+        if (!editName.trim() || !editCedula.trim() || !editNumber.trim()) return alert("Faltan datos");
+        try {
+            const playerRef = doc(db, colJugadores, playerId);
+            const updatedData = {
+                nombre: editName.toUpperCase(),
+                cedula: editCedula,
+                numero: parseInt(editNumber)
+            };
+            await updateDoc(playerRef, updatedData);
+            
+            // Actualizar lista local
+            const updatedList = players.map(p => p.id === playerId ? { ...p, ...updatedData } : p);
+            setPlayers(updatedList.sort((a, b) => (a.numero || 0) - (b.numero || 0)));
+            setEditingPlayerId(null);
+        } catch (error) { alert("Error al actualizar"); }
+    };
+
     const handlePrint = () => { window.print(); };
 
     return (
         <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, background:'#f8fafc', zIndex:2000, display:'flex', justifyContent:'center', overflowY:'auto' }}>
             <div style={{ width:'100%', maxWidth:'850px', background:'white', minHeight:'100vh', boxShadow: '0 0 20px rgba(0,0,0,0.1)' }}>
                 
-                {/* --- HEADER (NO PRINT) --- */}
                 <div className="no-print" style={{ padding:'15px 20px', background:'#1e3a8a', color:'white', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                     <h3 style={{margin:0, fontSize:'1.1rem'}}>🛡️ GESTIÓN {categoria}</h3>
                     <button onClick={onClose} style={{ background:'white', border:'none', color:'#1e3a8a', padding:'6px 12px', borderRadius:'6px', cursor:'pointer', fontWeight:'bold' }}>CERRAR</button>
@@ -244,17 +257,14 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                         </div>
                     )}
 
-                    {/* --- VISTA DE NÓMINA (EDITABLE) --- */}
                     {view === 'forma21' && selectedTeam && (
                         <div>
-                            {/* CONTROLES (NO SE IMPRIMEN) */}
                             <div className="no-print" style={{ marginBottom:'20px', padding:'15px', background:'#f0f9ff', borderRadius:'10px', border:'1px solid #bae6fd' }}>
                                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px'}}>
                                     <h4 style={{margin:0, color:'#0369a1'}}>📝 Editar Forma 21</h4>
                                     <button onClick={handlePrint} style={{background:'#10b981', color:'white', border:'none', padding:'8px 15px', borderRadius:'6px', fontWeight:'bold', cursor:'pointer'}}>🖨 IMPRIMIR</button>
                                 </div>
 
-                                {/* LOGO GESTIÓN */}
                                 <div style={{display:'flex', alignItems:'center', gap:'15px', marginBottom:'20px', background:'white', padding:'10px', borderRadius:'8px', border:'1px solid #e2e8f0'}}>
                                     <div style={{width:'60px', height:'60px', borderRadius:'50%', border:'1px solid #cbd5e1', overflow:'hidden', display:'flex', justifyContent:'center', alignItems:'center'}}>
                                         <img src={selectedTeam.logoUrl || DEFAULT_LOGO} style={{width:'100%', height:'100%', objectFit:'contain'}} alt="Logo" />
@@ -267,7 +277,6 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     </div>
                                 </div>
 
-                                {/* STAFF */}
                                 <div style={{display:'flex', gap:'10px', marginBottom:'15px', background:'white', padding:'10px', borderRadius:'8px'}}>
                                     <div style={{flex:1}}>
                                         <label style={{fontSize:'0.7rem', fontWeight:'bold', color:'#64748b'}}>ENTRENADOR</label>
@@ -280,7 +289,6 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     <button onClick={handleSaveStaff} style={{marginTop:'auto', padding:'8px 15px', background:'#3b82f6', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', height:'35px', fontWeight:'bold'}}>💾</button>
                                 </div>
 
-                                {/* AGREGAR JUGADOR (CON NÚMERO) */}
                                 <div style={{display:'flex', gap:'10px'}}>
                                     <input type="number" placeholder="N°" value={newPlayerNumber} onChange={e => setNewPlayerNumber(e.target.value)} style={{width:'60px', padding:'10px', borderRadius:'6px', border:'1px solid #ccc', textAlign:'center', fontWeight:'bold'}} />
                                     <input type="text" placeholder="Nombre y Apellido" value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} style={{flex:2, padding:'10px', borderRadius:'6px', border:'1px solid #ccc'}} />
@@ -290,10 +298,7 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                 <button onClick={() => setView('list')} style={{marginTop:'10px', background:'none', border:'none', color:'#64748b', fontSize:'0.8rem', cursor:'pointer'}}>← Volver</button>
                             </div>
 
-                            {/* --- HOJA OFICIAL (IMPRESIÓN) --- */}
                             <div id="printable-area" style={{ background:'white', padding:'20px' }}>
-                                
-                                {/* 1. ENCABEZADO */}
                                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'3px solid #1e3a8a', paddingBottom:'10px', marginBottom:'15px' }}>
                                     <img src={LOGO_LIGA} alt="Logo" style={{ height:'75px', objectFit:'contain' }} />
                                     <div style={{ textAlign:'center' }}>
@@ -307,15 +312,10 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     </div>
                                 </div>
 
-                                {/* 2. DATOS DEL EQUIPO */}
                                 <div style={{ display:'flex', alignItems:'center', gap:'20px', background:'#f8fafc', padding:'15px', borderRadius:'8px', border:'1px solid #e2e8f0', marginBottom:'15px' }}>
-                                    
-                                    {/* LOGO */}
                                     <div style={{ width:'80px', height:'80px', borderRadius:'50%', background:'white', border:'1px solid #cbd5e1', display:'flex', alignItems:'center', justifyContent:'center', padding:'5px', flexShrink:0, overflow:'hidden' }}>
                                         <img src={selectedTeam.logoUrl || DEFAULT_LOGO} style={{ width:'100%', height:'100%', objectFit:'contain' }} alt="Logo Equipo" />
                                     </div>
-
-                                    {/* DATOS */}
                                     <div style={{ flex:1 }}>
                                         <div style={{ display:'flex', justifyContent:'space-between', borderBottom:'1px solid #cbd5e1', paddingBottom:'8px', marginBottom:'8px' }}>
                                             <div style={{flex:1}}>
@@ -340,32 +340,48 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     </div>
                                 </div>
 
-                                {/* 3. TABLA DE JUGADORES (CON NÚMERO DE CAMISA) */}
                                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'0.85rem' }}>
                                     <thead>
                                         <tr style={{ background:'#1e3a8a', color:'white' }}>
-                                            <th style={{ padding:'8px', border:'1px solid #1e3a8a', width:'30px', fontSize:'0.7rem' }}>#</th> {/* Contador */}
-                                            <th style={{ padding:'8px', border:'1px solid #1e3a8a', width:'50px', textAlign:'center' }}>No.</th> {/* DORSAL */}
+                                            <th style={{ padding:'8px', border:'1px solid #1e3a8a', width:'30px', fontSize:'0.7rem' }}>#</th>
+                                            <th style={{ padding:'8px', border:'1px solid #1e3a8a', width:'50px', textAlign:'center' }}>No.</th>
                                             <th style={{ padding:'8px', border:'1px solid #1e3a8a', textAlign:'left' }}>APELLIDOS Y NOMBRES</th>
                                             <th style={{ padding:'8px', border:'1px solid #1e3a8a', width:'100px' }}>CÉDULA</th>
                                             <th style={{ padding:'8px', border:'1px solid #1e3a8a', width:'150px' }}>FIRMA JUGADOR</th>
-                                            <th className="no-print" style={{ width:'40px' }}></th>
+                                            <th className="no-print" style={{ width:'80px' }}></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {players.map((p, i) => (
                                             <tr key={p.id} style={{ borderBottom:'1px solid #cbd5e1' }}>
                                                 <td style={{ padding:'10px', textAlign:'center', borderRight:'1px solid #cbd5e1', fontSize:'0.7rem', color:'#64748b' }}>{i + 1}</td>
-                                                <td style={{ padding:'10px', textAlign:'center', borderRight:'1px solid #cbd5e1', fontWeight:'900', fontSize:'1rem' }}>{p.numero}</td>
-                                                <td style={{ padding:'10px', borderRight:'1px solid #cbd5e1', fontWeight:'600' }}>{p.nombre}</td>
-                                                <td style={{ padding:'10px', textAlign:'center', borderRight:'1px solid #cbd5e1' }}>{p.cedula}</td>
-                                                <td style={{ padding:'10px', borderRight:'1px solid #cbd5e1' }}></td>
-                                                <td className="no-print" style={{ textAlign:'center' }}>
-                                                    <button onClick={() => handleDeletePlayer(p.id!)} style={{color:'#ef4444', background:'none', border:'none', cursor:'pointer', fontWeight:'bold'}}>X</button>
-                                                </td>
+                                                
+                                                {/* CONDICIONAL: MODO EDICIÓN VS MODO VISTA */}
+                                                {editingPlayerId === p.id ? (
+                                                    <>
+                                                        <td style={{ borderRight:'1px solid #cbd5e1' }}><input type="number" value={editNumber} onChange={e => setEditNumber(e.target.value)} style={{width:'40px', textAlign:'center', fontWeight:'bold'}} /></td>
+                                                        <td style={{ borderRight:'1px solid #cbd5e1' }}><input type="text" value={editName} onChange={e => setEditName(e.target.value)} style={{width:'90%', textTransform:'uppercase'}} /></td>
+                                                        <td style={{ borderRight:'1px solid #cbd5e1' }}><input type="number" value={editCedula} onChange={e => setEditCedula(e.target.value)} style={{width:'80px'}} /></td>
+                                                        <td></td>
+                                                        <td className="no-print" style={{ textAlign:'center' }}>
+                                                            <button onClick={() => handleUpdatePlayer(p.id!)} style={{color:'#10b981', background:'none', border:'none', cursor:'pointer', fontWeight:'bold', marginRight:'5px'}}>✔</button>
+                                                            <button onClick={() => setEditingPlayerId(null)} style={{color:'#64748b', background:'none', border:'none', cursor:'pointer', fontWeight:'bold'}}>✕</button>
+                                                        </td>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <td style={{ padding:'10px', textAlign:'center', borderRight:'1px solid #cbd5e1', fontWeight:'900', fontSize:'1rem' }}>{p.numero}</td>
+                                                        <td style={{ padding:'10px', borderRight:'1px solid #cbd5e1', fontWeight:'600' }}>{p.nombre}</td>
+                                                        <td style={{ padding:'10px', textAlign:'center', borderRight:'1px solid #cbd5e1' }}>{p.cedula}</td>
+                                                        <td style={{ padding:'10px', borderRight:'1px solid #cbd5e1' }}></td>
+                                                        <td className="no-print" style={{ textAlign:'center' }}>
+                                                            <button onClick={() => startEditing(p)} style={{color:'#3b82f6', background:'none', border:'none', cursor:'pointer', fontWeight:'bold', marginRight:'10px'}}>✎</button>
+                                                            <button onClick={() => handleDeletePlayer(p.id!)} style={{color:'#ef4444', background:'none', border:'none', cursor:'pointer', fontWeight:'bold'}}>X</button>
+                                                        </td>
+                                                    </>
+                                                )}
                                             </tr>
                                         ))}
-                                        {/* RELLENO HASTA 15 */}
                                         {Array.from({ length: Math.max(0, 15 - players.length) }).map((_, i) => (
                                             <tr key={`empty-${i}`} style={{ borderBottom:'1px solid #cbd5e1', height:'40px' }}>
                                                 <td style={{ borderRight:'1px solid #cbd5e1', textAlign:'center', color:'#cbd5e1', fontSize:'0.7rem' }}>{players.length + i + 1}</td>
@@ -379,7 +395,6 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                     </tbody>
                                 </table>
 
-                                {/* 4. PIE DE PÁGINA (BILATERAL) */}
                                 <div style={{ marginTop:'60px', display:'flex', justifyContent:'space-around', textAlign:'center', pageBreakInside:'avoid' }}>
                                     <div style={{ width:'250px' }}>
                                         <div style={{ borderTop:'2px solid black', paddingTop:'5px', fontWeight:'bold', fontSize:'0.8rem' }}>DELEGADO DE EQUIPO</div>
@@ -390,7 +405,6 @@ const AdminEquipos: React.FC<{ onClose: () => void, categoria: string }> = ({ on
                                         <div style={{ fontSize:'0.6rem' }}>AUTORIZACIÓN OFICIAL</div>
                                     </div>
                                 </div>
-
                             </div>
                         </div>
                     )}

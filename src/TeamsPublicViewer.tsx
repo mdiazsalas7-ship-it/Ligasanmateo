@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+// 1. Añadimos doc y updateDoc de firestore
+import { collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore'; 
 
 // --- CONFIGURACIÓN DE ESTILO ---
 const LEAGUE_LOGO_URL = "https://i.postimg.cc/qMsBxr6P/image.png";
@@ -16,13 +17,16 @@ const TeamsPublicViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [roster, setRoster] = useState<Player[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // 1. Cargar la lista de equipos
+    // --- NUEVOS ESTADOS PARA EDICIÓN ---
+    const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+    const [editName, setEditName] = useState<string>('');
+    const [savingEdit, setSavingEdit] = useState(false);
+
     useEffect(() => {
         const fetchTeams = async () => {
             try {
                 const snapTeams = await getDocs(collection(db, 'equipos'));
                 const list = snapTeams.docs.map(d => ({ id: d.id, ...d.data() } as Team));
-                // Ordenar equipos alfabéticamente en JS para evitar errores de índice
                 setTeams(list.sort((a,b) => (a.nombre || '').localeCompare(b.nombre || '')));
             } catch (e) { 
                 console.error("Error equipos:", e); 
@@ -33,12 +37,12 @@ const TeamsPublicViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         fetchTeams();
     }, []);
 
-    // 2. Cargar la Nómina (Ruta universal de jugadores)
     const handleViewRoster = async (team: Team) => {
         setLoading(true);
         setSelectedTeam(team);
+        // Reseteamos cualquier edición pendiente al cambiar de equipo
+        setEditingPlayerId(null); 
         try {
-            // Buscamos en la colección principal 'jugadores' por equipoId
             const q = query(collection(db, 'jugadores'), where('equipoId', '==', team.id));
             const snap = await getDocs(q);
             
@@ -47,7 +51,6 @@ const TeamsPublicViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 nombre: d.data().nombre || 'Jugador sin nombre' 
             } as Player));
 
-            // Ordenamos los nombres en el código (JS) para que NO falle si no hay índices en Firebase
             playersData.sort((a, b) => a.nombre.localeCompare(b.nombre));
             
             setRoster(playersData);
@@ -61,10 +64,44 @@ const TeamsPublicViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         }
     };
 
+    // --- FUNCIONES DE EDICIÓN ---
+    const startEditing = (player: Player) => {
+        setEditingPlayerId(player.id);
+        setEditName(player.nombre);
+    };
+
+    const cancelEditing = () => {
+        setEditingPlayerId(null);
+        setEditName('');
+    };
+
+    const saveEdit = async (playerId: string) => {
+        if (!editName.trim()) return; // Evitar guardar nombres vacíos
+        setSavingEdit(true);
+        try {
+            // 2. Actualizamos en Firebase
+            const playerRef = doc(db, 'jugadores', playerId);
+            await updateDoc(playerRef, { nombre: editName.trim() });
+
+            // 3. Actualizamos el estado local (para no tener que recargar todo de Firebase)
+            setRoster(prevRoster => 
+                prevRoster.map(p => p.id === playerId ? { ...p, nombre: editName.trim() } : p)
+                // Opcional: podrías volver a ordenar la lista aquí si cambió el orden alfabético
+            );
+            
+            setEditingPlayerId(null);
+        } catch (error) {
+            console.error("Error al actualizar jugador:", error);
+            alert("Hubo un error al guardar el cambio.");
+        } finally {
+            setSavingEdit(false);
+        }
+    };
+
     return (
         <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, background:'#f3f4f6', zIndex:1000, display:'flex', flexDirection:'column' }}>
             
-            {/* HEADER 50PX - ESTILO MESA TÉCNICA */}
+            {/* HEADER */}
             <div style={{ height:'50px', background:'#111', borderBottom:'2px solid #333', display:'flex', alignItems:'center', padding:'0 15px', justifyContent:'space-between', color:'white' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
                     <button onClick={view === 'roster' ? () => setView('list') : onClose} style={{ background:'rgba(255,255,255,0.1)', border:'none', color:'white', borderRadius:'50%', width:'32px', height:'32px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem' }}>
@@ -92,7 +129,7 @@ const TeamsPublicViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         ))}
                     </div>
                 ) : (
-                    /* LISTA DE NOMBRES PURA */
+                    /* LISTA DE NOMBRES CON EDICIÓN */
                     <div style={{ maxWidth:'500px', margin:'0 auto' }}>
                         <div style={{ background:'#fff', padding:'15px', borderRadius:'12px', marginBottom:'15px', display:'flex', alignItems:'center', gap:'15px', border:'1px solid #e2e8f0', boxShadow:'0 2px 4px rgba(0,0,0,0.05)' }}>
                             <img src={selectedTeam?.logoUrl || DEFAULT_TEAM_LOGO} style={{ width:'45px', height:'45px', objectFit:'contain' }} alt="logo" />
@@ -116,10 +153,40 @@ const TeamsPublicViewer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                         color:'#334155',
                                         fontWeight:'600',
                                         display:'flex',
-                                        alignItems:'center'
+                                        alignItems:'center',
+                                        justifyContent: 'space-between' // Para separar nombre y botón
                                     }}>
-                                        <span style={{ color:'#cbd5e1', marginRight:'15px', fontSize:'0.8rem', width:'20px' }}>{index + 1}.</span>
-                                        {p.nombre.toUpperCase()}
+                                        
+                                        {/* MODO EDICIÓN VS MODO VISTA */}
+                                        {editingPlayerId === p.id ? (
+                                            <div style={{ display: 'flex', gap: '10px', width: '100%', alignItems: 'center' }}>
+                                                <input 
+                                                    value={editName}
+                                                    onChange={(e) => setEditName(e.target.value)}
+                                                    disabled={savingEdit}
+                                                    style={{ flex: 1, padding: '5px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '1rem', textTransform: 'uppercase' }}
+                                                    autoFocus
+                                                />
+                                                <button onClick={() => saveEdit(p.id)} disabled={savingEdit} style={{ background: '#10b981', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: savingEdit ? 'not-allowed' : 'pointer' }}>
+                                                    {savingEdit ? '...' : '✔'}
+                                                </button>
+                                                <button onClick={cancelEditing} disabled={savingEdit} style={{ background: '#ef4444', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: savingEdit ? 'not-allowed' : 'pointer' }}>
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                    <span style={{ color:'#cbd5e1', marginRight:'15px', fontSize:'0.8rem', width:'20px' }}>{index + 1}.</span>
+                                                    {p.nombre.toUpperCase()}
+                                                </div>
+                                                {/* BOTÓN PARA EDITAR (Solo debería verlo el delegado/admin) */}
+                                                <button onClick={() => startEditing(p)} style={{ background: 'transparent', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold' }}>
+                                                    Editar
+                                                </button>
+                                            </>
+                                        )}
+
                                     </div>
                                 ))
                             )}
