@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from './firebase'; 
-import { collection, addDoc, getDocs, deleteDoc, doc, Timestamp, query, orderBy, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, Timestamp, query, orderBy, where, limit } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-interface NewsItem { id: string; titulo: string; cuerpo: string; tipo: 'general' | 'sancion' | 'destacado'; fecha: any; imageUrl?: string; }
+// --- INTERFACES ---
+interface NewsItem { 
+    id: string; 
+    titulo: string; 
+    cuerpo: string; 
+    tipo: 'general' | 'sancion' | 'destacado'; 
+    fecha: any; 
+    imageUrl?: string; 
+}
 
 interface PartidoFinalizado {
     id: string;
@@ -14,9 +22,11 @@ interface PartidoFinalizado {
     mvp: string;
     puntosMvp: number;
     fecha: string;
+    categoria: string;
 }
 
 const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    // Estados de Formulario
     const [news, setNews] = useState<NewsItem[]>([]);
     const [titulo, setTitulo] = useState('');
     const [cuerpo, setCuerpo] = useState('');
@@ -24,13 +34,17 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [loading, setLoading] = useState(false);
 
+    // Estados del Selector de Partidos
     const [showMatchSelector, setShowMatchSelector] = useState(false);
     const [recentMatches, setRecentMatches] = useState<PartidoFinalizado[]>([]);
     const [loadingMatches, setLoadingMatches] = useState(false);
 
+    // Configuración
+    const CATEGORIAS = ['MASTER40', 'LIBRE'];
     const p1 = "sk-or-v1-09b7a0e6db89101ea9fee4db191b4679";
     const p2 = "9ffbfd8188cc2de82ace935725c78f3b";
-    
+
+    // --- LÓGICA DE IA ---
     const redactarConIA = async (matchData?: PartidoFinalizado) => {
         setLoading(true);
         const FULL_KEY = p1 + p2;
@@ -40,20 +54,18 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             const dif = Math.abs(matchData.scoreL - matchData.scoreV);
             const contexto = dif >= 15 ? "fue una PELA o PALIZA contundente" : dif <= 5 ? "fue un JUEGO CERRADO de INFARTO" : "fue un duelo muy disputado";
             
-            prompt = `Actúa como un cronista deportivo estrella de la Liga Metropolitana de Baloncesto. Redacta una noticia explosiva (máx 130 palabras).
+            prompt = `Actúa como un cronista deportivo estrella de la Liga Metropolitana de Baloncesto (Categoría ${matchData.categoria}). Redacta una noticia explosiva (máx 130 palabras).
             PARTIDO: ${matchData.local} vs ${matchData.visitante}. 
             SCORE: ${matchData.scoreL} - ${matchData.scoreV} (${contexto}).
             MVP: ${matchData.mvp} con ${matchData.puntosMvp} puntos.
 
             REQUISITOS:
             1. TÍTULO EN MAYÚSCULAS: Menciona quién ganó. Si la ventaja es >15 usa 'PELA'. Si es <5 usa 'INFARTO'.
-            2. CUERPO: Describe el ambiente. Haz un pase por el Boxscore resaltando al MVP y su dominio.
-            3. TABLA: Menciona si el ganador sube en la tabla o si el perdedor se complica.
-            4. ESTILO: Baloncesto criollo, apasionado y profesional.
-            
+            2. CUERPO: Describe el ambiente. Resalta al MVP.
+            3. ESTILO: Baloncesto criollo venezolano, apasionado y profesional.
             IMPORTANTE: Separa el título del cuerpo con la palabra 'CUERPO:'.`;
         } else {
-            prompt = `Mejora este comunicado para la Liga Metropolitana Master 40: "${titulo}". Hazlo institucional y profesional. Máximo 100 palabras.`;
+            prompt = `Mejora este comunicado para la Liga Metropolitana: "${titulo}". Hazlo institucional y profesional. Máximo 100 palabras.`;
         }
 
         try {
@@ -72,14 +84,10 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             const data = await response.json();
             const texto = data.choices[0].message.content;
 
-            if (matchData) {
-                if (texto.includes("CUERPO:")) {
-                    const partes = texto.split("CUERPO:");
-                    setTitulo(partes[0].replace("Título:", "").replace("TÍTULO:", "").trim().toUpperCase());
-                    setCuerpo(partes[1].trim());
-                } else {
-                    setCuerpo(texto);
-                }
+            if (matchData && texto.includes("CUERPO:")) {
+                const partes = texto.split("CUERPO:");
+                setTitulo(partes[0].replace("Título:", "").replace("TÍTULO:", "").trim().toUpperCase());
+                setCuerpo(partes[1].trim());
                 setTipo('destacado');
             } else {
                 setCuerpo(texto);
@@ -91,43 +99,56 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         }
     };
 
+    // --- CARGAR RESULTADOS DE FIREBASE ---
     const fetchRecentMatches = async () => {
         setLoadingMatches(true);
         try {
-            const q = query(collection(db, 'calendario'), where('estatus', '==', 'finalizado'));
-            const snap = await getDocs(q);
-            
-            let matchesData = await Promise.all(snap.docs.map(async (docSnap) => {
-                const d = docSnap.data();
-                let mvpNombre = "Figura destacada";
-                let mvpPuntos = 0;
+            let allMatches: PartidoFinalizado[] = [];
 
-                const statsSnap = await getDocs(query(collection(db, 'stats_partido'), where('partidoId', '==', docSnap.id)));
-                statsSnap.forEach(s => {
-                    const stat = s.data();
-                    if (Number(stat.puntos || 0) > mvpPuntos) {
-                        mvpPuntos = Number(stat.puntos);
-                        mvpNombre = stat.nombre;
-                    }
-                });
+            for (const cat of CATEGORIAS) {
+                // Mapeo dinámico: MASTER40 -> calendario | LIBRE -> calendario_LIBRE
+                const colName = cat === 'MASTER40' ? 'calendario' : `calendario_${cat}`;
+                const q = query(collection(db, colName), where('estatus', '==', 'finalizado'), limit(8));
+                const snap = await getDocs(q);
 
-                return {
-                    id: docSnap.id, local: d.equipoLocalNombre, visitante: d.equipoVisitanteNombre,
-                    scoreL: d.marcadorLocal, scoreV: d.marcadorVisitante,
-                    mvp: mvpNombre, puntosMvp: mvpPuntos, fecha: d.fechaAsignada || ''
-                } as PartidoFinalizado;
-            }));
+                const catMatches = await Promise.all(snap.docs.map(async (docSnap) => {
+                    const d = docSnap.data();
+                    let mvpNombre = "Figura destacada";
+                    let mvpPuntos = 0;
 
-            setRecentMatches(matchesData.sort((a, b) => b.fecha.localeCompare(a.fecha)));
+                    // Buscar MVP en stats_partido
+                    const statsSnap = await getDocs(query(collection(db, 'stats_partido'), where('partidoId', '==', docSnap.id)));
+                    statsSnap.forEach(s => {
+                        const st = s.data();
+                        const pts = (Number(st.tirosLibres)||0) + (Number(st.dobles)||0)*2 + (Number(st.triples)||0)*3;
+                        if (pts > mvpPuntos) {
+                            mvpPuntos = pts;
+                            mvpNombre = st.nombre || "Jugador";
+                        }
+                    });
+
+                    return {
+                        id: docSnap.id, 
+                        local: d.equipoLocalNombre, visitante: d.equipoVisitanteNombre,
+                        scoreL: d.marcadorLocal, scoreV: d.marcadorVisitante,
+                        mvp: mvpNombre, puntosMvp: mvpPuntos, 
+                        fecha: d.fechaAsignada || '', categoria: cat
+                    } as PartidoFinalizado;
+                }));
+                allMatches = [...allMatches, ...catMatches];
+            }
+
+            setRecentMatches(allMatches.sort((a, b) => b.fecha.localeCompare(a.fecha)));
             setShowMatchSelector(true);
         } catch (e) {
-            alert("Error al cargar los últimos resultados.");
+            console.error(e);
+            alert("Error al cargar resultados. Verifica las colecciones en Firestore.");
         } finally {
             setLoadingMatches(false);
         }
     };
 
-    // --- FUNCIÓN DE PUBLICACIÓN CON NOTIFICACIÓN AUTOMÁTICA ---
+    // --- PUBLICAR ---
     const handlePublicar = async (e: React.FormEvent) => {
         e.preventDefault(); 
         setLoading(true);
@@ -139,39 +160,32 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 imageUrl = await getDownloadURL(storageRef);
             }
 
-            // 1. Guardar en Firestore
             await addDoc(collection(db, 'noticias'), {
-                titulo: titulo.toUpperCase(), cuerpo, tipo, fecha: Timestamp.now(), imageUrl: imageUrl || null
+                titulo: titulo.toUpperCase(), 
+                cuerpo, 
+                tipo, 
+                fecha: Timestamp.now(), 
+                imageUrl: imageUrl || null
             });
 
-            // 2. ENVIAR NOTIFICACIÓN AUTOMÁTICA
+            // Notificación Push (FCM)
             const tokensSnap = await getDocs(collection(db, "tokens_notificaciones"));
             const tokens = tokensSnap.docs.map(d => d.data().token).filter(t => t);
-
             if (tokens.length > 0) {
                 await fetch('https://fcm.googleapis.com/fcm/send', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'BCIo9OadymsSrPl7ByiJ-MFXyunwbesFbKOw8ZTOaVRQInFVbTzQgfHSZaJx05vfdUZZZsv9XLdCKxtdvg3LNkg' // <--- PEGA AQUÍ TU CLAVE
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'key=BCIo9OadymsSrPl7ByiJ-MFXyunwbesFbKOw8ZTOaVRQInFVbTzQgfHSZaJx05vfdUZZZsv9XLdCKxtdvg3LNkg' },
                     body: JSON.stringify({
                         registration_ids: tokens,
-                        notification: {
-                            title: `🏀 ${titulo.toUpperCase()}`,
-                            body: cuerpo.substring(0, 100) + "...",
-                            icon: "https://i.postimg.cc/hhF5fTPn/image.png",
-                            click_action: window.location.origin
-                        }
+                        notification: { title: `🏀 ${titulo}`, body: cuerpo.substring(0, 100) + "...", icon: "https://i.postimg.cc/hhF5fTPn/image.png" }
                     })
                 });
             }
 
             setTitulo(''); setCuerpo(''); setImageFile(null); 
             fetchNews();
-            alert("✅ Publicada y Notificada a todos los fans."); 
+            alert("✅ Publicada y Notificada."); 
         } catch (e) { 
-            console.error(e);
             alert("Error al publicar."); 
         } finally { 
             setLoading(false); 
@@ -193,40 +207,42 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     };
 
     return (
-        <div style={{maxWidth: '800px', margin: '0 auto', background: '#fff', borderRadius: '15px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.1)'}}>
+        <div style={{maxWidth: '800px', margin: '0 auto', background: '#fff', borderRadius: '15px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontFamily: 'sans-serif'}}>
+            {/* Header */}
             <div style={{display:'flex', justifyContent:'space-between', padding: '20px', background: '#1e3a8a', color: 'white'}}>
-                <h2 style={{fontSize: '1rem', margin: 0, fontWeight: '900'}}>📰 PRENSA OFICIAL MASTER 40</h2>
+                <h2 style={{fontSize: '1rem', margin: 0, fontWeight: '900'}}>📰 PANEL DE PRENSA MULTI-CATEGORÍA</h2>
                 <button onClick={onClose} style={{background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: '5px 15px', borderRadius: '6px', cursor: 'pointer', fontWeight:'bold'}}>Cerrar</button>
             </div>
 
             <div style={{padding: '20px'}}>
+                {/* Botón Mágico */}
                 <button onClick={fetchRecentMatches} disabled={loadingMatches} style={{ width: '100%', marginBottom: '20px', background: 'linear-gradient(45deg, #1e3a8a, #3b82f6)', color: 'white', fontWeight: '900', padding: '15px', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(30, 58, 138, 0.2)' }}>
-                    {loadingMatches ? 'BUSCANDO BOXSCORES...' : '✨ REDACTAR CRÓNICA DESDE RESULTADOS (IA)'}
+                    {loadingMatches ? 'BUSCANDO BOXSCORES...' : '✨ REDACTAR DESDE RESULTADOS (IA)'}
                 </button>
 
                 <form onSubmit={handlePublicar} style={{background:'#f8fafc', padding:'20px', borderRadius:'15px', border:'1px solid #e2e8f0', marginBottom: '30px'}}>
                     <div style={{marginBottom:'15px'}}>
-                        <label style={{fontWeight:'900', color: '#1e3a8a', display: 'block', marginBottom: '8px', fontSize: '0.75rem'}}>TÍTULO DE LA CRÓNICA</label>
-                        <input type="text" value={titulo} onChange={e=>setTitulo(e.target.value)} required placeholder="Ej: PELA HISTÓRICA EN EL EJE ESTE" style={{width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 'bold'}} />
+                        <label style={{fontWeight:'900', color: '#1e3a8a', display: 'block', marginBottom: '8px', fontSize: '0.75rem'}}>TÍTULO</label>
+                        <input type="text" value={titulo} onChange={e=>setTitulo(e.target.value)} required placeholder="Ej: PELA HISTÓRICA EN EL EJE ESTE" style={{width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 'bold', boxSizing: 'border-box'}} />
                     </div>
                     
                     <div style={{marginBottom:'15px'}}>
-                        <label style={{fontWeight:'900', color: '#1e3a8a', display: 'block', marginBottom: '8px', fontSize: '0.75rem'}}>FOTO DEL ENCUENTRO</label>
-                        <input type="file" accept="image/*" onChange={(e) => { if (e.target.files) setImageFile(e.target.files[0]); }} style={{width: '100%', background: '#fff', padding: '10px', border: '1px dashed #cbd5e1', borderRadius: '8px'}} />
+                        <label style={{fontWeight:'900', color: '#1e3a8a', display: 'block', marginBottom: '8px', fontSize: '0.75rem'}}>IMAGEN DE PORTADA</label>
+                        <input type="file" accept="image/*" onChange={(e) => { if (e.target.files) setImageFile(e.target.files[0]); }} style={{width: '100%', background: '#fff', padding: '10px', border: '1px dashed #cbd5e1', borderRadius: '8px', boxSizing: 'border-box'}} />
                     </div>
 
                     <div style={{marginBottom:'15px', position:'relative'}}>
                         <label style={{fontWeight:'900', color: '#1e3a8a', display: 'block', marginBottom: '8px', fontSize: '0.75rem'}}>CUERPO DE LA NOTICIA</label>
-                        <textarea value={cuerpo} onChange={e=>setCuerpo(e.target.value)} required style={{width:'100%', padding:'15px', borderRadius:'8px', border:'1px solid #cbd5e1', minHeight:'180px', fontFamily: 'inherit', lineHeight: '1.5', fontSize: '0.85rem'}} />
-                        <button type="button" onClick={() => redactarConIA()} style={{position:'absolute', bottom:'15px', right:'15px', background:'#1e3a8a', color:'white', border:'none', padding:'6px 12px', borderRadius:'6px', fontSize:'0.6rem', cursor:'pointer', fontWeight: '900'}}>🪄 MEJORAR TEXTO</button>
+                        <textarea value={cuerpo} onChange={e=>setCuerpo(e.target.value)} required style={{width:'100%', padding:'15px', borderRadius:'8px', border:'1px solid #cbd5e1', minHeight:'180px', fontFamily: 'inherit', lineHeight: '1.5', fontSize: '0.85rem', boxSizing: 'border-box'}} />
+                        <button type="button" onClick={() => redactarConIA()} style={{position:'absolute', bottom:'15px', right:'15px', background:'#1e3a8a', color:'white', border:'none', padding:'6px 12px', borderRadius:'6px', fontSize:'0.6rem', cursor:'pointer', fontWeight: '900'}}>🪄 PULIR TEXTO</button>
                     </div>
 
                     <button disabled={loading} style={{width:'100%', padding:'16px', background: '#10b981', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '900', fontSize: '0.9rem', cursor: 'pointer', borderBottom: '4px solid #059669'}}>
-                        {loading ? 'ENVIANDO ALERTAS...' : 'PUBLICAR Y NOTIFICAR'}
+                        {loading ? 'PROCESANDO...' : 'PUBLICAR Y NOTIFICAR'}
                     </button>
                 </form>
 
-                <h3 style={{color: '#1e3a8a', fontSize: '0.8rem', marginBottom: '10px', fontWeight: '900', textTransform: 'uppercase'}}>Historial de Boletines</h3>
+                <h3 style={{color: '#1e3a8a', fontSize: '0.8rem', marginBottom: '10px', fontWeight: '900', textTransform: 'uppercase'}}>Boletines Recientes</h3>
                 <div style={{display:'flex', flexDirection:'column', gap:'8px'}}>
                     {news.map(n => (
                         <div key={n.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 15px', border:'1px solid #e2e8f0', borderRadius:'12px', background:'#fff'}}>
@@ -240,6 +256,7 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
             </div>
 
+            {/* Modal Selector de Partidos */}
             {showMatchSelector && (
                 <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.85)', zIndex:3000, display:'flex', justifyContent:'center', alignItems:'center', padding:'20px', backdropFilter: 'blur(3px)'}}>
                     <div style={{background:'white', width:'100%', maxWidth:'400px', borderRadius:'20px', padding:'20px', maxHeight:'80vh', overflowY:'auto'}}>
@@ -247,6 +264,10 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
                             {recentMatches.map(m => (
                                 <div key={m.id} onClick={() => { setShowMatchSelector(false); redactarConIA(m); }} style={{ border:'2px solid #f1f5f9', padding:'15px', borderRadius:'12px', cursor:'pointer', background:'#f8fafc' }}>
+                                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
+                                        <span style={{fontSize:'0.6rem', color:'#3b82f6', fontWeight:'900'}}>{m.categoria}</span>
+                                        <span style={{fontSize:'0.6rem', color:'#94a3b8'}}>{m.fecha}</span>
+                                    </div>
                                     <div style={{fontWeight:'900', color:'#1e3a8a', marginBottom: '5px', fontSize: '0.8rem'}}>{m.local} vs {m.visitante}</div>
                                     <div style={{fontSize:'1.4rem', fontWeight:'900', color: '#111'}}>{m.scoreL} - {m.scoreV}</div>
                                     <div style={{fontSize:'0.65rem', color:'#64748b', marginTop: '5px'}}>MVP: {m.mvp} ({m.puntosMvp} pts)</div>
@@ -260,4 +281,5 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         </div>
     );
 };
+
 export default NewsAdmin;

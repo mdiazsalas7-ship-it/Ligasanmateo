@@ -1,9 +1,8 @@
 import { useEffect, useState, memo } from 'react';
 import './App.css'; 
-import { db, auth, messaging } from './firebase'; 
-import { doc, onSnapshot, collection, query, orderBy, getDocs, limit, setDoc, where } from 'firebase/firestore'; 
+import { db, auth } from './firebase'; 
+import { doc, onSnapshot, collection, query, orderBy, getDocs, limit, where } from 'firebase/firestore'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth'; 
-import { getToken } from 'firebase/messaging'; 
 
 // Componentes
 import Login from './Login';
@@ -12,7 +11,6 @@ import CalendarViewer from './CalendarViewer';
 import MesaTecnica from './MesaTecnica'; 
 import StatsViewer from './StatsViewer'; 
 import StandingsViewer from './StandingsViewer'; 
-import TeamsPublicViewer from './TeamsPublicViewer';
 import NewsAdmin from './NewsAdmin'; 
 import NewsFeed from './NewsFeed';
 import PlayoffViewer from './PlayoffViewer';
@@ -27,19 +25,8 @@ const CATEGORIAS_DISPONIBLES = [
 
 const getCollectionName = (baseName, cat) => (cat === 'MASTER40' ? baseName : `${baseName}_${cat}`);
 
-// Imagen de respaldo por si falla el logo
 const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/15568/15568903.png";
-const DEFAULT_VIDEO_THUMB = "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&q=80&w=300";
 
-// Función para obtener el ID de video de YouTube
-const getYouTubeID = (url) => {
-    if (!url) return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-};
-
-// 1. TABLA RESUMIDA CON JG/JP Y LÓGICA FIBA
 const RenderTableSummary = memo(({ title, data, color }) => (
   <div className="fade-in" style={{ width: '100%', background: 'white', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 8px 20px rgba(0,0,0,0.06)', border: `2.5px solid ${color}` }}>
     <div style={{ background: color, padding: '10px', textAlign: 'center' }}>
@@ -103,7 +90,6 @@ function App() {
   const [leaderIndex, setLeaderIndex] = useState(0);
   const [leadersList, setLeadersList] = useState([]);
 
-  // --- LÓGICA DE NOMBRES DE GRUPO ---
   const getGroupLabel = (grupo, cat) => {
       const g = (grupo || '').toUpperCase();
       const c = (cat || '').toUpperCase();
@@ -157,9 +143,11 @@ function App() {
         const nombreColCalendario = getCollectionName('calendario', categoriaActiva);
         const calendarSnap = await getDocs(query(collection(db, nombreColCalendario), orderBy("fechaAsignada", "asc")));
         const allMatches = calendarSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setAllMatchesGlobal(allMatches);
+        const finishedMatches = allMatches.filter(m => m.estatus === 'finalizado');
+        const validGameIds = new Set(finishedMatches.map(m => m.id));
 
-        setResultadosRecientes(allMatches.filter(m => m.estatus === 'finalizado').reverse().slice(0, 5));
+        setAllMatchesGlobal(allMatches);
+        setResultadosRecientes([...finishedMatches].reverse().slice(0, 5));
 
         const proximosOrdenados = allMatches
             .filter(m => m.estatus !== 'finalizado')
@@ -167,7 +155,8 @@ function App() {
                 const fComp = (a.fechaAsignada || "").localeCompare(b.fechaAsignada || "");
                 if (fComp !== 0) return fComp;
                 return (a.hora || "00:00").localeCompare(b.hora || "00:00");
-            });
+            })
+            .slice(0, 2); // SOLO LOS 2 PRÓXIMOS JUEGOS
         setProximosJuegos(proximosOrdenados);
 
         // 3. LÓGICA FIBA
@@ -195,9 +184,9 @@ function App() {
         setEquiposA(sortTeamsFIBA(equiposDelMundo.filter(e => e.grupo === 'A' || e.grupo === 'a' || categoriaActiva === 'U19')));
         setEquiposB(sortTeamsFIBA(equiposDelMundo.filter(e => e.grupo === 'B' || e.grupo === 'b')));
 
-        // 4. LÍDERES
+        // 4. LÍDERES (FILTRADO POR CATEGORÍA Y PARTIDOS FINALIZADOS)
         const teamGamesCount = {};
-        allMatches.filter(m => m.estatus === 'finalizado').forEach(game => {
+        finishedMatches.forEach(game => {
             const loc = game.equipoLocalNombre?.trim().toUpperCase();
             const vis = game.equipoVisitanteNombre?.trim().toUpperCase();
             if (loc) teamGamesCount[loc] = (teamGamesCount[loc] || 0) + 1;
@@ -206,18 +195,21 @@ function App() {
 
         const statsSnap = await getDocs(collection(db, 'stats_partido')); 
         const aggregated = {};
-        const nombresEquiposValidos = equiposDelMundo.map(e => e.nombre);
 
         statsSnap.forEach(docSnap => {
             const stat = docSnap.data();
-            const eqStat = (stat.equipo || stat.nombreEquipo || '').trim().toUpperCase();
-            const statCat = (stat.categoria || '').toUpperCase(); 
-
-            const esMismaCategoria = statCat === categoriaActiva || (!statCat && categoriaActiva === 'MASTER40');
-
-            if (nombresEquiposValidos.includes(eqStat) && esMismaCategoria) {
+            const juegoId = stat.partidoId || stat.juegoId;
+            
+            // FILTRO: Solo estadísticas que pertenezcan a los juegos finalizados de esta categoría
+            if (juegoId && validGameIds.has(juegoId)) {
                 const jId = stat.jugadorId;
-                if (!aggregated[jId]) aggregated[jId] = { nombre: stat.nombre, equipo: eqStat, pts: 0, reb: 0, pj: 0 };
+                const eqStat = (stat.equipo || '').trim().toUpperCase();
+                
+                if (!jId) return;
+
+                if (!aggregated[jId]) {
+                    aggregated[jId] = { nombre: stat.nombre, equipo: eqStat, pts: 0, reb: 0, pj: 0 };
+                }
                 const acc = aggregated[jId];
                 acc.pts += (Number(stat.tirosLibres)||0) + (Number(stat.dobles)||0)*2 + (Number(stat.triples)||0)*3;
                 acc.reb += (Number(stat.rebotes)||0);
@@ -240,7 +232,6 @@ function App() {
         const newsSnap = await getDocs(query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5)));
         setNoticias(newsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-        // --- CARGA DE ENTREVISTAS (LÍMITE 5 VIDEOS) ---
         const interviewsSnap = await getDocs(query(collection(db, "entrevistas"), orderBy("fecha", "desc"), limit(5)));
         setEntrevistas(interviewsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
@@ -299,7 +290,6 @@ function App() {
         ) : activeView === 'dashboard' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
               
-              {/* MARCADORES */}
               <section>
                 <h2 style={{ fontSize: '0.7rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '10px', textTransform:'uppercase' }}>🏀 Marcadores {categoriaActiva}</h2>
                 <div style={{ position: 'relative', height: '180px', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(30,58,138,0.12)' }}>
@@ -355,14 +345,13 @@ function App() {
                 <div onClick={() => setActiveView('tabla')} style={{ cursor: 'pointer' }}><RenderTableSummary title={`TABLA OFICIAL`} data={tablaIndex === 0 ? equiposA : equiposB} color={tablaIndex === 0 ? "#1e3a8a" : "#d97706"} /></div>
               </section>
 
-              {/* PRÓXIMOS JUEGOS */}
               <section>
                 <div style={{ background: 'white', borderRadius: '24px', border: '2.5px solid #1e3a8a', overflow: 'hidden', boxShadow: '0 10px 30px rgba(30,58,138,0.1)' }}>
                   <div style={{ background: '#1e3a8a', padding: '10px 15px' }}>
                     <h2 style={{ fontSize: '0.75rem', fontWeight: '900', color: 'white', margin: 0, textTransform:'uppercase' }}>📅 Próxima Jornada {categoriaActiva}</h2>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', padding: '10px', gap: '10px' }}>
-                    {proximosJuegos.length > 0 ? proximosJuegos.slice(0, 5).map(j => (
+                    {proximosJuegos.length > 0 ? proximosJuegos.map(j => (
                       <div key={j.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafc', borderRadius: '18px', border: '1px solid #e2e8f0' }}>
                         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
                           <span style={{ fontSize: '0.65rem', fontWeight: '900', textAlign:'right', lineHeight:'1.1' }}>{j.equipoLocalNombre.toUpperCase()}</span>
@@ -382,7 +371,6 @@ function App() {
                 </div>
               </section>
 
-              {/* --- ZONA DE ENTREVISTAS (CARRUSEL DE MINIATURAS DEL VIDEO) --- */}
               <section>
                 <h2 style={{ fontSize: '0.75rem', fontWeight: '900', color: '#1e3a8a', marginBottom:'10px', textTransform:'uppercase' }}>🎙️ Zona de Entrevistas</h2>
                 <div style={{ display: 'flex', overflowX: 'auto', gap: '12px', paddingBottom: '10px', scrollSnapType: 'x mandatory' }} className="no-scrollbar">
@@ -395,7 +383,6 @@ function App() {
                           flexShrink: 0
                       }}>
                          <div style={{ width: '100px', height: '140px', borderRadius: '15px', overflow: 'hidden', border: '2px solid #1e3a8a', position:'relative', background:'#000' }}>
-                            {/* MINIATURA: VIDEO PAUSADO EN MUTE PARA EXTRAER LA IMAGEN REAL */}
                             <video 
                                 src={`${video.videoUrl}#t=0.1`} 
                                 muted 
@@ -403,7 +390,6 @@ function App() {
                                 playsInline
                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                             />
-                            {/* Icono de Play encima */}
                             <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.3)', display:'flex', alignItems:'center', justifyContent:'center' }}>
                                 <span style={{ fontSize:'1.5rem', color:'white', background:'rgba(255,255,255,0.2)', borderRadius:'50%', width:'35px', height:'35px', display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid white' }}>▶</span>
                             </div>
@@ -414,11 +400,9 @@ function App() {
                 </div>
               </section>
 
-              {/* MODAL REPRODUCTOR DE VIDEO FULLSCREEN */}
               {videoSeleccionado && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.95)', zIndex: 5000, display: 'flex', flexDirection:'column', alignItems: 'center', justifyContent: 'center' }}>
                     <button onClick={() => setVideoSeleccionado(null)} style={{ position: 'absolute', top: '20px', right: '20px', background:'rgba(255,255,255,0.2)', color:'white', border:'none', borderRadius:'50%', width:'40px', height:'40px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', zIndex:5001 }}>✕</button>
-                    
                     <div style={{ width:'100%', maxWidth:'500px', height:'80vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
                         <video 
                             src={videoSeleccionado.videoUrl} 

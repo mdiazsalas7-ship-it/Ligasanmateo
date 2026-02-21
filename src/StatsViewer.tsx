@@ -49,49 +49,59 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
 
         const initStats = async () => {
             try {
-                const equiposSnap = await getDocs(collection(db, 'equipos'));
-                const catMap: Record<string, string> = {};
-                const logoMap: Record<string, string> = {};
+                const catStr = categoria.trim().toUpperCase();
+                const isMaster = catStr === 'MASTER40' || catStr === 'MASTER';
+                
+                // 1. DETERMINAR COLECCIONES DINÁMICAS
+                const colEquipos = isMaster ? 'equipos' : `equipos_${catStr}`;
+                const colCalendario = isMaster ? 'calendario' : `calendario_${catStr}`;
 
+                // 2. CARGAR MAPA DE EQUIPOS Y LOGOS
+                const equiposSnap = await getDocs(collection(db, colEquipos));
+                const logoMap: Record<string, string> = {};
                 equiposSnap.forEach(d => {
                     const data = d.data();
                     if (data.nombre) {
-                        const nombreNorm = data.nombre.trim().toUpperCase();
-                        catMap[nombreNorm] = data.categoria || 'MASTER40'; 
-                        logoMap[nombreNorm] = data.logoUrl || DEFAULT_LOGO;
+                        logoMap[data.nombre.trim().toUpperCase()] = data.logoUrl || DEFAULT_LOGO;
                     }
                 });
 
-                const calendarSnap = await getDocs(query(collection(db, 'calendario'), where('estatus', '==', 'finalizado')));
+                // 3. OBTENER JUEGOS FINALIZADOS DE ESTA LIGA Y SUS IDs
+                const calendarSnap = await getDocs(query(collection(db, colCalendario), where('estatus', '==', 'finalizado')));
                 const teamGamesCount: Record<string, number> = {};
+                const validGameIds = new Set<string>(); // <- NUEVO: Guardaremos los IDs de los juegos válidos
 
                 calendarSnap.forEach(doc => {
                     const game = doc.data();
-                    if (game.equipoLocalNombre) {
-                        const local = game.equipoLocalNombre.trim().toUpperCase();
-                        teamGamesCount[local] = (teamGamesCount[local] || 0) + 1;
-                    }
-                    if (game.equipoVisitanteNombre) {
-                        const visit = game.equipoVisitanteNombre.trim().toUpperCase();
-                        teamGamesCount[visit] = (teamGamesCount[visit] || 0) + 1;
-                    }
+                    validGameIds.add(doc.id); // Guardamos el ID del juego válido
+                    
+                    const local = (game.equipoLocalNombre || '').trim().toUpperCase();
+                    const visit = (game.equipoVisitanteNombre || '').trim().toUpperCase();
+                    if (local) teamGamesCount[local] = (teamGamesCount[local] || 0) + 1;
+                    if (visit) teamGamesCount[visit] = (teamGamesCount[visit] || 0) + 1;
                 });
 
+                // 4. ESCUCHAR ESTADÍSTICAS GLOBALES Y FILTRAR POR JUEGO VÁLIDO
                 const q = query(collection(db, 'stats_partido'));
+                
                 unsubscribe = onSnapshot(q, (snapshot) => {
                     const aggregated: Record<string, any> = {};
 
                     snapshot.docs.forEach(doc => {
                         const stat = doc.data();
-                        const equipoStat = (stat.equipo || stat.nombreEquipo || '').trim().toUpperCase();
-                        const catReal = catMap[equipoStat];
+                        
+                        // FILTRO MAESTRO ABSOLUTO: 
+                        // Verificamos si la estadística pertenece a un juego que REALMENTE
+                        // existe en el calendario de esta categoría y está finalizado.
+                        // Asumimos que la estadística guarda el ID del juego en el campo 'partidoId' o 'juegoId'
+                        const juegoId = stat.partidoId || stat.juegoId;
 
-                        const mostrar = (categoria === 'MASTER40') 
-                            ? (catReal === 'MASTER40' || !catReal) 
-                            : (catReal === categoria);
-
-                        if (mostrar) {
+                        if (juegoId && validGameIds.has(juegoId)) {
                             const jId = stat.jugadorId;
+                            const equipoStat = (stat.equipo || '').trim().toUpperCase();
+
+                            if (!jId) return;
+
                             if (!aggregated[jId]) {
                                 aggregated[jId] = {
                                     id: jId, jugadorId: jId, nombre: stat.nombre, equipo: stat.equipo,
@@ -181,7 +191,7 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                     
                     <div style={{display:'flex', justifyContent:'center', marginBottom:'15px'}}>
                         <div style={{ width: '95px', height: '95px', borderRadius: '50%', border: '4px solid white', boxShadow: '0 8px 20px rgba(0,0,0,0.2)', background: 'white', overflow: 'hidden' }}>
-                            <img src={leader.logoUrl || DEFAULT_LOGO} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="logo" />
+                            <img src={leader.logoUrl || DEFAULT_LOGO} style={{width:'100%', height:'100%', objectFit:'contain'}} alt="logo" />
                         </div>
                     </div>
                     
@@ -210,7 +220,7 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                     {others.map((p: any, i: number) => (
                         <div key={p.id} style={{ padding:'15px 20px', display:'flex', alignItems:'center', fontSize:'0.9rem', borderBottom:'1px solid #f1f5f9' }}>
                             <span style={{width:'30px', fontWeight:'900', color:'#cbd5e1', fontSize: '1.1rem'}}>{i+2}</span>
-                            <img src={p.logoUrl || DEFAULT_LOGO} style={{width:'38px', height:'38px', borderRadius:'50%', marginRight:'15px', border: '1px solid #f1f5f9', objectFit:'cover'}} alt="t" />
+                            <img src={p.logoUrl || DEFAULT_LOGO} style={{width:'38px', height:'38px', borderRadius:'50%', marginRight:'15px', border: '1px solid #f1f5f9', objectFit:'contain'}} alt="t" />
                             <div style={{flex:1, display:'flex', flexDirection:'column'}}>
                                 <span style={{fontWeight:'800', color:'#1e3a8a', fontSize: '1rem'}}>{p.nombre}</span>
                                 <span style={{fontSize:'0.65rem', color:'#94a3b8', fontWeight: 'bold'}}>{p.equipo.toUpperCase()}</span>

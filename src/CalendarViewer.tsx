@@ -202,19 +202,18 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
     useEffect(() => {
         setLoading(true);
         
-        // 1. Determinar el nombre correcto de la colección según la categoría
         const catStr = categoria.trim().toUpperCase();
-        const isMaster = catStr === 'MASTER40';
-        const colName = isMaster ? 'calendario' : `calendario_${catStr}`;
-
-        // 2. Consultar a la colección específica
-        const qM = query(collection(db, colName), orderBy('fechaAsignada', 'asc'));
+        const isMaster = catStr === 'MASTER40' || catStr === 'MASTER';
         
+        // 1. Determinar nombres de colecciones según categoría
+        const colCalendario = isMaster ? 'calendario' : `calendario_${catStr}`;
+        const colEquipos = isMaster ? 'equipos' : `equipos_${catStr}`;
+
+        // 2. Suscribirse a los juegos
+        const qM = query(collection(db, colCalendario), orderBy('fechaAsignada', 'asc'));
         const unsubMatches = onSnapshot(qM, (snap) => {
             let allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             
-            // Si es MASTER40 (usa la colección general vieja), filtramos para no mostrar otras ligas por error.
-            // Si es LIBRE, ya estamos consultando "calendario_LIBRE", así que mostramos todo lo que esté allí.
             if (isMaster) {
                 const NUEVAS_CATEGORIAS = ['U19', 'FEMENINO', 'LIBRE']; 
                 allMatches = allMatches.filter(m => {
@@ -234,7 +233,8 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
             setLoading(false);
         });
 
-        const qE = query(collection(db, 'equipos'), orderBy('nombre', 'asc'));
+        // 3. Suscribirse a los equipos correspondientes (Equipos o Equipos_LIBRE)
+        const qE = query(collection(db, colEquipos), orderBy('nombre', 'asc'));
         const unsubEquipos = onSnapshot(qE, (snap) => {
             setEquipos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         });
@@ -242,13 +242,17 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
         return () => { unsubMatches(); unsubEquipos(); };
     }, [categoria]); 
 
-    const getLogo = (teamId) => equipos.find(e => e.id === teamId)?.logoUrl || DEFAULT_LOGO;
+    const getLogo = (teamId) => {
+        // Busca el logo en la lista de equipos cargada (que ya es la correcta según la categoría)
+        const equipo = equipos.find(e => e.id === teamId);
+        return equipo?.logoUrl || DEFAULT_LOGO;
+    };
 
     const handleDeleteMatch = async (id) => {
         if (window.confirm("⚠️ ¿Estás seguro de ELIMINAR este juego?")) {
             try { 
                 const catStr = categoria.trim().toUpperCase();
-                const colName = catStr === 'MASTER40' ? 'calendario' : `calendario_${catStr}`;
+                const colName = (catStr === 'MASTER40' || catStr === 'MASTER') ? 'calendario' : `calendario_${catStr}`;
                 await deleteDoc(doc(db, colName, id)); 
             } catch (e) { alert("Error al eliminar."); }
         }
