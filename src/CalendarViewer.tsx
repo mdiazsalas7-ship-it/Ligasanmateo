@@ -1,9 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, query, onSnapshot, orderBy, deleteDoc, doc, getDocs, where, updateDoc } from 'firebase/firestore';
+import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 import MatchForm from './MatchForm'; 
 
 const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/451/451716.png";
+
+// --- SUBCOMPONENTE PARA LOGOS DE FIREBASE STORAGE ---
+const TeamLogo = ({ logoUrl, altText }) => {
+    const [url, setUrl] = useState(DEFAULT_LOGO);
+
+    useEffect(() => {
+        if (!logoUrl) {
+            setUrl(DEFAULT_LOGO);
+            return;
+        }
+        if (logoUrl.startsWith('gs://')) {
+            const storage = getStorage();
+            getDownloadURL(ref(storage, logoUrl))
+                .then(setUrl)
+                .catch(() => setUrl(DEFAULT_LOGO));
+        } else {
+            setUrl(logoUrl);
+        }
+    }, [logoUrl]);
+
+    return <img src={url} alt={altText} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />;
+};
 
 // --- COMPONENTE INTERNO: BOX SCORE ---
 const BoxScoreModal = ({ match, onClose, getLogo, rol }) => {
@@ -129,7 +152,7 @@ const BoxScoreModal = ({ match, onClose, getLogo, rol }) => {
 
     return (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(241, 245, 249, 0.98)', zIndex: 3000, display: 'flex', justifyContent: 'center', padding: '15px', overflowY: 'auto' }}>
-            <div style={{ background: '#fff', width: '100%', maxWidth: '750px', borderRadius: '25px', height: 'fit-content', overflow: 'hidden', border: '1px solid #e2e880', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+            <div style={{ background: '#fff', width: '100%', maxWidth: '750px', borderRadius: '25px', height: 'fit-content', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
                 <div style={{ padding: '15px', background: '#f8fafc', color: '#1e3a8a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
                     <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', textTransform: 'uppercase' }}>{isEditing ? '✏️ MODO EDICIÓN' : '📊 BOX SCORE'}</h3>
                     <div style={{display:'flex', gap:'10px'}}>
@@ -141,14 +164,14 @@ const BoxScoreModal = ({ match, onClose, getLogo, rol }) => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '30px 15px', background: '#fff' }}>
                     <div style={{ textAlign: 'center', flex: 1 }}>
                         <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'white', border: '2px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', overflow: 'hidden', padding: '5px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-                            <img src={getLogo(match.equipoLocalId)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="L" />
+                            <TeamLogo logoUrl={getLogo(match.equipoLocalId)} altText="L" />
                         </div>
                         <div style={{ color: '#3b82f6', fontWeight: '900', fontSize: '2.2rem', marginTop: '10px' }}>{match.marcadorLocal}</div>
                     </div>
                     <div style={{ fontSize: '1.2rem', color: '#cbd5e1', fontWeight: '900' }}>VS</div>
                     <div style={{ textAlign: 'center', flex: 1 }}>
                         <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'white', border: '2px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', overflow: 'hidden', padding: '5px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-                            <img src={getLogo(match.equipoVisitanteId)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="V" />
+                            <TeamLogo logoUrl={getLogo(match.equipoVisitanteId)} altText="V" />
                         </div>
                         <div style={{ color: '#ef4444', fontWeight: '900', fontSize: '2.2rem', marginTop: '10px' }}>{match.marcadorVisitante}</div>
                     </div>
@@ -176,25 +199,31 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
     const [activeFilter, setActiveFilter] = useState('TODOS');
     const [matchToEdit, setMatchToEdit] = useState(null);
 
-    const NUEVAS_CATEGORIAS = ['U19', 'FEMENINO', 'LIBRE']; 
-
     useEffect(() => {
         setLoading(true);
-        const qM = query(collection(db, 'calendario'), orderBy('fechaAsignada', 'asc'));
-        const unsubMatches = onSnapshot(qM, (snap) => {
-            const allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            
-            const filteredByCat = allMatches.filter(m => {
-                const catJuego = (m.categoria || '').trim().toUpperCase();
-                const categoriaActual = categoria.trim().toUpperCase();
-                if (categoriaActual === 'MASTER40') {
-                    return catJuego === 'MASTER40' || !NUEVAS_CATEGORIAS.includes(catJuego);
-                } else {
-                    return catJuego === categoriaActual;
-                }
-            });
+        
+        // 1. Determinar el nombre correcto de la colección según la categoría
+        const catStr = categoria.trim().toUpperCase();
+        const isMaster = catStr === 'MASTER40';
+        const colName = isMaster ? 'calendario' : `calendario_${catStr}`;
 
-            const sorted = filteredByCat.sort((a, b) => {
+        // 2. Consultar a la colección específica
+        const qM = query(collection(db, colName), orderBy('fechaAsignada', 'asc'));
+        
+        const unsubMatches = onSnapshot(qM, (snap) => {
+            let allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            
+            // Si es MASTER40 (usa la colección general vieja), filtramos para no mostrar otras ligas por error.
+            // Si es LIBRE, ya estamos consultando "calendario_LIBRE", así que mostramos todo lo que esté allí.
+            if (isMaster) {
+                const NUEVAS_CATEGORIAS = ['U19', 'FEMENINO', 'LIBRE']; 
+                allMatches = allMatches.filter(m => {
+                    const catJuego = (m.categoria || '').trim().toUpperCase();
+                    return catJuego === 'MASTER40' || !NUEVAS_CATEGORIAS.includes(catJuego);
+                });
+            }
+
+            const sorted = allMatches.sort((a, b) => {
                 if (a.fechaAsignada !== b.fechaAsignada) {
                     return a.fechaAsignada.localeCompare(b.fechaAsignada);
                 }
@@ -217,7 +246,11 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
 
     const handleDeleteMatch = async (id) => {
         if (window.confirm("⚠️ ¿Estás seguro de ELIMINAR este juego?")) {
-            try { await deleteDoc(doc(db, 'calendario', id)); } catch (e) { alert("Error."); }
+            try { 
+                const catStr = categoria.trim().toUpperCase();
+                const colName = catStr === 'MASTER40' ? 'calendario' : `calendario_${catStr}`;
+                await deleteDoc(doc(db, colName, id)); 
+            } catch (e) { alert("Error al eliminar."); }
         }
     };
 
@@ -226,12 +259,9 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
         setShowMatchForm(true);
     };
 
-    // --- LÓGICA DE FILTRADO ACTUALIZADA PARA CRUCES ---
     const filteredMatches = matches.filter(m => {
         if (activeFilter === 'TODOS') return true;
-        // Si el filtro es PLAYOFFS, mostrar solo juegos con fase playoff
         if (activeFilter === 'PLAYOFFS') return m.fase === 'playoff';
-        // En temporada regular, filtrar por grupo
         return (m.grupo || '').toUpperCase() === activeFilter;
     });
 
@@ -249,7 +279,6 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
                 <button onClick={onClose} style={{background:'white', color:'#1e3a8a', border:'none', padding:'8px 15px', borderRadius:'12px', fontWeight:'bold', fontSize:'0.7rem', cursor:'pointer'}}>VOLVER</button>
             </div>
 
-            {/* BARRA DE FILTROS ACTUALIZADA */}
             <div style={{ background:'white', padding:'12px', display:'flex', justifyContent:'center', gap:'8px', boxShadow:'0 2px 10px rgba(0,0,0,0.05)', flexWrap:'wrap' }}>
                 {['TODOS', 'A', 'B', 'PLAYOFFS'].map((f) => (
                     <button 
@@ -284,8 +313,6 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
                         {filteredMatches.length > 0 ? filteredMatches.map(m => {
                             const isFinished = m.estatus === 'finalizado';
                             const isPlayoff = m.fase === 'playoff';
-                            
-                            // Color dinámico según fase o grupo
                             const borderColor = isPlayoff ? '#ef4444' : (isFinished ? '#1e3a8a' : (m.grupo === 'A' ? '#3b82f6' : '#f59e0b'));
 
                             return (
@@ -297,7 +324,6 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
                                     border: `3px solid ${borderColor}`
                                 }}>
                                     <div style={{ background: isPlayoff ? '#fef2f2' : (isFinished ? '#f1f5f9' : (m.grupo === 'A' ? '#eff6ff' : '#fffbeb')), padding:'10px 15px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:`1px solid ${borderColor}` }}>
-                                        {/* CABECERA DINÁMICA PARA CRUCES */}
                                         <span style={{ fontSize:'0.65rem', fontWeight:'900', color: borderColor }}>
                                             {isPlayoff ? `🏆 PLAYOFF - ${m.tituloCruce || 'CRUCE DE GRUPOS'}` : `GRUPO ${m.grupo}`}
                                         </span>
@@ -310,7 +336,7 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
                                     <div style={{ display:'flex', padding:'20px 15px', alignItems:'center', justifyContent:'space-between' }}>
                                         <div style={{ flex:1, textAlign:'center' }}>
                                             <div style={{width:'55px', height:'55px', borderRadius:'50%', background:'white', border:'2px solid #f1f5f9', margin:'0 auto', overflow:'hidden', padding:'3px'}}>
-                                                <img src={getLogo(m.equipoLocalId)} style={{width:'100%', height:'100%', objectFit:'contain'}} alt="L" />
+                                                <TeamLogo logoUrl={getLogo(m.equipoLocalId)} altText="L" />
                                             </div>
                                             <div style={{fontWeight:'900', fontSize:'0.75rem', marginTop:'8px', color:'#1e293b'}}>{m.equipoLocalNombre.toUpperCase()}</div>
                                             {isFinished && <div style={{fontSize:'1.8rem', fontWeight:'900', color: borderColor, marginTop:'5px'}}>{m.marcadorLocal}</div>}
@@ -322,7 +348,7 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
 
                                         <div style={{ flex:1, textAlign:'center' }}>
                                             <div style={{width:'55px', height:'55px', borderRadius:'50%', background:'white', border:'2px solid #f1f5f9', margin:'0 auto', overflow:'hidden', padding:'3px'}}>
-                                                <img src={getLogo(m.equipoVisitanteId)} style={{width:'100%', height:'100%', objectFit:'contain'}} alt="V" />
+                                                <TeamLogo logoUrl={getLogo(m.equipoVisitanteId)} altText="V" />
                                             </div>
                                             <div style={{fontWeight:'900', fontSize:'0.75rem', marginTop:'8px', color:'#1e293b'}}>{m.equipoVisitanteNombre.toUpperCase()}</div>
                                             {isFinished && <div style={{fontSize:'1.8rem', fontWeight:'900', color: borderColor, marginTop:'5px'}}>{m.marcadorVisitante}</div>}
