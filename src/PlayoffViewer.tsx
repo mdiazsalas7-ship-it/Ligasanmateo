@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { db } from './firebase';
-import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
+import { db, auth } from './firebase'; 
+import { collection, query, onSnapshot, orderBy, doc, updateDoc, getDoc, where, getDocs } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 
 interface PlayoffViewerProps {
@@ -8,39 +8,63 @@ interface PlayoffViewerProps {
     onClose: () => void;
 }
 
-// Subcomponente para procesar y mostrar los logos correctamente
-const TeamLogo = ({ logoPath, fallbackName }: { logoPath: string, fallbackName: string }) => {
-    const [url, setUrl] = useState<string>('https://via.placeholder.com/30?text=Logo');
+const TeamLogo = ({ logoPath, fallbackName, categoria }: { logoPath: string, fallbackName: string, categoria: string }) => {
+    const [url, setUrl] = useState<string>('');
+    const [hasError, setHasError] = useState(false);
 
     useEffect(() => {
-        if (!logoPath) return;
+        const fetchLogo = async () => {
+            // 1. Si ya viene la ruta en el objeto del partido, intentamos usarla
+            if (logoPath && logoPath.startsWith('http')) {
+                setUrl(logoPath);
+                return;
+            }
 
-        // Si la URL es de Firebase Storage (empieza con gs://)
-        if (logoPath.startsWith('gs://')) {
-            const storage = getStorage();
-            const fileRef = ref(storage, logoPath);
-            
-            getDownloadURL(fileRef)
-                .then((downloadUrl) => {
-                    setUrl(downloadUrl);
-                })
-                .catch((error) => {
-                    console.error(`Error cargando el logo de ${fallbackName}:`, error);
-                    setUrl('https://via.placeholder.com/30?text=Error');
-                });
-        } 
-        // Si ya es una URL web válida (http:// o https://)
-        else if (logoPath.startsWith('http')) {
-            setUrl(logoPath);
-        }
-    }, [logoPath, fallbackName]);
+            // 2. Si no hay ruta (o está rota), buscamos en la colección de 'equipos' por el NOMBRE
+            try {
+                const colEquipos = categoria.trim().toUpperCase() === 'MASTER40' ? 'equipos' : `equipos_${categoria.trim().toUpperCase()}`;
+                const q = query(collection(db, colEquipos), where('nombre', '==', fallbackName));
+                const querySnap = await getDocs(q);
+
+                if (!querySnap.empty) {
+                    const data = querySnap.docs[0].data();
+                    // Usamos 'logoUrl' que es como me mostraste que está en tu base de datos
+                    if (data.logoUrl) {
+                        setUrl(data.logoUrl);
+                        setHasError(false);
+                    } else {
+                        setHasError(true);
+                    }
+                } else {
+                    setHasError(true);
+                }
+            } catch (error) {
+                setHasError(true);
+            }
+        };
+
+        fetchLogo();
+    }, [logoPath, fallbackName, categoria]);
+
+    if (hasError || !url) {
+        const initial = fallbackName ? fallbackName.charAt(0).toUpperCase() : '🏀';
+        return (
+            <div style={{ 
+                width: '30px', height: '30px', borderRadius: '6px', 
+                background: '#3b82f6', color: 'white', display: 'flex', 
+                justifyContent: 'center', alignItems: 'center', fontWeight: '900', fontSize: '14px' 
+            }}>
+                {initial}
+            </div>
+        );
+    }
 
     return (
         <img 
             src={url} 
-            alt={`Logo ${fallbackName}`} 
-            style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }} 
-            onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/30?text=NA'; }}
+            alt={fallbackName} 
+            style={{ width: '30px', height: '30px', objectFit: 'contain', borderRadius: '4px', background: 'white' }} 
+            onError={() => setHasError(true)}
         />
     );
 };
@@ -48,124 +72,112 @@ const TeamLogo = ({ logoPath, fallbackName }: { logoPath: string, fallbackName: 
 const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => {
     const [matches, setMatches] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isActualAdmin, setIsActualAdmin] = useState(false); 
+    const [editMode, setEditMode] = useState(false); 
+    const [editScores, setEditScores] = useState<{ [key: string]: { l: number, v: number } }>({});
 
-    const getCollectionName = (base: string) => {
-        const cat = categoria.trim().toUpperCase();
-        return cat === 'MASTER40' ? base : `${base}_${cat}`;
-    };
+    const colName = categoria.trim().toUpperCase() === 'MASTER40' ? 'calendario' : `calendario_${categoria.trim().toUpperCase()}`;
 
     useEffect(() => {
-        const colName = getCollectionName('calendario');
-        // Ordenamos por fecha y luego por hora para la vista cronológica
-        const q = query(
-            collection(db, colName), 
-            orderBy('fechaAsignada', 'asc'),
-            orderBy('hora', 'asc')
-        );
-        
+        const checkAdminStatus = async () => {
+            const user = auth.currentUser;
+            if (user) {
+                const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
+                if (userDoc.exists() && userDoc.data().rol === 'admin') {
+                    setIsActualAdmin(true);
+                }
+            }
+        };
+        checkAdminStatus();
+
+        const q = query(collection(db, colName), orderBy('fechaAsignada', 'asc'));
         const unsub = onSnapshot(q, (snap) => {
             const data = snap.docs
-                .map(d => ({id: d.id, ...d.data()} as any))
-                .filter(m => m.fase && m.fase !== 'REGULAR');
+                .map(d => ({ id: d.id, ...d.data() } as any))
+                .filter(m => m.fase && m.fase.toUpperCase() !== 'REGULAR');
             setMatches(data);
             setLoading(false);
         });
         return () => unsub();
-    }, [categoria]);
+    }, [categoria, colName]);
 
-    const MatchCard = ({ m }: { m: any }) => (
-        <div style={{ 
-            background: 'white', 
-            borderRadius: '12px', 
-            padding: '12px', 
-            marginBottom: '12px', 
-            borderLeft: '5px solid #f59e0b', 
-            boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
-            fontSize: '0.75rem', 
-            minWidth: '220px' 
-        }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: '#64748b', fontWeight: '600', fontSize: '0.65rem' }}>
-                <span>📅 {m.fechaAsignada} • ⏰ {m.hora}</span>
-                <span style={{ 
-                    padding: '2px 6px', 
-                    borderRadius: '4px', 
-                    background: m.estatus === 'finalizado' ? '#d1fae5' : '#fef3c7',
-                    color: m.estatus === 'finalizado' ? '#065f46' : '#92400e' 
-                }}>
-                    {m.estatus === 'finalizado' ? 'FINAL' : 'PENDIENTE'}
-                </span>
-            </div>
-
-            {/* Equipo Local */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <TeamLogo logoPath={m.equipoLocalLogo} fallbackName={m.equipoLocalNombre} />
-                    <span style={{ fontWeight: '800', color: '#1e293b' }}>{m.equipoLocalNombre}</span>
-                </div>
-                <span style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1e3a8a' }}>{m.marcadorLocal ?? '-'}</span>
-            </div>
-
-            {/* Equipo Visitante */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <TeamLogo logoPath={m.equipoVisitanteLogo} fallbackName={m.equipoVisitanteNombre} />
-                    <span style={{ fontWeight: '800', color: '#1e293b' }}>{m.equipoVisitanteNombre}</span>
-                </div>
-                <span style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1e3a8a' }}>{m.marcadorVisitante ?? '-'}</span>
-            </div>
-        </div>
-    );
+    const handleSaveScore = async (id: string) => {
+        const score = editScores[id];
+        if (!score) return alert("Modifica el marcador antes de guardar.");
+        try {
+            await updateDoc(doc(db, colName, id), {
+                marcadorLocal: Number(score.l),
+                marcadorVisitante: Number(score.v),
+                estatus: 'finalizado'
+            });
+            alert("✅ Resultado actualizado.");
+        } catch (e) {
+            alert("Error al guardar.");
+        }
+    };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(circle, #1e3a8a 0%, #0f172a 100%)', zIndex: 2000, overflowY: 'auto', color: 'white', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 10 }}>
-                <h2 style={{ margin: 0, textTransform: 'uppercase', fontSize: '1.3rem', letterSpacing: '1px' }}>🏆 Playoffs {categoria}</h2>
-                <button onClick={onClose} style={{ background: '#ef4444', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}>SALIR</button>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(circle, #1e3a8a 0%, #0f172a 100%)', zIndex: 2000, overflowY: 'auto', color: 'white', fontFamily: 'sans-serif' }}>
+            <div style={{ padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 10 }}>
+                <h2 style={{ margin: 0, fontSize: '1rem' }}>🏆 PLAYOFFS {categoria}</h2>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    {isActualAdmin && (
+                        <button onClick={() => setEditMode(!editMode)} style={{ background: editMode ? '#f59e0b' : '#3b82f6', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.7rem' }}>
+                            {editMode ? 'VER PÚBLICO' : 'EDITAR RESULTADOS'}
+                        </button>
+                    )}
+                    <button onClick={onClose} style={{ background: '#ef4444', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.7rem' }}>SALIR</button>
+                </div>
             </div>
 
             {loading ? (
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>Cargando llaves...</div>
+                <div style={{ textAlign: 'center', marginTop: '100px' }}>Cargando...</div>
             ) : (
-                <div style={{ display: 'flex', gap: '30px', padding: '40px 20px', overflowX: 'auto', flex: 1, alignItems: 'flex-start' }}>
-                    
-                    {/* Renderizado de Columnas por Fase */}
+                <div style={{ display: 'flex', gap: '30px', padding: '30px 20px', overflowX: 'auto' }}>
                     {['OCTAVOS', 'CUARTOS', 'SEMIS', 'FINAL'].map((fase) => {
-                        const phaseMatches = matches.filter(m => m.fase === fase);
-                        if (fase === 'OCTAVOS' && phaseMatches.length === 0) return null;
-
+                        const phaseMatches = matches.filter(m => m.fase?.toUpperCase() === fase);
+                        if (phaseMatches.length === 0) return null;
                         return (
-                            <div key={fase} style={{ minWidth: '260px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                                <h3 style={{ 
-                                    textAlign: 'center', 
-                                    background: fase === 'FINAL' ? '#f59e0b' : 'rgba(255,255,255,0.1)', 
-                                    padding: '10px', 
-                                    borderRadius: '8px',
-                                    fontSize: '0.9rem',
-                                    margin: 0 
-                                }}>
-                                    {fase === 'SEMIS' ? '⚡ SEMIFINALES' : fase === 'FINAL' ? '👑 GRAN FINAL' : `🔥 ${fase}`}
-                                </h3>
-                                
-                                {phaseMatches.length > 0 ? (
-                                    phaseMatches.map(m => (
-                                        <div key={m.id} style={fase === 'FINAL' ? { transform: 'scale(1.1)', marginTop: '20px' } : {}}>
-                                            <MatchCard m={m} />
-                                            {fase === 'FINAL' && m.estatus === 'finalizado' && (
-                                                <div style={{ textAlign: 'center', marginTop: '20px', animation: 'bounce 2s infinite' }}>
-                                                    <span style={{ fontSize: '4rem' }}>🏆</span>
-                                                    <div style={{ fontWeight: '900', fontSize: '1.5rem', color: '#f59e0b' }}>
-                                                        {m.marcadorLocal > m.marcadorVisitante ? m.equipoLocalNombre : m.equipoVisitanteNombre}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>CAMPEÓN INDISCUTIBLE</div>
-                                                </div>
+                            <div key={fase} style={{ minWidth: '260px' }}>
+                                <h3 style={{ textAlign: 'center', background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '8px', fontSize: '0.8rem', marginBottom: '15px' }}>{fase}</h3>
+                                {phaseMatches.map(m => (
+                                    <div key={m.id} style={{ background: 'white', borderRadius: '12px', padding: '12px', marginBottom: '12px', color: '#1e293b' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: '#64748b', marginBottom: '8px' }}>
+                                            <span>{m.fechaAsignada}</span>
+                                            <span style={{ fontWeight: 'bold' }}>{m.estatus === 'finalizado' ? 'FINAL' : 'PENDIENTE'}</span>
+                                        </div>
+                                        
+                                        {/* Fila Equipo Local */}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <TeamLogo logoPath={m.equipoLocalLogo} fallbackName={m.equipoLocalNombre} categoria={categoria} />
+                                                <span style={{ fontWeight: 'bold' }}>{m.equipoLocalNombre}</span>
+                                            </div>
+                                            {editMode ? (
+                                                <input type="number" defaultValue={m.marcadorLocal} onChange={(e) => setEditScores({...editScores, [m.id]: {...(editScores[m.id] || {v: m.marcadorVisitante || 0}), l: Number(e.target.value)}})} style={{ width: '40px', textAlign: 'center' }} />
+                                            ) : (
+                                                <span style={{ fontSize: '1.1rem', fontWeight: '900' }}>{m.marcadorLocal ?? '-'}</span>
                                             )}
                                         </div>
-                                    ))
-                                ) : (
-                                    <div style={{ textAlign: 'center', opacity: 0.4, fontSize: '0.8rem', padding: '20px', border: '1px dashed white', borderRadius: '10px' }}>
-                                        Esperando resultados...
+
+                                        {/* Fila Equipo Visitante */}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <TeamLogo logoPath={m.equipoVisitanteLogo} fallbackName={m.equipoVisitanteNombre} categoria={categoria} />
+                                                <span style={{ fontWeight: 'bold' }}>{m.equipoVisitanteNombre}</span>
+                                            </div>
+                                            {editMode ? (
+                                                <input type="number" defaultValue={m.marcadorVisitante} onChange={(e) => setEditScores({...editScores, [m.id]: {...(editScores[m.id] || {l: m.marcadorLocal || 0}), v: Number(e.target.value)}})} style={{ width: '40px', textAlign: 'center' }} />
+                                            ) : (
+                                                <span style={{ fontSize: '1.1rem', fontWeight: '900' }}>{m.marcadorVisitante ?? '-'}</span>
+                                            )}
+                                        </div>
+
+                                        {editMode && (
+                                            <button onClick={() => handleSaveScore(m.id)} style={{ width: '100%', marginTop: '10px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '5px', fontSize: '0.7rem', fontWeight: 'bold', cursor: 'pointer' }}>GUARDAR</button>
+                                        )}
                                     </div>
-                                )}
+                                ))}
                             </div>
                         );
                     })}
