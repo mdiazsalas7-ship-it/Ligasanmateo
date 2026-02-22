@@ -359,7 +359,8 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
                                         </div>
                                     </div>
 
-                                    {rol === 'admin' && !isFinished && (
+                                    {/* SE ELIMINÓ LA CONDICIÓN !isFinished AQUÍ */}
+                                    {rol === 'admin' && (
                                         <div style={{ display:'flex', borderTop:`1px solid ${borderColor}` }}>
                                             <button onClick={() => handleEditMatch(m)} style={{ flex:1, background:'white', border:'none', padding:'12px', fontSize:'0.7rem', fontWeight:'bold', color: borderColor, cursor:'pointer', borderRight:'1px solid #eee' }}>✏️ EDITAR</button>
                                             <button onClick={() => handleDeleteMatch(m.id)} style={{ flex:1, background:'white', border:'none', padding:'12px', fontSize:'0.7rem', fontWeight:'bold', color:'#ef4444', cursor:'pointer' }}>🗑️ ELIMINAR</button>

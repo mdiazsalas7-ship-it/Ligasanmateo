@@ -5,7 +5,7 @@ import { collection, getDocs, addDoc, query, orderBy, doc, updateDoc } from 'fir
 interface MatchFormProps {
     onSuccess: () => void;
     onClose?: () => void;
-    categoriaActiva: string; // Ej: "LIBRE", "MASTER40", "U19"
+    categoriaActiva: string; 
     matchToEdit?: any;
 }
 
@@ -18,20 +18,19 @@ const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActi
         fecha: matchToEdit?.fechaAsignada || '', 
         hora: matchToEdit?.hora || '', 
         cancha: matchToEdit?.cancha || '',
+        // Forzamos que siempre haya una fase, por defecto REGULAR
         fase: matchToEdit?.fase || 'REGULAR' 
     });
     
     const [grupoSeleccionado, setGrupoSeleccionado] = useState<string | null>(matchToEdit?.grupo || null);
     const [loading, setLoading] = useState(false);
 
-    // Determinar nombre de colección según categoría
     const getCollectionName = (base: string) => {
         const cat = categoriaActiva.trim().toUpperCase();
-        if (cat === 'MASTER40') return base;
+        if (cat === 'MASTER40' || cat === 'MASTER') return base;
         return `${base}_${cat}`;
     };
 
-    // 1. CARGA DE EQUIPOS
     useEffect(() => {
         const fetchEquipos = async () => {
             try {
@@ -54,13 +53,13 @@ const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActi
         fetchEquipos();
     }, [categoriaActiva]);
 
-    // 2. RESETEAR VISITANTE SI CAMBIA LA FASE
-    // Esto evita que quede seleccionado un equipo del mismo grupo si pasas a Playoff
+    // Al cambiar la fase, reseteamos el visitante para obligar a re-seleccionar según la lógica de cruces
     useEffect(() => {
-        setForm(prev => ({ ...prev, visitId: '' }));
+        if (!matchToEdit) { // Solo si es un juego nuevo para no borrar datos editando
+            setForm(prev => ({ ...prev, visitId: '' }));
+        }
     }, [form.fase]);
 
-    // 3. CAMBIO DE EQUIPO LOCAL
     const handleLocalChange = (id: string) => {
         const eq = equipos.find(e => e.id === id);
         if (eq) {
@@ -80,74 +79,80 @@ const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActi
             const local = equipos.find(e => e.id === form.localId);
             const visit = equipos.find(e => e.id === form.visitId);
 
-            if (!local || !visit) throw new Error("Equipos inválidos.");
+            if (!local || !visit) throw new Error("Debes seleccionar ambos equipos.");
             
             const matchData = {
                 equipoLocalId: local.id,
                 equipoLocalNombre: local.nombre,
                 equipoVisitanteId: visit.id,
                 equipoVisitanteNombre: visit.nombre,
-                grupo: grupoSeleccionado, // Se mantiene el grupo del local como referencia
+                grupo: grupoSeleccionado,
                 categoria: categoriaActiva,
                 fechaAsignada: form.fecha,
                 hora: form.hora,
                 cancha: form.cancha.toUpperCase(),
-                fase: form.fase,
+                fase: form.fase.toUpperCase(), // Aseguramos mayúsculas para el filtro
                 estatus: matchToEdit ? matchToEdit.estatus : 'programado',
-                marcadorLocal: matchToEdit ? matchToEdit.marcadorLocal : 0,
-                marcadorVisitante: matchToEdit ? matchToEdit.marcadorVisitante : 0,
-                registradoPorId: auth.currentUser?.uid
+                marcadorLocal: matchToEdit ? (matchToEdit.marcadorLocal || 0) : 0,
+                marcadorVisitante: matchToEdit ? (matchToEdit.marcadorVisitante || 0) : 0,
+                registradoPorId: auth.currentUser?.uid,
+                ultimaModificacion: new Date().toISOString()
             };
 
             const nombreColCalendario = getCollectionName('calendario');
 
             if (matchToEdit) {
                 await updateDoc(doc(db, nombreColCalendario, matchToEdit.id), matchData);
-                alert("✏️ Juego actualizado.");
+                alert("✏️ Juego actualizado con éxito.");
             } else {
                 await addDoc(collection(db, nombreColCalendario), matchData);
-                alert(`📅 Juego de ${form.fase} creado.`);
+                alert(`📅 Juego de ${form.fase} creado correctamente.`);
             }
 
             onSuccess();
         } catch (err: any) {
-            alert("Error: " + err.message);
+            alert("Error al guardar: " + err.message);
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="card" style={{ maxWidth: '600px', margin: '0 auto', background: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
-            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px', alignItems: 'center'}}>
-                <h2 style={{color: '#1e3a8a', margin: 0, fontSize:'1.2rem'}}>
-                    {matchToEdit ? '✏️ Editar Juego' : `📅 Nuevo Juego ${categoriaActiva}`}
-                </h2>
-                {onClose && <button onClick={onClose} style={{background: '#ef4444', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '6px', cursor: 'pointer', fontWeight:'bold'}}>Cerrar</button>}
+        <div className="card" style={{ maxWidth: '600px', margin: '0 auto', background: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 25px rgba(0,0,0,0.15)' }}>
+            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px', alignItems: 'center', borderBottom: '2px solid #f1f5f9', paddingBottom: '15px'}}>
+                <div>
+                    <h2 style={{color: '#1e3a8a', margin: 0, fontSize:'1.3rem', fontWeight: 900}}>
+                        {matchToEdit ? '✏️ EDITAR JUEGO' : `📅 NUEVO JUEGO`}
+                    </h2>
+                    <span style={{fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold'}}>CATEGORÍA: {categoriaActiva}</span>
+                </div>
+                {onClose && <button onClick={onClose} style={{background: '#f1f5f9', color: '#475569', border: 'none', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight:'bold', fontSize: '0.7rem'}}>CANCELAR</button>}
             </div>
 
-            <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+            <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', gap: '18px'}}>
                 
-                {/* SELECTOR DE FASE */}
-                <div style={{background:'#eff6ff', padding:'10px', borderRadius:'8px', border:'1px solid #1e3a8a'}}>
-                    <label style={{fontSize: '0.7rem', fontWeight: 'bold', color: '#1e3a8a'}}>TIPO DE JUEGO (FASE)</label>
+                {/* SELECTOR DE FASE - EL MÁS IMPORTANTE */}
+                <div style={{background: form.fase === 'REGULAR' ? '#eff6ff' : '#fff7ed', padding:'15px', borderRadius:'10px', border: `2px solid ${form.fase === 'REGULAR' ? '#1e3a8a' : '#ea580c'}`, transition: '0.3s'}}>
+                    <label style={{fontSize: '0.75rem', fontWeight: '900', color: form.fase === 'REGULAR' ? '#1e3a8a' : '#ea580c', display: 'block', marginBottom: '8px'}}>
+                        TIPO DE ENCUENTRO (ESTABLECE SI CUENTA PARA ESTADÍSTICAS)
+                    </label>
                     <select 
                         value={form.fase} 
                         onChange={e => setForm({...form, fase: e.target.value})} 
-                        style={{width: '100%', padding: '10px', marginTop: '5px', borderRadius: '8px', border: '1px solid #1e3a8a', fontWeight:'bold', color:'#1e3a8a', cursor:'pointer'}}
+                        style={{width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight:'900', color: '#1e3a8a', cursor:'pointer', fontSize: '0.9rem'}}
                     >
-                        <option value="REGULAR">📅 TEMPORADA REGULAR</option>
-                        <option value="OCTAVOS">🔥 OCTAVOS DE FINAL</option>
-                        <option value="CUARTOS">⚔️ CUARTOS DE FINAL</option>
-                        <option value="SEMIS">🏆 SEMIFINAL</option>
-                        <option value="FINAL">👑 GRAN FINAL</option>
+                        <option value="REGULAR">📅 TEMPORADA REGULAR (Suma a tabla/líderes)</option>
+                        <option value="OCTAVOS">🔥 OCTAVOS DE FINAL (No suma)</option>
+                        <option value="CUARTOS">⚔️ CUARTOS DE FINAL (No suma)</option>
+                        <option value="SEMIS">🏆 SEMIFINAL (No suma)</option>
+                        <option value="FINAL">👑 GRAN FINAL (No suma)</option>
                     </select>
                 </div>
 
                 <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
                     {/* LOCAL */}
                     <div>
-                        <label style={{fontSize: '0.7rem', fontWeight: 'bold', color: '#64748b'}}>LOCAL</label>
+                        <label style={{fontSize: '0.7rem', fontWeight: 'bold', color: '#64748b'}}>EQUIPO LOCAL</label>
                         <select 
                             value={form.localId} 
                             onChange={e => handleLocalChange(e.target.value)} 
@@ -163,9 +168,9 @@ const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActi
                         </select>
                     </div>
 
-                    {/* VISITANTE CON LÓGICA DE FILTRADO PARA CRUCES */}
+                    {/* VISITANTE */}
                     <div>
-                        <label style={{fontSize: '0.7rem', fontWeight: 'bold', color: '#64748b'}}>VISITANTE</label>
+                        <label style={{fontSize: '0.7rem', fontWeight: 'bold', color: '#64748b'}}>EQUIPO VISITANTE</label>
                         <select 
                             value={form.visitId} 
                             onChange={e => setForm({...form, visitId: e.target.value})} 
@@ -175,20 +180,18 @@ const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActi
                         >
                             <option value="">
                                 {!grupoSeleccionado 
-                                    ? "---" 
+                                    ? "Esperando local..." 
                                     : form.fase === 'REGULAR' 
-                                        ? `Rivales Grupo ${grupoSeleccionado}...` 
-                                        : `Rivales del Grupo Contrario...`}
+                                        ? `Rivales Grupo ${grupoSeleccionado}` 
+                                        : `Cruces (Grupo contrario)`}
                             </option>
                             {equipos
                                 .filter(e => {
                                     if (e.id === form.localId) return false;
-                                    
                                     if (form.fase === 'REGULAR') {
-                                        // Mismo grupo en temporada regular
                                         return e.grupo === grupoSeleccionado;
                                     } else {
-                                        // Grupo contrario en Playoffs (Cruces A vs B)
+                                        // Para Playoff permitimos cruces entre grupos
                                         return e.grupo !== grupoSeleccionado;
                                     }
                                 })
@@ -208,7 +211,7 @@ const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActi
                             value={form.fecha} 
                             onChange={e => setForm({...form, fecha:e.target.value})} 
                             required 
-                            style={{width: '100%', padding: '10px', marginTop: '5px', borderRadius: '8px', border: '1px solid #cbd5e1'}}
+                            style={{width: '100%', padding: '10px', marginTop: '5px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'inherit'}}
                         />
                     </div>
                     <div>
@@ -218,13 +221,13 @@ const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActi
                             value={form.hora} 
                             onChange={e => setForm({...form, hora:e.target.value})} 
                             required 
-                            style={{width: '100%', padding: '10px', marginTop: '5px', borderRadius: '8px', border: '1px solid #cbd5e1'}}
+                            style={{width: '100%', padding: '10px', marginTop: '5px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'inherit'}}
                         />
                     </div>
                 </div>
 
                 <div>
-                    <label style={{fontSize: '0.7rem', fontWeight: 'bold', color: '#64748b'}}>CANCHA / SEDE</label>
+                    <label style={{fontSize: '0.7rem', fontWeight: 'bold', color: '#64748b'}}>SEDE / CANCHA</label>
                     <input 
                         type="text" 
                         value={form.cancha} 
@@ -240,18 +243,19 @@ const MatchForm: React.FC<MatchFormProps> = ({ onSuccess, onClose, categoriaActi
                     disabled={loading} 
                     style={{
                         width:'100%', 
-                        padding: '15px', 
-                        background: '#1e3a8a', 
+                        padding: '16px', 
+                        background: loading ? '#94a3b8' : '#1e3a8a', 
                         color: 'white', 
-                        fontWeight: 'bold', 
+                        fontWeight: '900', 
                         border: 'none', 
-                        borderRadius: '10px', 
+                        borderRadius: '12px', 
                         cursor: loading ? 'not-allowed' : 'pointer',
                         marginTop: '10px',
-                        fontSize: '0.9rem'
+                        fontSize: '1rem',
+                        boxShadow: '0 4px 12px rgba(30,58,138,0.3)'
                     }}
                 >
-                    {loading ? 'PROCESANDO...' : (matchToEdit ? '💾 GUARDAR CAMBIOS' : '➕ CONFIRMAR JUEGO')}
+                    {loading ? 'GUARDANDO...' : (matchToEdit ? '💾 ACTUALIZAR ENCUENTRO' : '➕ PROGRAMAR JUEGO')}
                 </button>
             </form>
         </div>

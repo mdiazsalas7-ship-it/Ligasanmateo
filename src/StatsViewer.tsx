@@ -52,11 +52,9 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                 const catStr = categoria.trim().toUpperCase();
                 const isMaster = catStr === 'MASTER40' || catStr === 'MASTER';
                 
-                // 1. DETERMINAR COLECCIONES DINÁMICAS
                 const colEquipos = isMaster ? 'equipos' : `equipos_${catStr}`;
                 const colCalendario = isMaster ? 'calendario' : `calendario_${catStr}`;
 
-                // 2. CARGAR MAPA DE EQUIPOS Y LOGOS
                 const equiposSnap = await getDocs(collection(db, colEquipos));
                 const logoMap: Record<string, string> = {};
                 equiposSnap.forEach(d => {
@@ -66,14 +64,22 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                     }
                 });
 
-                // 3. OBTENER JUEGOS FINALIZADOS DE ESTA LIGA Y SUS IDs
+                // 3. OBTENER JUEGOS FINALIZADOS **SOLO DE FASE REGULAR**
                 const calendarSnap = await getDocs(query(collection(db, colCalendario), where('estatus', '==', 'finalizado')));
                 const teamGamesCount: Record<string, number> = {};
-                const validGameIds = new Set<string>(); // <- NUEVO: Guardaremos los IDs de los juegos válidos
+                const validGameIds = new Set<string>(); 
 
                 calendarSnap.forEach(doc => {
                     const game = doc.data();
-                    validGameIds.add(doc.id); // Guardamos el ID del juego válido
+                    
+                    // --- FILTRO DE PLAYOFFS ---
+                    // Solo incluimos el juego si la fase es 'REGULAR' o está vacío (asumiendo que vacío es regular)
+                    const fase = (game.fase || '').trim().toUpperCase();
+                    if (fase !== 'REGULAR' && fase !== '') {
+                        return; // Ignoramos este juego porque es Playoff u otra fase
+                    }
+
+                    validGameIds.add(doc.id); 
                     
                     const local = (game.equipoLocalNombre || '').trim().toUpperCase();
                     const visit = (game.equipoVisitanteNombre || '').trim().toUpperCase();
@@ -81,7 +87,7 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                     if (visit) teamGamesCount[visit] = (teamGamesCount[visit] || 0) + 1;
                 });
 
-                // 4. ESCUCHAR ESTADÍSTICAS GLOBALES Y FILTRAR POR JUEGO VÁLIDO
+                // 4. ESCUCHAR ESTADÍSTICAS GLOBALES Y FILTRAR POR JUEGO VÁLIDO (REGULAR)
                 const q = query(collection(db, 'stats_partido'));
                 
                 unsubscribe = onSnapshot(q, (snapshot) => {
@@ -89,13 +95,9 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
 
                     snapshot.docs.forEach(doc => {
                         const stat = doc.data();
-                        
-                        // FILTRO MAESTRO ABSOLUTO: 
-                        // Verificamos si la estadística pertenece a un juego que REALMENTE
-                        // existe en el calendario de esta categoría y está finalizado.
-                        // Asumimos que la estadística guarda el ID del juego en el campo 'partidoId' o 'juegoId'
                         const juegoId = stat.partidoId || stat.juegoId;
 
+                        // Si el ID del juego no está en nuestro Set de juegos de "Fase Regular", lo ignoramos
                         if (juegoId && validGameIds.has(juegoId)) {
                             const jId = stat.jugadorId;
                             const equipoStat = (stat.equipo || '').trim().toUpperCase();
@@ -169,7 +171,7 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
             <div style={{textAlign:'center', padding:'60px 20px', color:'#94a3b8'}}>
                 <div style={{fontSize:'2rem', marginBottom:'10px'}}>📭</div>
                 <p style={{fontWeight:'900', fontSize:'0.9rem', color:'#1e3a8a', textTransform:'uppercase'}}>Temporada {categoria} por iniciar</p>
-                <small style={{display:'block', marginTop:'5px'}}>No hay estadísticas en esta categoría.</small>
+                <small style={{display:'block', marginTop:'5px'}}>No hay estadísticas de Fase Regular registradas.</small>
             </div>
         );
         
@@ -199,7 +201,7 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                         {leader.nombre}
                     </div>
                     <div style={{fontSize:'0.75rem', fontWeight:'700', opacity: 0.9, marginTop:'5px', textTransform: 'uppercase'}}>
-                        {leader.equipo} • {leader.juegosDelEquipo} PARTIDOS
+                        {leader.equipo} • {leader.juegosDelEquipo} PARTIDOS REGULARES
                     </div>
                     
                     <div style={{marginTop: '20px'}}>
@@ -213,7 +215,7 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                 </div>
                 
                 <div style={{background:'#f8fafc', padding:'12px 20px', borderBottom:'1px solid #f1f5f9'}}>
-                    <span style={{fontSize:'0.75rem', fontWeight:'900', color: cat.color, textTransform: 'uppercase', letterSpacing: '1px'}}>Top Perseguidores</span>
+                    <span style={{fontSize:'0.75rem', fontWeight:'900', color: cat.color, textTransform: 'uppercase', letterSpacing: '1px'}}>Top Perseguidores (Regular)</span>
                 </div>
 
                 <div style={{minHeight:'200px'}}>
@@ -242,7 +244,7 @@ const StatsViewer: React.FC<{ onClose: () => void, categoria: string }> = ({ onC
                 <div style={{maxWidth:'800px', margin:'0 auto', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                     <div>
                         <h2 style={{margin:0, fontWeight:900, fontSize:'1.6rem', letterSpacing: '-0.5px'}}>📊 LÍDERES</h2>
-                        <p style={{margin:0, opacity:0.8, fontSize:'0.75rem', fontWeight:'bold', textTransform:'uppercase', color: '#fbbf24'}}>Promedios Reales • {categoria}</p>
+                        <p style={{margin:0, opacity:0.8, fontSize:'0.75rem', fontWeight:'bold', textTransform:'uppercase', color: '#fbbf24'}}>Promedios Fase Regular • {categoria}</p>
                     </div>
                     <button onClick={onClose} style={{background:'white', color:'#1e3a8a', border:'none', padding:'10px 20px', borderRadius:'15px', fontWeight:'900', fontSize:'0.75rem', cursor:'pointer', boxShadow:'0 4px 10px rgba(0,0,0,0.1)'}}>CERRAR</button>
                 </div>
