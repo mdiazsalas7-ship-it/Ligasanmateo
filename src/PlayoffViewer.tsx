@@ -119,7 +119,8 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
     return (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(circle, #1e3a8a 0%, #0f172a 100%)', zIndex: 2000, overflowY: 'auto', color: 'white', fontFamily: 'sans-serif' }}>
             <div style={{ padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 10 }}>
-                <h2 style={{ margin: 0, fontSize: '1rem' }}>🏆 PLAYOFFS {categoria}</h2>
+                {/* Agregado color: 'white' aquí */}
+                <h2 style={{ margin: 0, fontSize: '1rem', color: 'white' }}>🏆 PLAYOFFS {categoria}</h2>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     {isActualAdmin && (
                         <button onClick={() => setEditMode(!editMode)} style={{ background: editMode ? '#f59e0b' : '#3b82f6', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.7rem' }}>
@@ -139,7 +140,8 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                         if (phaseMatches.length === 0) return null;
                         return (
                             <div key={fase} style={{ minWidth: '260px' }}>
-                                <h3 style={{ textAlign: 'center', background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '8px', fontSize: '0.8rem', marginBottom: '15px' }}>{fase}</h3>
+                                {/* Agregado color: 'white' aquí */}
+                                <h3 style={{ textAlign: 'center', background: 'rgba(255,255,255,0.1)', color: 'white', padding: '10px', borderRadius: '8px', fontSize: '0.8rem', marginBottom: '15px' }}>{fase}</h3>
                                 {phaseMatches.map(m => (
                                     <div key={m.id} style={{ background: 'white', borderRadius: '12px', padding: '12px', marginBottom: '12px', color: '#1e293b' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: '#64748b', marginBottom: '8px' }}>
