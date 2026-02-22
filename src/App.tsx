@@ -1,7 +1,7 @@
 import { useEffect, useState, memo } from 'react';
 import './App.css'; 
 import { db, auth } from './firebase'; 
-import { doc, onSnapshot, collection, query, orderBy, getDocs, limit, where } from 'firebase/firestore'; 
+import { doc, onSnapshot, collection, query, orderBy, getDocs, limit } from 'firebase/firestore'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth'; 
 
 // Componentes
@@ -119,11 +119,11 @@ function App() {
         setLoading(true); 
         setLeadersList([]);
 
-        // 1. CARGA DE EQUIPOS
+        // 1. CARGA DE EQUIPOS BASE
         const nombreColEquipos = getCollectionName('equipos', categoriaActiva);
         const equiposSnap = await getDocs(collection(db, nombreColEquipos));
         const logoMap = {};
-        const equiposDelMundo = [];
+        const equiposBase = [];
 
         equiposSnap.forEach(d => {
             const data = d.data();
@@ -133,22 +133,30 @@ function App() {
                 const esColeccionEspecifica = categoriaActiva !== 'MASTER40';
                 const pertenece = esColeccionEspecifica ? true : (!data.categoria || data.categoria === 'MASTER40');
                 if (pertenece) {
-                    equiposDelMundo.push({ id: d.id, ...data });
+                    equiposBase.push({ id: d.id, ...data });
                 }
             }
         });
         setTeamLogos(logoMap);
 
-        // 2. CALENDARIO
+        // 2. CARGA Y FILTRADO DE PARTIDOS (EL MOTOR DE TODO)
         const nombreColCalendario = getCollectionName('calendario', categoriaActiva);
         const calendarSnap = await getDocs(query(collection(db, nombreColCalendario), orderBy("fechaAsignada", "asc")));
         const allMatches = calendarSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        const finishedMatches = allMatches.filter(m => m.estatus === 'finalizado');
-        const validGameIds = new Set(finishedMatches.map(m => m.id));
+        
+        // FILTRO MAESTRO: Solo partidos de fase regular finalizados
+        const regularMatchesFinalizados = allMatches.filter(m => {
+            const fase = (m.fase || '').trim().toUpperCase();
+            return m.estatus === 'finalizado' && (fase === 'REGULAR' || fase === '');
+        });
 
-        setAllMatchesGlobal(allMatches);
-        setResultadosRecientes([...finishedMatches].reverse().slice(0, 5));
+        const validRegularGameIds = new Set(regularMatchesFinalizados.map(m => m.id));
+        setAllMatchesGlobal(allMatches); // Guardamos todos para el calendario
+        
+        // El carrusel solo muestra los últimos de fase regular
+        setResultadosRecientes([...regularMatchesFinalizados].reverse().slice(0, 5));
 
+        // PRÓXIMOS JUEGOS (Independiente de la fase, solo los no finalizados)
         const proximosOrdenados = allMatches
             .filter(m => m.estatus !== 'finalizado')
             .sort((a, b) => {
@@ -156,37 +164,59 @@ function App() {
                 if (fComp !== 0) return fComp;
                 return (a.hora || "00:00").localeCompare(b.hora || "00:00");
             })
-            .slice(0, 2); // SOLO LOS 2 PRÓXIMOS JUEGOS
+            .slice(0, 2); 
         setProximosJuegos(proximosOrdenados);
 
-        // 3. LÓGICA FIBA
+        // 3. RECALCULAR ESTADÍSTICAS DE EQUIPOS (PARA LAS TABLAS DEL DASHBOARD)
+        const equiposConStatsLimpias = equiposBase.map(eq => {
+            let victorias = 0, derrotas = 0, pf = 0, pc = 0, puntos = 0;
+            
+            regularMatchesFinalizados.forEach(m => {
+                if (m.equipoLocalId === eq.id) {
+                    pf += m.marcadorLocal; pc += m.marcadorVisitante;
+                    if (m.marcadorLocal > m.marcadorVisitante) { victorias++; puntos += 2; }
+                    else { derrotas++; puntos += 1; }
+                } else if (m.equipoVisitanteId === eq.id) {
+                    pf += m.marcadorVisitante; pc += m.marcadorLocal;
+                    if (m.marcadorVisitante > m.marcadorLocal) { victorias++; puntos += 2; }
+                    else { derrotas++; puntos += 1; }
+                }
+            });
+            return { ...eq, victorias, derrotas, puntos, puntos_favor: pf, puntos_contra: pc };
+        });
+
+        // 4. LÓGICA DE ORDENAMIENTO FIBA (USANDO SOLO LO REGULAR)
         const sortTeamsFIBA = (teams) => {
             return [...teams].sort((a, b) => {
-                if ((b.puntos || 0) !== (a.puntos || 0)) return (b.puntos || 0) - (a.puntos || 0);
+                if (b.puntos !== a.puntos) return b.puntos - a.puntos;
+                
                 const tiedIds = teams.filter(t => t.puntos === a.puntos).map(t => t.id);
-                const h2hMatches = allMatches.filter(p => p.estatus === 'finalizado' && tiedIds.includes(p.equipoLocalId) && tiedIds.includes(p.equipoVisitanteId));
+                const h2hMatches = regularMatchesFinalizados.filter(p => 
+                    tiedIds.includes(p.equipoLocalId) && tiedIds.includes(p.equipoVisitanteId)
+                );
+                
                 const getH2H = (id) => {
-                    let pts = 0, pf = 0, pc = 0;
+                    let pts = 0, pfh = 0, pch = 0;
                     h2hMatches.forEach(m => {
-                        if (m.equipoLocalId === id) { pf += m.marcadorLocal; pc += m.marcadorVisitante; pts += m.marcadorLocal > m.marcadorVisitante ? 2 : 1; }
-                        else if (m.equipoVisitanteId === id) { pf += m.marcadorVisitante; pc += m.marcadorLocal; pts += m.marcadorVisitante > m.marcadorLocal ? 2 : 1; }
+                        if (m.equipoLocalId === id) { pfh += m.marcadorLocal; pch += m.marcadorVisitante; pts += m.marcadorLocal > m.marcadorVisitante ? 2 : 1; }
+                        else if (m.equipoVisitanteId === id) { pfh += m.marcadorVisitante; pch += m.marcadorLocal; pts += m.marcadorVisitante > m.marcadorLocal ? 2 : 1; }
                     });
-                    return { pts, dif: pf - pc, pf };
+                    return { pts, dif: pfh - pch, pfh };
                 };
+
                 const sA = getH2H(a.id), sB = getH2H(b.id);
                 if (sB.pts !== sA.pts) return sB.pts - sA.pts;
                 if (sB.dif !== sA.dif) return sB.dif - sA.dif;
-                if (sB.pf !== sA.pf) return sB.pf - sA.pf;
-                return ((b.puntos_favor || 0) - (b.puntos_contra || 0)) - ((a.puntos_favor || 0) - (a.puntos_contra || 0));
+                return (b.puntos_favor - b.puntos_contra) - (a.puntos_favor - a.puntos_contra);
             });
         };
 
-        setEquiposA(sortTeamsFIBA(equiposDelMundo.filter(e => e.grupo === 'A' || e.grupo === 'a' || categoriaActiva === 'U19')));
-        setEquiposB(sortTeamsFIBA(equiposDelMundo.filter(e => e.grupo === 'B' || e.grupo === 'b')));
+        setEquiposA(sortTeamsFIBA(equiposConStatsLimpias.filter(e => e.grupo?.toUpperCase() === 'A' || e.grupo?.toUpperCase() === 'ÚNICO')));
+        setEquiposB(sortTeamsFIBA(equiposConStatsLimpias.filter(e => e.grupo?.toUpperCase() === 'B')));
 
-        // 4. LÍDERES (FILTRADO POR CATEGORÍA Y PARTIDOS FINALIZADOS)
-        const teamGamesCount = {};
-        finishedMatches.forEach(game => {
+        // 5. LÍDERES (FILTRADO ESTRICTO POR JUEGOS DE FASE REGULAR)
+        const teamGamesCount = {}; 
+        regularMatchesFinalizados.forEach(game => {
             const loc = game.equipoLocalNombre?.trim().toUpperCase();
             const vis = game.equipoVisitanteNombre?.trim().toUpperCase();
             if (loc) teamGamesCount[loc] = (teamGamesCount[loc] || 0) + 1;
@@ -198,19 +228,18 @@ function App() {
 
         statsSnap.forEach(docSnap => {
             const stat = docSnap.data();
-            const juegoId = stat.partidoId || stat.juegoId;
+            const jId = stat.partidoId || stat.juegoId;
             
-            // FILTRO: Solo estadísticas que pertenezcan a los juegos finalizados de esta categoría
-            if (juegoId && validGameIds.has(juegoId)) {
-                const jId = stat.jugadorId;
-                const eqStat = (stat.equipo || '').trim().toUpperCase();
-                
-                if (!jId) return;
+            // EL FILTRO CLAVE: ¿Este ID de juego pertenece a la fase regular?
+            if (jId && validRegularGameIds.has(jId)) {
+                const plyId = stat.jugadorId;
+                if (!plyId) return;
 
-                if (!aggregated[jId]) {
-                    aggregated[jId] = { nombre: stat.nombre, equipo: eqStat, pts: 0, reb: 0, pj: 0 };
+                const eqStat = (stat.equipo || '').trim().toUpperCase();
+                if (!aggregated[plyId]) {
+                    aggregated[plyId] = { nombre: stat.nombre, equipo: eqStat, pts: 0, reb: 0, pj: 0 };
                 }
-                const acc = aggregated[jId];
+                const acc = aggregated[plyId];
                 acc.pts += (Number(stat.tirosLibres)||0) + (Number(stat.dobles)||0)*2 + (Number(stat.triples)||0)*3;
                 acc.reb += (Number(stat.rebotes)||0);
                 acc.pj += 1;
@@ -219,16 +248,21 @@ function App() {
 
         const playerList = Object.values(aggregated).map((p) => {
             const den = teamGamesCount[p.equipo] || p.pj || 1;
-            return { ...p, ppg: parseFloat((p.pts / den).toFixed(1)), rpg: parseFloat((p.reb / den).toFixed(1)) };
+            return { 
+                ...p, 
+                ppg: parseFloat((p.pts / den).toFixed(1)), 
+                rpg: parseFloat((p.reb / den).toFixed(1)) 
+            };
         });
 
         if (playerList.length > 0) {
             setLeadersList([
-                { label: 'PUNTOS', p: [...playerList].sort((a,b) => b.ppg - a.ppg)[0], val: [...playerList].sort((a,b) => b.ppg - a.ppg)[0].ppg, unit: 'PPG', icon: '🔥', color:'#ef4444' },
-                { label: 'REBOTES', p: [...playerList].sort((a,b) => b.rpg - a.rpg)[0], val: [...playerList].sort((a,b) => b.rpg - a.rpg)[0].rpg, unit: 'RPG', icon: '🖐️', color:'#10b981' }
+                { label: 'PUNTOS', p: [...playerList].sort((a,b) => b.ppg - a.ppg)[0], val: [...playerList].sort((a,b) => b.ppg - a.ppg)[0]?.ppg || 0, unit: 'PPG', icon: '🔥', color:'#ef4444' },
+                { label: 'REBOTES', p: [...playerList].sort((a,b) => b.rpg - a.rpg)[0], val: [...playerList].sort((a,b) => b.rpg - a.rpg)[0]?.rpg || 0, unit: 'RPG', icon: '🖐️', color:'#10b981' }
             ]);
         }
 
+        // 6. CARGA DE NOTICIAS Y ENTREVISTAS
         const newsSnap = await getDocs(query(collection(db, "noticias"), orderBy("fecha", "desc"), limit(5)));
         setNoticias(newsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
@@ -291,7 +325,7 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
               
               <section>
-                <h2 style={{ fontSize: '0.7rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '10px', textTransform:'uppercase' }}>🏀 Marcadores {categoriaActiva}</h2>
+                <h2 style={{ fontSize: '0.7rem', fontWeight: '900', color: '#1e3a8a', marginBottom: '10px', textTransform:'uppercase' }}>🏀 Resultados Fase Regular {categoriaActiva}</h2>
                 <div style={{ position: 'relative', height: '180px', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(30,58,138,0.12)' }}>
                   {resultadosRecientes.length > 0 ? (
                     <div key={juegoIndex} className="fade-in" style={{ height: '100%', background: 'linear-gradient(135deg, #1e3a8a, #1e40af)', color: 'white', padding: '20px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
@@ -310,7 +344,7 @@ function App() {
                       </div>
                       <button onClick={() => window.open('https://www.youtube.com/@barbakanzler', '_blank')} style={{ width: '100%', padding: '10px', borderRadius: '15px', border: 'none', background: '#f59e0b', color: 'white', fontWeight: '900', fontSize: '0.65rem', cursor: 'pointer' }}>▶ CANAL @BARBAKANZLER</button>
                     </div>
-                  ) : <div style={{height:'100%', background:'#f8fafc', borderRadius:'24px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.7rem'}}>No hay resultados aún</div>}
+                  ) : <div style={{height:'100%', background:'#f8fafc', borderRadius:'24px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.7rem'}}>No hay resultados de fase regular aún</div>}
                 </div>
               </section>
 
@@ -324,7 +358,7 @@ function App() {
                 <div onClick={() => setActiveView('stats')} style={{ height: '220px', background: '#ffffff', borderRadius: '24px', border: `2.5px solid ${leadersList[leaderIndex]?.color || '#eee'}`, cursor: 'pointer', textAlign: 'center', display: 'flex', flexDirection:'column', position:'relative', overflow:'hidden', boxShadow:`0 8px 25px ${leadersList[leaderIndex]?.color}20` }}>
                   {leadersList.length > 0 ? (
                     <div key={leaderIndex} className="fade-in" style={{ height:'100%', display:'flex', flexDirection:'column' }}>
-                      <div style={{ background: leadersList[leaderIndex].color, padding: '6px 12px', color:'white', fontSize:'0.6rem', fontWeight:'900' }}>{leadersList[leaderIndex].icon} LÍDER {leadersList[leaderIndex].label}</div>
+                      <div style={{ background: leadersList[leaderIndex].color, padding: '6px 12px', color:'white', fontSize:'0.6rem', fontWeight:'900' }}>{leadersList[leaderIndex].icon} LÍDER REGULAR {leadersList[leaderIndex].label}</div>
                       <div style={{ flex: 1, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', padding:'10px' }}>
                         <div style={{ width:'55px', height:'55px', borderRadius:'50%', background:'white', overflow:'hidden', border:`2.5px solid ${leadersList[leaderIndex].color}`, marginBottom:'8px' }}><img src={teamLogos[leadersList[leaderIndex].p?.equipo?.toUpperCase()] || ""} style={{ width:'100%', height:'100%', objectFit:'contain' }} /></div>
                         <h3 style={{ fontSize: '0.8rem', fontWeight: 900, color:'#1e3a8a', margin: 0 }}>{leadersList[leaderIndex].p?.nombre}</h3>
@@ -337,7 +371,7 @@ function App() {
 
               <section>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px' }}>
-                  <h2 style={{ fontSize: '0.75rem', fontWeight: '900', color: '#1e3a8a', margin: 0 }}>🏆 Clasificación {categoriaActiva}</h2>
+                  <h2 style={{ fontSize: '0.75rem', fontWeight: '900', color: '#1e3a8a', margin: 0 }}>🏆 Tabla Regular {categoriaActiva}</h2>
                   <span style={{ fontSize:'0.55rem', fontWeight:'900', color:'#94a3b8', background:'#f1f5f9', padding:'3px 10px', borderRadius:'12px', textTransform:'uppercase' }}>
                     {getGroupLabel(tablaIndex === 0 ? 'A' : 'B', categoriaActiva)}
                   </span>
@@ -448,7 +482,7 @@ function App() {
 
       <nav style={{ position: 'fixed', bottom: '20px', left: '20px', right: '20px', background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(10px)', height: '75px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderRadius: '35px', boxShadow: '0 15px 40px rgba(0,0,0,0.12)', border: '1.5px solid #f1f5f9', zIndex: 1000 }}>
           {[{v:'calendario',i:'📅',l:'Juegos'},{v:'tabla',i:'🏆',l:'Tablas'},{v:'dashboard',i:'🏠',l:'Inicio'},{v:'playoff',i:'🔥',l:'Playoff'},{v:'stats',i:'📊',l:'Líderes'},{v:'noticias',i:'📰',l:'Noticias'}].map(item => (
-            <button key={item.v} onClick={() => setActiveView(item.v as any)} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: activeView === item.v ? '#1e3a8a' : '#94a3b8', cursor: 'pointer', transition:'0.3s' }}>
+            <button key={item.v} onClick={() => setActiveView(item.v)} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: activeView === item.v ? '#1e3a8a' : '#94a3b8', cursor: 'pointer', transition:'0.3s' }}>
               <span style={{ fontSize: '1.3rem', transform: activeView === item.v ? 'scale(1.25)' : 'scale(1)' }}>{item.i}</span>
               <span style={{ fontSize: '0.55rem', fontWeight: '900', textTransform:'uppercase' }}>{item.l}</span>
             </button>
