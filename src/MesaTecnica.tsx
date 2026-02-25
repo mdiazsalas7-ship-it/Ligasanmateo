@@ -2,9 +2,6 @@ import React, { useState, useEffect, memo, useRef } from 'react';
 import { db, storage } from './firebase'; 
 import { doc, updateDoc, onSnapshot, collection, query, getDocs, setDoc, increment, where, writeBatch, limit, orderBy, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import QRCode from 'qrcode';
 
 // --- FILA DE JUGADOR ---
 const PlayerRow = memo(({ player, team, stats, onStat, onSub }: any) => {
@@ -102,7 +99,7 @@ const MesaTecnica: React.FC<{ categoria: string, onClose: () => void }> = ({ cat
                 const data = { id: snap.id, ...snap.data() } as any;
                 setMatchData(data);
                 
-                // Cargar Logos desde la colección de equipos correcta
+                // Cargar Logos desde la colección de equipos correcta usando logoUrl
                 const lDoc = await getDocs(query(collection(db, getTeamsCol()), where('nombre', '==', data.equipoLocalNombre)));
                 const vDoc = await getDocs(query(collection(db, getTeamsCol()), where('nombre', '==', data.equipoVisitanteNombre)));
                 setLogos({ 
@@ -127,7 +124,6 @@ const MesaTecnica: React.FC<{ categoria: string, onClose: () => void }> = ({ cat
         if (matchData?.equipoLocalId && matchData?.equipoVisitanteId) {
             const fetchRosters = async () => {
                 const playerColName = getPlayersCol();
-                console.log(`Buscando jugadores en: ${playerColName}`);
                 
                 const qL = query(collection(db, playerColName), where('equipoId', '==', matchData.equipoLocalId));
                 const qV = query(collection(db, playerColName), where('equipoId', '==', matchData.equipoVisitanteId));
@@ -182,7 +178,7 @@ const MesaTecnica: React.FC<{ categoria: string, onClose: () => void }> = ({ cat
         onClose();
     };
 
-    // --- RENDERIZADO (IGUAL AL ANTERIOR PERO USANDO LOS ESTADOS CARGADOS) ---
+    // --- RENDERIZADO ---
     if (!selectedMatchId) return (
         <div style={{padding:'20px', color:'white', background:'#000', minHeight:'100vh'}}>
             <h2 style={{color: '#60a5fa', marginBottom:'20px'}}>⏱️ Mesa Técnica - {categoria}</h2>
@@ -203,14 +199,28 @@ const MesaTecnica: React.FC<{ categoria: string, onClose: () => void }> = ({ cat
         <div style={{background:'#000', height:'100vh', display:'flex', flexDirection:'column', color:'white', overflow:'hidden'}}>
              <style>{`.btn-stat { padding:8px 0; border:none; border-radius:6px; color:white; font-weight:900; cursor:pointer; font-size:0.6rem; transition: 0.1s; } .btn-stat:active { transform: scale(0.95); }`}</style>
             
-            <div style={{height:'55px', background:'#111', borderBottom:'2px solid #333', display:'flex', alignItems:'center', padding:'0 15px', justifyContent:'space-between'}}>
-                <button onClick={() => {}} style={{background:'#1e3a8a', border:'none', color:'white', padding:'6px 12px', borderRadius:'8px', fontSize:'0.65rem', fontWeight:'bold'}}>🖨️ PDF</button>
-                <div style={{display:'flex', alignItems:'center', gap:'10px', background:'#222', padding:'4px 12px', borderRadius:'8px', border:'1px solid #444'}}>
+            {/* CABECERA CON LOGOS Y MARCADOR */}
+            <div style={{minHeight:'65px', background:'#111', borderBottom:'2px solid #333', display:'flex', alignItems:'center', padding:'5px 15px', justifyContent:'center', width: '100%'}}>
+                
+                {/* Equipo Local */}
+                <div style={{display:'flex', alignItems:'center', gap:'8px', flex:1, justifyContent:'flex-end', overflow:'hidden'}}>
+                    <span style={{fontWeight:'bold', fontSize:'0.75rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{matchData?.equipoLocalNombre}</span>
+                    <img src={logos.local} alt="Local" style={{width:'40px', height:'40px', borderRadius:'50%', objectFit:'cover', background:'white', border:'2px solid #3b82f6', flexShrink: 0}} />
+                </div>
+
+                {/* Marcador Central */}
+                <div style={{display:'flex', alignItems:'center', gap:'12px', background:'#222', padding:'4px 15px', borderRadius:'8px', border:'1px solid #444', margin:'0 10px', flexShrink: 0}}>
                     <span style={{fontSize:'1.5rem', fontWeight:'900', color:'#fff'}}>{matchData?.marcadorLocal}</span>
                     <span style={{fontSize:'0.6rem', color:'#666'}}>VS</span>
                     <span style={{fontSize:'1.5rem', fontWeight:'900', color:'#fff'}}>{matchData?.marcadorVisitante}</span>
                 </div>
-                <button style={{background:'#7c3aed', border:'none', color:'white', padding:'6px 12px', borderRadius:'8px', fontSize:'0.65rem', fontWeight:'bold'}}>📸 F21</button>
+
+                {/* Equipo Visitante */}
+                <div style={{display:'flex', alignItems:'center', gap:'8px', flex:1, justifyContent:'flex-start', overflow:'hidden'}}>
+                    <img src={logos.visitante} alt="Visitante" style={{width:'40px', height:'40px', borderRadius:'50%', objectFit:'cover', background:'white', border:'2px solid #ef4444', flexShrink: 0}} />
+                    <span style={{fontWeight:'bold', fontSize:'0.75rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{matchData?.equipoVisitanteNombre}</span>
+                </div>
+
             </div>
 
             <div style={{flex:1, display:'flex', overflow:'hidden'}}>
@@ -241,28 +251,60 @@ const MesaTecnica: React.FC<{ categoria: string, onClose: () => void }> = ({ cat
                 <button onClick={handleFinalize} style={{flex:2, padding:'12px', background:'#10b981', color:'white', border:'none', borderRadius:'10px', fontWeight:'bold', fontSize:'0.7rem'}}>FINALIZAR</button>
             </div>
 
-            {/* MODAL F21 */}
+            {/* MODAL F21 (Banca / Sustitución) */}
             {subModal.isOpen && (
                 <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.95)', zIndex:4000, padding:'20px', display:'flex', justifyContent:'center', alignItems:'center'}}>
                     <div style={{background:'white', width:'100%', maxWidth:'400px', borderRadius:'15px', overflow:'hidden'}}>
                         <div style={{padding:'15px', background:'#1e3a8a', color:'white', textAlign:'center', fontWeight:'bold'}}>JUGADORES EN MESA</div>
                         <div style={{maxHeight:'350px', overflowY:'auto', padding:'10px'}}>
-                            {(subModal.team === 'local' ? playersLocal : playersVisitante).map(p => {
-                                const activeIds = subModal.team === 'local' ? onCourtLocal : onCourtVisitante;
-                                const isSelected = activeIds.includes(p.id);
-                                return (
-                                    <div key={p.id} onClick={() => {
-                                        const setter = subModal.team === 'local' ? setOnCourtLocal : setOnCourtVisitante;
-                                        if (isSelected) setter(activeIds.filter(id => id !== p.id));
-                                        else if (activeIds.length < 5) setter([...activeIds, p.id]);
-                                    }} style={{ padding:'12px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', background: isSelected ? '#dbeafe' : 'transparent', color:'#333', cursor:'pointer' }}>
-                                        <span>#{p.numero || '??'} {p.nombre}</span>
-                                        {isSelected && <span style={{fontWeight:'bold', color:'#1e40af'}}>SELEC.</span>}
-                                    </div>
-                                );
-                            })}
+                            {(subModal.team === 'local' ? playersLocal : playersVisitante)
+                                .slice()
+                                .sort((a, b) => (parseInt(a.numero) || 0) - (parseInt(b.numero) || 0))
+                                .map(p => {
+                                    const activeIds = subModal.team === 'local' ? onCourtLocal : onCourtVisitante;
+                                    const isSelected = activeIds.includes(p.id);
+                                    return (
+                                        <div key={p.id} onClick={() => {
+                                            const setter = subModal.team === 'local' ? setOnCourtLocal : setOnCourtVisitante;
+                                            if (isSelected) setter(activeIds.filter(id => id !== p.id));
+                                            else if (activeIds.length < 5) setter([...activeIds, p.id]);
+                                        }} style={{ padding:'12px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', background: isSelected ? '#dbeafe' : 'transparent', color:'#333', cursor:'pointer' }}>
+                                            <span>#{p.numero || '??'} {p.nombre}</span>
+                                            {isSelected && <span style={{fontWeight:'bold', color:'#1e40af'}}>SELEC.</span>}
+                                        </div>
+                                    );
+                                })}
                         </div>
                         <button onClick={() => setSubModal({...subModal, isOpen:false})} style={{width:'100%', padding:'15px', background:'#10b981', color:'white', border:'none', fontWeight:'bold'}}>LISTO</button>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL HISTORIAL DE JUGADAS */}
+            {isHistoryOpen && (
+                <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.95)', zIndex:4000, padding:'20px', display:'flex', justifyContent:'center', alignItems:'center'}}>
+                    <div style={{background:'white', width:'100%', maxWidth:'400px', borderRadius:'15px', overflow:'hidden', display: 'flex', flexDirection: 'column', maxHeight: '80vh'}}>
+                        <div style={{padding:'15px', background:'#475569', color:'white', textAlign:'center', fontWeight:'bold', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                            <span>📜 HISTORIAL DE JUGADAS</span>
+                            <button onClick={() => setIsHistoryOpen(false)} style={{background:'rgba(255,255,255,0.2)', border:'none', color:'white', borderRadius:'50%', width:'30px', height:'30px', fontWeight:'bold', cursor:'pointer', display:'flex', justifyContent:'center', alignItems:'center'}}>✕</button>
+                        </div>
+                        <div style={{overflowY:'auto', padding:'10px', flex:1}}>
+                            {recentPlays.length === 0 ? (
+                                <p style={{textAlign:'center', color:'#666', padding:'20px'}}>No hay jugadas registradas aún.</p>
+                            ) : recentPlays.map(play => (
+                                <div key={play.id} style={{ padding:'10px', borderBottom:'1px solid #eee', color:'#333', fontSize:'0.8rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                                    <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
+                                        <span style={{ background: play.equipo === 'local' ? '#3b82f6' : '#ef4444', color:'white', padding:'2px 6px', borderRadius:'4px', fontWeight:'bold' }}>
+                                            #{play.jugadorNumero || '??'}
+                                        </span>
+                                        <span style={{fontWeight:'bold'}}>{play.jugadorNombre}</span>
+                                    </div>
+                                    <span style={{fontWeight:'900', color: play.puntos > 0 ? '#10b981' : '#f59e0b'}}>
+                                        {play.accion === 'tirosLibres' ? '+1 TL' : play.accion === 'dobles' ? '+2 PT' : play.accion === 'triples' ? '+3 PT' : play.accion.toUpperCase()}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
