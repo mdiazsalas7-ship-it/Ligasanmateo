@@ -316,55 +316,62 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
                                     overflow: 'hidden'
                                 }}>
                                     
-                                    {/* COLUMNA IZQUIERDA: Estado/Hora y Fecha */}
-                                    <div style={{ width: '90px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRight: `1px solid ${themeColor}30`, padding: '15px 10px', background: `${themeColor}05` }}>
-                                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: isFinished ? '#4b5563' : themeColor, textAlign: 'center' }}>
+                                    {/* COLUMNA IZQUIERDA: Estado/Hora y Fecha (Un poco más estrecha para ganar espacio) */}
+                                    <div style={{ width: '75px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRight: `1px solid ${themeColor}30`, padding: '10px 5px', background: `${themeColor}05` }}>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: isFinished ? '#4b5563' : themeColor, textAlign: 'center' }}>
                                             {isFinished ? 'FINAL' : m.hora || 'S.H'}
                                         </span>
-                                        <span style={{ fontSize: '0.65rem', color: '#6b7280', marginTop: '4px', textAlign: 'center', fontWeight:'600' }}>
-                                            {m.fechaAsignada}
+                                        <span style={{ fontSize: '0.6rem', color: '#6b7280', marginTop: '4px', textAlign: 'center', fontWeight:'600' }}>
+                                            {m.fechaAsignada.split('-').slice(1).join('/') /* Formato MM/DD para ahorrar espacio */}
                                         </span>
-                                        {isPlayoff && (
-                                             <span style={{ fontSize: '0.55rem', color: '#ef4444', marginTop: '4px', textAlign: 'center', fontWeight:'bold', background:'#fef2f2', padding:'2px 4px', borderRadius:'4px' }}>
-                                                PLAYOFF
-                                            </span>
-                                        )}
                                     </div>
 
-                                    {/* COLUMNA CENTRAL: Equipos y Marcadores */}
-                                    <div style={{ flex: 1, padding: '15px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '12px' }}>
+                                    {/* COLUMNA CENTRAL: Equipos y Marcadores (Optimizado para móvil) */}
+                                    <div style={{ flex: 1, padding: '12px 15px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '10px', minWidth: 0 }}>
                                         
                                         {/* Fila Equipo Local */}
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                                {/* Contenedor circular del logo */}
-                                                <div style={{ width: '36px', height: '36px', borderRadius: '50%', border: '1px solid #e5e7eb', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2px', background: '#fff' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                                                <div style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid #e5e7eb', flexShrink: 0, overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2px', background: '#fff' }}>
                                                     <TeamLogo logoUrl={getLogo(m.equipoLocalId)} altText="L" />
                                                 </div>
-                                                <span style={{ fontWeight: localWins ? '800' : '600', color: localWins ? '#000' : '#4b5563', fontSize: '1rem' }}>
+                                                <span style={{ 
+                                                    fontWeight: localWins ? '800' : '600', 
+                                                    color: localWins ? '#000' : '#4b5563', 
+                                                    fontSize: '0.85rem',
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis' 
+                                                }}>
                                                     {m.equipoLocalNombre}
                                                 </span>
                                             </div>
                                             {isFinished && (
-                                                <span style={{ fontWeight: localWins ? '900' : '500', fontSize: '1.2rem', color: localWins ? '#000' : '#4b5563' }}>
+                                                <span style={{ fontWeight: localWins ? '900' : '500', fontSize: '1.1rem', color: localWins ? '#000' : '#4b5563', flexShrink: 0 }}>
                                                     {m.marcadorLocal}
                                                 </span>
                                             )}
                                         </div>
 
                                         {/* Fila Equipo Visitante */}
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                                 {/* Contenedor circular del logo */}
-                                                <div style={{ width: '36px', height: '36px', borderRadius: '50%', border: '1px solid #e5e7eb', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2px', background: '#fff' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                                                <div style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid #e5e7eb', flexShrink: 0, overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2px', background: '#fff' }}>
                                                     <TeamLogo logoUrl={getLogo(m.equipoVisitanteId)} altText="V" />
                                                 </div>
-                                                <span style={{ fontWeight: visitorWins ? '800' : '600', color: visitorWins ? '#000' : '#4b5563', fontSize: '1rem' }}>
+                                                <span style={{ 
+                                                    fontWeight: visitorWins ? '800' : '600', 
+                                                    color: visitorWins ? '#000' : '#4b5563', 
+                                                    fontSize: '0.85rem',
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis' 
+                                                }}>
                                                     {m.equipoVisitanteNombre}
                                                 </span>
                                             </div>
                                             {isFinished && (
-                                                <span style={{ fontWeight: visitorWins ? '900' : '500', fontSize: '1.2rem', color: visitorWins ? '#000' : '#4b5563' }}>
+                                                <span style={{ fontWeight: visitorWins ? '900' : '500', fontSize: '1.1rem', color: visitorWins ? '#000' : '#4b5563', flexShrink: 0 }}>
                                                     {m.marcadorVisitante}
                                                 </span>
                                             )}
@@ -372,19 +379,19 @@ const CalendarViewer = ({ rol, onClose, categoria }) => {
                                     </div>
 
                                     {/* COLUMNA DERECHA: Box Score y Botones Admin */}
-                                    <div style={{ width: '100px', borderLeft: `1px solid ${themeColor}30`, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '10px', padding:'10px' }}>
+                                    <div style={{ width: '85px', borderLeft: `1px solid ${themeColor}30`, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '8px', padding:'5px' }}>
                                         {isFinished ? (
-                                            <button onClick={() => setSelectedBoxScore(m)} style={{ background: 'transparent', border: 'none', color: '#06c', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer' }}>
+                                            <button onClick={() => setSelectedBoxScore(m)} style={{ background: 'transparent', border: 'none', color: '#06c', fontSize: '0.65rem', fontWeight: '800', cursor: 'pointer' }}>
                                                 BOX SCORE
                                             </button>
                                         ) : (
-                                            <span style={{fontSize:'0.7rem', color:'#9ca3af', fontWeight:'bold'}}>PREVIA</span>
+                                            <span style={{fontSize:'0.65rem', color:'#9ca3af', fontWeight:'bold'}}>PREVIA</span>
                                         )}
                                         
                                         {rol === 'admin' && (
-                                            <div style={{ display: 'flex', gap: '6px', marginTop: '5px' }}>
-                                                <button onClick={() => handleEditMatch(m)} title="Editar" style={{ background: '#f3f4f6', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>✏️</button>
-                                                <button onClick={() => handleDeleteMatch(m.id)} title="Eliminar" style={{ background: '#fef2f2', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>🗑️</button>
+                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                                <button onClick={() => handleEditMatch(m)} title="Editar" style={{ background: '#f3f4f6', border: 'none', padding: '5px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}>✏️</button>
+                                                <button onClick={() => handleDeleteMatch(m.id)} title="Eliminar" style={{ background: '#fef2f2', border: 'none', padding: '5px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}>🗑️</button>
                                             </div>
                                         )}
                                     </div>
