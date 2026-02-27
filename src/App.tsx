@@ -303,7 +303,7 @@ function App() {
           
           <div style={{ flex: 1, textAlign: 'right' }}>
              <button 
-                onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=907097ad-6740-4123-a961-106929de366e', '_blank')} 
+                onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Oficial%20LMB%202026.docx?alt=media&token=f973a1a1-685a-428a-85f4-7d90db9eeccc', '_blank')} 
                 style={{ background: 'white', border: '1px solid #e2e8f0', padding: '6px 8px', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', float: 'right', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}
              >
                 <span style={{ fontSize:'1.2rem' }}>📜</span>
