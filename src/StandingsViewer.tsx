@@ -164,7 +164,10 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
                                     <td style={{ padding: '15px', fontWeight: 'bold', color: '#94a3b8' }}>{index + 1}</td>
                                     <td style={{ padding: '10px 15px', textAlign: 'left' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <img src={eq.logoUrl || DEFAULT_LOGO} style={{ width: '35px', height: '35px', objectFit: 'contain' }} alt="logo" />
+                                            {/* CONTENEDOR CIRCULAR AJUSTADO */}
+                                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #e2e8f0', overflow: 'hidden', background: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+                                                <img src={eq.logoUrl || DEFAULT_LOGO} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="logo" />
+                                            </div>
                                             <span style={{ fontWeight: '900', color: '#1e293b', fontSize: '0.8rem' }}>{eq.nombre.toUpperCase()}</span>
                                         </div>
                                     </td>
