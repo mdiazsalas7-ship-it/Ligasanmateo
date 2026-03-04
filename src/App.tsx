@@ -18,9 +18,9 @@ import AdminVideos from './AdminVideos';
 
 const CATEGORIAS_DISPONIBLES = [
   { id: 'MASTER40', label: '🍷 MASTER 40' },
-  { id: 'U19', label: '⚡ U19' },
+  { id: 'U16', label: '⚡ U16' },
   { id: 'LIBRE', label: '🏀 LIBRE' },
-  { id: 'FEMENINO', label: '‍♀️ FEMENINO' }
+  { id: 'INTERINDUSTRIAL', label: '‍INTERINDUSTRIAL' }
 ];
 
 const getCollectionName = (baseName, cat) => (cat === 'MASTER40' ? baseName : `${baseName}_${cat}`);
