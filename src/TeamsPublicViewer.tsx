@@ -5,7 +5,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 // ─────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────
-const LEAGUE_LOGO     = 'https://i.postimg.cc/hhF5fTPn/image.png';
+const LEAGUE_LOGO     = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
 const DEFAULT_LOGO    = 'https://cdn-icons-png.flaticon.com/512/451/451716.png';
 const DEFAULT_AVATAR  = '';   // vacío → usa iniciales
 
@@ -385,36 +385,90 @@ const TeamsPublicViewer: React.FC<{
 
             {/* ── Header ── */}
             <div style={{
-                background: '#1e3a8a', color: 'white',
-                padding: '14px 18px', flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                background: 'white', flexShrink: 0,
+                borderBottom: '1px solid #e2e8f0',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {/* Fila superior: botón atrás + logo liga */}
+                <div style={{
+                    padding: '10px 16px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                    {/* Botón de regreso */}
                     <button
                         onClick={view === 'roster' ? () => setView('list') : onClose}
                         style={{
-                            background: 'rgba(255,255,255,0.15)', border: 'none',
-                            color: 'white', borderRadius: '50%',
-                            width: 34, height: 34, cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '1.1rem', fontWeight: 900,
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            background: '#f1f5f9', border: 'none', cursor: 'pointer',
+                            borderRadius: 12, padding: '8px 14px',
+                            color: '#1e3a8a', fontWeight: 800, fontSize: '0.72rem',
+                            transition: 'background 0.15s',
                         }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; }}
                     >
-                        {view === 'roster' ? '←' : '✕'}
+                        <span style={{ fontSize: '1rem', lineHeight: 1 }}>
+                            {view === 'roster' ? '←' : '✕'}
+                        </span>
+                        <span>{view === 'roster' ? 'Equipos' : 'Cerrar'}</span>
                     </button>
-                    <div>
-                        <div style={{ fontWeight: 900, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                            {view === 'list' ? `Equipos · ${categoria}` : selectedTeam?.nombre}
-                        </div>
-                        {view === 'roster' && (
-                            <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>
-                                Toca un jugador para ver su barajita
-                            </div>
-                        )}
+
+                    {/* Logo liga en círculo */}
+                    <div style={{
+                        width: 44, height: 44, borderRadius: '50%',
+                        border: '2px solid #e2e8f0',
+                        background: 'white',
+                        overflow: 'hidden',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        flexShrink: 0,
+                    }}>
+                        <img src={LEAGUE_LOGO} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Liga" />
                     </div>
                 </div>
-                <img src={LEAGUE_LOGO} style={{ height: 32, opacity: 0.9 }} alt="Liga" />
+
+                {/* Fila inferior: título de la vista */}
+                <div style={{
+                    padding: '0 16px 10px',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                }}>
+                    {view === 'roster' && selectedTeam && (
+                        /* Logo del equipo en círculo + nombre */
+                        <>
+                            <div style={{
+                                width: 36, height: 36, borderRadius: '50%',
+                                background: '#f8fafc', border: '2px solid #e2e8f0',
+                                overflow: 'hidden', flexShrink: 0,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                <img
+                                    src={selectedTeam.logoUrl || DEFAULT_LOGO}
+                                    alt={selectedTeam.nombre}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    onError={e => { e.currentTarget.src = DEFAULT_LOGO; }}
+                                />
+                            </div>
+                            <div>
+                                <div style={{ fontWeight: 900, fontSize: '0.95rem', color: '#1e293b', textTransform: 'uppercase' }}>
+                                    {selectedTeam.nombre}
+                                </div>
+                                <div style={{ fontSize: '0.58rem', color: '#94a3b8', fontWeight: 700 }}>
+                                    Toca un jugador para ver su barajita
+                                </div>
+                            </div>
+                        </>
+                    )}
+                    {view === 'list' && (
+                        <div>
+                            <div style={{ fontWeight: 900, fontSize: '0.95rem', color: '#1e293b', textTransform: 'uppercase' }}>
+                                Equipos
+                            </div>
+                            <div style={{ fontSize: '0.58rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>
+                                {categoria}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* ── Contenido ── */}
@@ -470,17 +524,16 @@ const TeamsPublicViewer: React.FC<{
                                             minHeight: 100,
                                         }}>
                                             <div style={{
-                                                width: 72, height: 72, borderRadius: '50%',
+                                                width: 80, height: 80, borderRadius: '50%',
                                                 background: 'white',
-                                                border: '2px solid #e2e8f0',
-                                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                border: '3px solid #e2e8f0',
+                                                boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
                                                 overflow: 'hidden', flexShrink: 0,
                                             }}>
                                                 <img
                                                     src={team.logoUrl || DEFAULT_LOGO}
                                                     alt={team.nombre}
-                                                    style={{ width: 58, height: 58, objectFit: 'contain' }}
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                                     onError={e => { e.currentTarget.src = DEFAULT_LOGO; }}
                                                 />
                                             </div>
@@ -534,12 +587,18 @@ const TeamsPublicViewer: React.FC<{
                             padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14,
                             border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
                         }}>
-                            <img
-                                src={selectedTeam?.logoUrl || DEFAULT_LOGO}
-                                alt={selectedTeam?.nombre}
-                                style={{ width: 54, height: 54, objectFit: 'contain', flexShrink: 0 }}
-                                onError={e => { e.currentTarget.src = DEFAULT_LOGO; }}
-                            />
+                            <div style={{
+                                width: 56, height: 56, borderRadius: '50%',
+                                border: '2.5px solid #e2e8f0', overflow: 'hidden',
+                                flexShrink: 0, background: 'white',
+                            }}>
+                                <img
+                                    src={selectedTeam?.logoUrl || DEFAULT_LOGO}
+                                    alt={selectedTeam?.nombre}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    onError={e => { e.currentTarget.src = DEFAULT_LOGO; }}
+                                />
+                            </div>
                             <div>
                                 <h3 style={{ margin: 0, color: '#1e3a8a', textTransform: 'uppercase', fontSize: '1rem', fontWeight: 900 }}>
                                     {selectedTeam?.nombre}
