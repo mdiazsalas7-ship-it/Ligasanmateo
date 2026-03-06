@@ -1,9 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 
+// ─────────────────────────────────────────────
+// TIPOS
+// ─────────────────────────────────────────────
 interface Equipo {
     id: string;
     nombre: string;
-    grupo: string; 
+    grupo: string;
     victorias: number;
     derrotas: number;
     puntos: number;
@@ -18,196 +21,391 @@ interface Partido {
     marcadorLocal: number;
     marcadorVisitante: number;
     estatus: string;
-    fase?: string; 
+    fase?: string;
+}
+
+interface EquipoConStats extends Equipo {
+    jj: number;
+    dif: number;
 }
 
 interface Props {
     equipos?: Equipo[];
-    partidos?: Partido[]; 
+    partidos?: Partido[];
     onClose: () => void;
-    categoria: string; 
+    categoria: string;
 }
 
-const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose, categoria }) => {
-    
-    const DEFAULT_LOGO = "https://cdn-icons-png.flaticon.com/512/166/166344.png";
+const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/166/166344.png';
 
-    // --- 1. RECALCULAR ESTADÍSTICAS (FILTRO MAESTRO) ---
-    // Ignoramos lo que viene de la DB y sumamos nosotros solo lo REGULAR
-    const equiposConStatsReales = useMemo(() => {
-        return equipos.map(eq => {
-            let victorias = 0;
-            let derrotas = 0;
-            let puntos_favor = 0;
-            let puntos_contra = 0;
-            let puntos = 0;
+// ─────────────────────────────────────────────
+// HELPERS FIBA APPENDIX D (2024)
+//
+// D.1.1 - Clasificación por puntos (2 victoria, 1 derrota, 0 no presentación)
+// D.1.3 - Empate: se analizan SOLO los partidos entre los implicados
+//   Criterio 1: Mayor récord V/D entre ellos (= más puntos H2H)
+//   Criterio 2: Mayor diferencia de puntos en partidos entre ellos
+//   Criterio 3: Mayor número de puntos anotados en partidos entre ellos
+//   Criterio 4: Mayor diferencia de puntos en TODOS los partidos del grupo
+//   Criterio 5: Mayor número de puntos anotados en TODOS los partidos del grupo
+//   Criterio 6: Sorteo (aquí dejamos el orden actual como fallback)
+//
+// IMPORTANTE: Si tras aplicar un criterio el grupo de N empatados se reduce
+// a un sub-empate de M < N, se reinicia el proceso DESDE el criterio 1
+// solo para ese subgrupo. Esta implementación aplica eso correctamente
+// mediante ordenación estable iterativa.
+// ─────────────────────────────────────────────
 
-            // Solo procesamos partidos finalizados de Fase Regular
-            const partidosRegular = partidos.filter(p => {
-                const fase = (p.fase || '').trim().toUpperCase();
-                return p.estatus === 'finalizado' && (fase === 'REGULAR' || fase === '');
-            });
+/** Filtra partidos de fase regular finalizados */
+const esPartidoRegular = (p: Partido) => {
+    const fase = (p.fase ?? '').trim().toUpperCase();
+    return p.estatus === 'finalizado' && (fase === 'REGULAR' || fase === '');
+};
 
-            partidosRegular.forEach(p => {
-                if (p.equipoLocalId === eq.id) {
-                    puntos_favor += p.marcadorLocal;
-                    puntos_contra += p.marcadorVisitante;
-                    if (p.marcadorLocal > p.marcadorVisitante) {
-                        victorias += 1;
-                        puntos += 2; // Victoria
-                    } else {
-                        derrotas += 1;
-                        puntos += 1; // Derrota
-                    }
-                } else if (p.equipoVisitanteId === eq.id) {
-                    puntos_favor += p.marcadorVisitante;
-                    puntos_contra += p.marcadorLocal;
-                    if (p.marcadorVisitante > p.marcadorLocal) {
-                        victorias += 1;
-                        puntos += 2;
-                    } else {
-                        derrotas += 1;
-                        puntos += 1;
-                    }
-                }
-            });
+/** Estadísticas de un equipo en un subconjunto de partidos */
+const calcStats = (equipoId: string, partidos: Partido[]) => {
+    let pts = 0, pf = 0, pc = 0;
+    for (const p of partidos) {
+        const esLocal = p.equipoLocalId === equipoId;
+        const esVisitante = p.equipoVisitanteId === equipoId;
+        if (!esLocal && !esVisitante) continue;
 
-            return {
-                ...eq,
-                victorias,
-                derrotas,
-                puntos,
-                puntos_favor,
-                puntos_contra
-            };
-        });
-    }, [equipos, partidos]);
+        const miMarcador = esLocal ? p.marcadorLocal : p.marcadorVisitante;
+        const suMarcador = esLocal ? p.marcadorVisitante : p.marcadorLocal;
+        pf += miMarcador;
+        pc += suMarcador;
+        pts += miMarcador > suMarcador ? 2 : miMarcador < suMarcador ? 1 : 0;
+    }
+    return { pts, pf, pc, dif: pf - pc };
+};
 
-    const getGroupLabel = (groupCode: string) => {
-        const catNorm = (categoria || '').trim().toUpperCase();
-        if (catNorm === 'LIBRE') {
-            if (groupCode === 'A') return 'CONFERENCIA ESTE';
-            if (groupCode === 'B') return 'CONFERENCIA OESTE';
+/**
+ * Ordena un grupo de equipos empatados en puntos usando los criterios
+ * del Apéndice D.1.3 FIBA 2024. Aplica reinicio de criterios si el
+ * sub-grupo de empatados se reduce.
+ */
+const resolverEmpate = (empatados: EquipoConStats[], partidosRegular: Partido[]): EquipoConStats[] => {
+    if (empatados.length <= 1) return empatados;
+
+    const ids = empatados.map(e => e.id);
+
+    // Partidos H2H solo entre los empatados
+    const h2h = partidosRegular.filter(
+        p => ids.includes(p.equipoLocalId) && ids.includes(p.equipoVisitanteId)
+    );
+
+    // Stats H2H de cada equipo
+    const statsH2H = Object.fromEntries(empatados.map(e => [e.id, calcStats(e.id, h2h)]));
+
+    // Comparador por criterios D.1.3
+    const comparar = (a: EquipoConStats, b: EquipoConStats): number => {
+        const ha = statsH2H[a.id];
+        const hb = statsH2H[b.id];
+
+        // Criterio 1: récord H2H (puntos H2H: 2=win, 1=loss)
+        if (hb.pts !== ha.pts) return hb.pts - ha.pts;
+        // Criterio 2: diferencia de puntos H2H
+        if (hb.dif !== ha.dif) return hb.dif - ha.dif;
+        // Criterio 3: puntos a favor H2H
+        if (hb.pf !== ha.pf) return hb.pf - ha.pf;
+        // Criterio 4: diferencia de puntos en TODOS los partidos del grupo
+        if (b.dif !== a.dif) return b.dif - a.dif;
+        // Criterio 5: puntos a favor en TODOS los partidos del grupo
+        if (b.puntos_favor !== a.puntos_favor) return b.puntos_favor - a.puntos_favor;
+        // Criterio 6: sorteo → mantenemos orden original
+        return 0;
+    };
+
+    // Ordenamos por los criterios
+    const ordenados = [...empatados].sort(comparar);
+
+    // Reinicio: si un subgrupo sigue empatado en TODOS los criterios H2H,
+    // debemos procesar ese subgrupo recursivamente con sus propios partidos H2H.
+    // Detectamos los sub-grupos que quedaron "juntos" tras el sort.
+    const resultado: EquipoConStats[] = [];
+    let i = 0;
+    while (i < ordenados.length) {
+        let j = i + 1;
+        // Agrupar equipos que son idénticos en todos los criterios
+        while (j < ordenados.length && comparar(ordenados[i], ordenados[j]) === 0) {
+            j++;
         }
-        return `GRUPO ${groupCode}`;
-    };
+        const subgrupo = ordenados.slice(i, j);
+        // Si el subgrupo es menor al original, hay oportunidad de reordenar
+        if (subgrupo.length > 1 && subgrupo.length < empatados.length) {
+            // Reinicio recursivo para el subgrupo
+            resultado.push(...resolverEmpate(subgrupo, partidosRegular));
+        } else {
+            resultado.push(...subgrupo);
+        }
+        i = j;
+    }
 
-    const sortFIBARule = (teams: Equipo[]) => {
-        return [...teams].sort((a, b) => {
-            if (b.puntos !== a.puntos) return b.puntos - a.puntos;
+    return resultado;
+};
 
-            const regularMatches = partidos.filter(p => {
-                const fase = (p.fase || '').trim().toUpperCase();
-                return p.estatus === 'finalizado' && (fase === 'REGULAR' || fase === '');
-            });
+/**
+ * Ordenación principal del grupo:
+ * 1. Ordena por puntos generales (D.1.1)
+ * 2. Agrupa empatados y aplica D.1.3
+ */
+const sortFIBA = (equipos: EquipoConStats[], partidosRegular: Partido[]): EquipoConStats[] => {
+    const porPuntos = [...equipos].sort((a, b) => b.puntos - a.puntos);
 
-            const tiedTeamsIds = teams.filter(t => t.puntos === a.puntos).map(t => t.id);
-            const h2hMatches = regularMatches.filter(p => 
-                tiedTeamsIds.includes(p.equipoLocalId) && 
-                tiedTeamsIds.includes(p.equipoVisitanteId)
-            );
+    const resultado: EquipoConStats[] = [];
+    let i = 0;
+    while (i < porPuntos.length) {
+        let j = i + 1;
+        while (j < porPuntos.length && porPuntos[j].puntos === porPuntos[i].puntos) j++;
+        const empatados = porPuntos.slice(i, j);
+        resultado.push(...resolverEmpate(empatados, partidosRegular));
+        i = j;
+    }
+    return resultado;
+};
 
-            const getH2HStats = (teamId: string) => {
-                let h2hPts = 0, h2hPF = 0, h2hPC = 0;
-                h2hMatches.forEach(m => {
-                    if (m.equipoLocalId === teamId) {
-                        h2hPF += m.marcadorLocal;
-                        h2hPC += m.marcadorVisitante;
-                        h2hPts += m.marcadorLocal > m.marcadorVisitante ? 2 : 1;
-                    } else if (m.equipoVisitanteId === teamId) {
-                        h2hPF += m.marcadorVisitante;
-                        h2hPC += m.marcadorLocal;
-                        h2hPts += m.marcadorVisitante > m.marcadorLocal ? 2 : 1;
-                    }
-                });
-                return { h2hPts, h2hDif: h2hPF - h2hPC, h2hPF };
-            };
+// ─────────────────────────────────────────────
+// COMPONENTE: Fila de equipo en la tabla
+// ─────────────────────────────────────────────
+const TeamRow = memo(({ eq, index, color }: { eq: EquipoConStats; index: number; color: string }) => {
+    const [imgError, setImgError] = React.useState(false);
+    const esLider = index === 0;
 
-            const statsA = getH2HStats(a.id);
-            const statsB = getH2HStats(b.id);
+    return (
+        <tr style={{
+            borderBottom: '1px solid #f1f5f9',
+            background: esLider ? `${color}08` : 'transparent',
+            transition: 'background 0.15s',
+        }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+            onMouseLeave={e => (e.currentTarget.style.background = esLider ? `${color}08` : 'transparent')}
+        >
+            {/* Posición */}
+            <td style={{ padding: '12px 10px', textAlign: 'center', width: 40 }}>
+                <div style={{
+                    width: 26, height: 26, borderRadius: '50%', margin: '0 auto',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: index < 2 ? color : '#f1f5f9',
+                    color: index < 2 ? 'white' : '#94a3b8',
+                    fontSize: '0.7rem', fontWeight: 900,
+                }}>
+                    {index + 1}
+                </div>
+            </td>
 
-            if (statsB.h2hPts !== statsA.h2hPts) return statsB.h2hPts - statsA.h2hPts;
-            if (statsB.h2hDif !== statsA.h2hDif) return statsB.h2hDif - statsA.h2hDif;
-            if (statsB.h2hPF !== statsA.h2hPF) return statsB.h2hPF - statsA.h2hPF;
+            {/* Equipo */}
+            <td style={{ padding: '10px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                        width: 36, height: 36, borderRadius: '50%',
+                        border: '1.5px solid #e2e8f0', overflow: 'hidden',
+                        background: 'white', display: 'flex',
+                        justifyContent: 'center', alignItems: 'center', flexShrink: 0,
+                    }}>
+                        <img
+                            src={imgError ? DEFAULT_LOGO : (eq.logoUrl || DEFAULT_LOGO)}
+                            alt={eq.nombre}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={() => setImgError(true)}
+                        />
+                    </div>
+                    <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                        {eq.nombre.toUpperCase()}
+                    </span>
+                </div>
+            </td>
 
-            return (b.puntos_favor - b.puntos_contra) - (a.puntos_favor - a.puntos_contra);
-        });
-    };
+            {/* JJ */}
+            <td style={tdStyle}><span style={statStyle('#64748b')}>{eq.jj}</span></td>
+            {/* JG */}
+            <td style={tdStyle}><span style={statStyle('#10b981')}>{eq.victorias}</span></td>
+            {/* JP */}
+            <td style={tdStyle}><span style={statStyle('#ef4444')}>{eq.derrotas}</span></td>
+            {/* DIF */}
+            <td style={tdStyle}>
+                <span style={statStyle(eq.dif >= 0 ? '#3b82f6' : '#ef4444')}>
+                    {eq.dif > 0 ? `+${eq.dif}` : eq.dif}
+                </span>
+            </td>
+            {/* PTS */}
+            <td style={{ ...tdStyle, background: `${color}0d` }}>
+                <span style={{ fontSize: '1rem', fontWeight: 900, color }}>{eq.puntos}</span>
+            </td>
+        </tr>
+    );
+});
 
-    const grupoA = sortFIBARule(equiposConStatsReales.filter(e => e.grupo?.toUpperCase() === 'A' || e.grupo?.toUpperCase() === 'ÚNICO'));
-    const grupoB = sortFIBARule(equiposConStatsReales.filter(e => e.grupo?.toUpperCase() === 'B'));
+const tdStyle: React.CSSProperties = { padding: '12px 8px', textAlign: 'center' };
+const statStyle = (color: string): React.CSSProperties => ({ fontWeight: 700, color, fontSize: '0.82rem' });
 
-    const RenderTable = ({ teams, groupName, color }: { teams: Equipo[], groupName: string, color: string }) => (
-        <div style={{ background: 'white', borderRadius: '28px', boxShadow: '0 12px 35px rgba(0,0,0,0.1)', marginBottom: '35px', overflow: 'hidden', border: `2px solid ${color}` }}>
-            <div style={{ background: color, color: 'white', padding: '16px', fontWeight: '900', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '1px', fontSize: '1.1rem' }}>
-                {groupName} • FASE REGULAR
+// ─────────────────────────────────────────────
+// COMPONENTE: Tabla de grupo
+// ─────────────────────────────────────────────
+const GroupTable = memo(({ teams, groupName, color }: { teams: EquipoConStats[]; groupName: string; color: string }) => {
+    if (teams.length === 0) return null;
+    return (
+        <div style={{
+            background: 'white', borderRadius: 24,
+            boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
+            marginBottom: 28, overflow: 'hidden',
+            border: `1.5px solid ${color}30`,
+        }}>
+            {/* Header del grupo */}
+            <div style={{
+                background: color, color: 'white',
+                padding: '14px 20px', fontWeight: 900,
+                textTransform: 'uppercase', letterSpacing: '1.5px',
+                fontSize: '0.9rem', display: 'flex',
+                alignItems: 'center', gap: 10,
+            }}>
+                <span>🏀</span>
+                <span>{groupName}</span>
+                <span style={{ marginLeft: 'auto', fontSize: '0.6rem', opacity: 0.7, letterSpacing: '1px' }}>FASE REGULAR</span>
             </div>
-            <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
-                    <thead style={{ background: '#f1f5f9', color: '#475569', fontSize: '0.65rem', textTransform: 'uppercase' }}>
-                        <tr>
-                            <th style={{ padding: '15px' }}>POS</th>
-                            <th style={{ padding: '15px', textAlign: 'left' }}>EQUIPO</th>
-                            <th>JJ</th>
-                            <th>JG</th>
-                            <th>JP</th>
-                            <th>DIF</th>
-                            <th style={{ background: 'rgba(0,0,0,0.05)', color: '#1e3a8a', width: '60px' }}>PTS</th>
+
+            {/* Tabla */}
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', minWidth: 420 }}>
+                    <thead>
+                        <tr style={{ background: '#f8fafc', color: '#94a3b8', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                            <th style={{ padding: '10px', width: 40 }}>#</th>
+                            <th style={{ padding: '10px', textAlign: 'left' }}>Equipo</th>
+                            <th style={{ padding: '10px' }}>JJ</th>
+                            <th style={{ padding: '10px' }}>JG</th>
+                            <th style={{ padding: '10px' }}>JP</th>
+                            <th style={{ padding: '10px' }}>DIF</th>
+                            <th style={{ padding: '10px', background: `${color}15`, color, fontWeight: 900, minWidth: 50 }}>PTS</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {teams.map((eq, index) => {
-                            const jj = eq.victorias + eq.derrotas;
-                            const dif = eq.puntos_favor - eq.puntos_contra;
-                            return (
-                                <tr key={eq.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                    <td style={{ padding: '15px', fontWeight: 'bold', color: '#94a3b8' }}>{index + 1}</td>
-                                    <td style={{ padding: '10px 15px', textAlign: 'left' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            {/* CONTENEDOR CIRCULAR AJUSTADO */}
-                                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #e2e8f0', overflow: 'hidden', background: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
-                                                <img src={eq.logoUrl || DEFAULT_LOGO} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="logo" />
-                                            </div>
-                                            <span style={{ fontWeight: '900', color: '#1e293b', fontSize: '0.8rem' }}>{eq.nombre.toUpperCase()}</span>
-                                        </div>
-                                    </td>
-                                    <td style={{ fontWeight: '600', color: '#64748b' }}>{jj}</td>
-                                    <td style={{ color: '#10b981', fontWeight: 'bold' }}>{eq.victorias}</td>
-                                    <td style={{ color: '#ef4444', fontWeight: 'bold' }}>{eq.derrotas}</td>
-                                    <td style={{ fontWeight: 'bold', color: dif >= 0 ? '#3b82f6' : '#ef4444' }}>
-                                        {dif > 0 ? `+${dif}` : dif}
-                                    </td>
-                                    <td style={{ background: 'rgba(0,0,0,0.02)', fontWeight: '900', color: color, fontSize: '1.2rem' }}>{eq.puntos}</td>
-                                </tr>
-                            );
-                        })}
+                        {teams.map((eq, i) => (
+                            <TeamRow key={eq.id} eq={eq} index={i} color={color} />
+                        ))}
                     </tbody>
                 </table>
             </div>
+
+            {/* Leyenda desempate */}
+            <div style={{
+                padding: '8px 16px', background: '#f8fafc',
+                borderTop: '1px solid #f1f5f9',
+                fontSize: '0.58rem', color: '#94a3b8', letterSpacing: '0.5px',
+            }}>
+                Desempate: Apéndice D FIBA 2024 • H2H récord → Dif. H2H → PF H2H → Dif. general → PF general
+            </div>
         </div>
     );
+});
+
+// ─────────────────────────────────────────────
+// COMPONENTE PRINCIPAL
+// ─────────────────────────────────────────────
+const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose, categoria }) => {
+
+    // Partidos regulares finalizados (única fuente de verdad)
+    const partidosRegular = useMemo(
+        () => partidos.filter(esPartidoRegular),
+        [partidos]
+    );
+
+    // Recalcular estadísticas desde los partidos (ignoramos los datos de la DB)
+    const equiposConStats = useMemo<EquipoConStats[]>(() => {
+        return equipos.map(eq => {
+            let victorias = 0, derrotas = 0, puntos = 0, pf = 0, pc = 0;
+            for (const p of partidosRegular) {
+                const esLocal = p.equipoLocalId === eq.id;
+                const esVisitante = p.equipoVisitanteId === eq.id;
+                if (!esLocal && !esVisitante) continue;
+
+                const miMarcador = esLocal ? p.marcadorLocal : p.marcadorVisitante;
+                const suMarcador = esLocal ? p.marcadorVisitante : p.marcadorLocal;
+                pf += miMarcador;
+                pc += suMarcador;
+
+                if (miMarcador > suMarcador) {
+                    victorias++; puntos += 2;
+                } else if (miMarcador < suMarcador) {
+                    derrotas++; puntos += 1;
+                }
+                // Empate: no suma puntos (no debería ocurrir en basquetbol, pero lo manejamos)
+            }
+            return { ...eq, victorias, derrotas, puntos, puntos_favor: pf, puntos_contra: pc, jj: victorias + derrotas, dif: pf - pc };
+        });
+    }, [equipos, partidosRegular]);
+
+    // Separar grupos y ordenar con reglas FIBA
+    const grupoA = useMemo(() => {
+        const equipos = equiposConStats.filter(e => {
+            const g = e.grupo?.toUpperCase();
+            return g === 'A' || g === 'ÚNICO';
+        });
+        return sortFIBA(equipos, partidosRegular);
+    }, [equiposConStats, partidosRegular]);
+
+    const grupoB = useMemo(() => {
+        const equipos = equiposConStats.filter(e => e.grupo?.toUpperCase() === 'B');
+        return sortFIBA(equipos, partidosRegular);
+    }, [equiposConStats, partidosRegular]);
+
+    const getGroupLabel = (groupCode: 'A' | 'B') => {
+        const cat = (categoria ?? '').trim().toUpperCase();
+        if (cat === 'LIBRE') return groupCode === 'A' ? 'CONFERENCIA ESTE' : 'CONFERENCIA OESTE';
+        if (grupoA.some(e => e.grupo?.toUpperCase() === 'ÚNICO')) return 'TABLA GENERAL';
+        return `GRUPO ${groupCode}`;
+    };
+
+    const hayDatos = equiposConStats.length > 0;
 
     return (
-        <div style={{ minHeight: '100vh', background: '#ffffff', paddingBottom: '120px' }}>
-            <div style={{ background: '#1e3a8a', color: 'white', padding: '30px 20px', borderRadius: '0 0 40px 40px', marginBottom: '30px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: '900px', margin: '0 auto' }}>
+        <div style={{ minHeight: '100vh', background: '#f8fafc', paddingBottom: 100, fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
+
+            {/* Header */}
+            <div style={{
+                background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)',
+                color: 'white', padding: '28px 20px 36px',
+                borderRadius: '0 0 36px 36px', marginBottom: 28,
+                boxShadow: '0 8px 30px rgba(30,58,138,0.3)',
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: 860, margin: '0 auto' }}>
                     <div>
-                        <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900 }}>TABLAS {categoria}</h2>
-                        <p style={{ margin: '5px 0 0 0', fontSize: '0.65rem', fontWeight: 'bold', color: '#fbbf24' }}>
-                            CONTABILIZANDO ÚNICAMENTE FASE REGULAR
+                        <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, letterSpacing: '1px' }}>
+                            TABLAS {categoria.toUpperCase()}
+                        </h2>
+                        <p style={{ margin: '4px 0 0', fontSize: '0.6rem', fontWeight: 700, color: '#fbbf24', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                            Solo fase regular • Desempate Apéndice D FIBA 2024
                         </p>
                     </div>
-                    <button onClick={onClose} style={{ background: 'white', color: '#1e3a8a', border: 'none', padding: '10px 20px', borderRadius: '15px', fontWeight: '900', cursor: 'pointer' }}>CERRAR</button>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            background: 'rgba(255,255,255,0.15)', color: 'white',
+                            border: '1px solid rgba(255,255,255,0.3)',
+                            padding: '9px 18px', borderRadius: 12,
+                            fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem',
+                            backdropFilter: 'blur(8px)', transition: 'background 0.2s',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.25)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
+                    >
+                        ✕ CERRAR
+                    </button>
                 </div>
             </div>
 
-            <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
-                {equiposConStatsReales.length === 0 ? (
-                    <p style={{textAlign:'center'}}>Cargando equipos...</p>
+            {/* Tablas */}
+            <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 16px' }}>
+                {!hayDatos ? (
+                    <div style={{ textAlign: 'center', color: '#94a3b8', padding: 60, fontSize: '0.9rem' }}>
+                        Cargando equipos...
+                    </div>
                 ) : (
                     <>
-                        {grupoA.length > 0 && <RenderTable teams={grupoA} groupName={getGroupLabel('A')} color="#1e3a8a" />}
-                        {grupoB.length > 0 && <RenderTable teams={grupoB} groupName={getGroupLabel('B')} color="#d97706" />}
+                        {grupoA.length > 0 && (
+                            <GroupTable teams={grupoA} groupName={getGroupLabel('A')} color="#1e3a8a" />
+                        )}
+                        {grupoB.length > 0 && (
+                            <GroupTable teams={grupoB} groupName={getGroupLabel('B')} color="#d97706" />
+                        )}
                     </>
                 )}
             </div>
