@@ -26,6 +26,7 @@ interface PlayerStat {
     ppg: number; rpg: number; spg: number; bpg: number;
     tpg: number; dpg: number; ftpg: number; valpg: number;
     logoUrl?: string;
+    fotoUrl?: string;
 }
 
 type ViewMode = 'promedio' | 'total';
@@ -143,19 +144,36 @@ const LeaderSection = memo(({
                     RANKING #1
                 </div>
 
-                {/* Logo del equipo */}
+                {/* Foto del jugador líder #1 */}
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
                     <div style={{
                         width: 88, height: 88, borderRadius: '50%',
-                        border: '4px solid white', background: 'white', overflow: 'hidden',
-                        boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
+                        border: '4px solid white', overflow: 'hidden',
+                        boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
+                        background: 'white',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                        <img
-                            src={leader.logoUrl || DEFAULT_LOGO}
-                            alt={leader.equipo}
-                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                            onError={e => { e.currentTarget.src = DEFAULT_LOGO; }}
-                        />
+                        {leader.fotoUrl ? (
+                            <img
+                                src={leader.fotoUrl}
+                                alt={leader.nombre}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={e => {
+                                    e.currentTarget.style.display = 'none';
+                                    (e.currentTarget.nextSibling as HTMLElement)?.style.setProperty('display','flex');
+                                }}
+                            />
+                        ) : null}
+                        {/* Fallback: inicial del nombre */}
+                        <div style={{
+                            display: leader.fotoUrl ? 'none' : 'flex',
+                            width: '100%', height: '100%',
+                            alignItems: 'center', justifyContent: 'center',
+                            background: 'rgba(255,255,255,0.25)',
+                            fontSize: '2.2rem', fontWeight: 900, color: 'white',
+                        }}>
+                            {(leader.nombre || '?').charAt(0).toUpperCase()}
+                        </div>
                     </div>
                 </div>
 
@@ -307,6 +325,15 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                     if (data.nombre) logoMap[data.nombre.trim().toUpperCase()] = data.logoUrl || DEFAULT_LOGO;
                 });
 
+                // 1b. Fotos de jugadores (jugadorId → fotoUrl)
+                const colJugadores = isMaster ? 'jugadores' : `jugadores_${catStr}`;
+                const jugSnap = await getDocs(collection(db, colJugadores));
+                const fotoMap: Record<string, string> = {};
+                jugSnap.forEach(d => {
+                    const url = d.data().fotoUrl;
+                    if (url) fotoMap[d.id] = url;
+                });
+
                 // 2. Juegos de Fase Regular finalizados
                 const calSnap = await getDocs(
                     query(collection(db, colCalendario), where('estatus', '==', 'finalizado'))
@@ -349,6 +376,7 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                                     totalTirosLibres: 0, totalValoracion: 0,
                                     partidosJugados: 0,
                                     logoUrl: logoMap[equipoKey] || DEFAULT_LOGO,
+                                    fotoUrl: fotoMap[jId] || '',
                                 };
                             }
                             const acc = aggregated[jId];

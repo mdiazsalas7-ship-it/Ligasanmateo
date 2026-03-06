@@ -429,48 +429,50 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         }
     }, [matchData, colCal, showToast]);
 
-    // ── DESHACER última jugada ──
-    const handleUndo = useCallback(async () => {
-        const ultima = recentPlays[0];
-        if (!ultima) { showToast('No hay jugadas para deshacer', '#f59e0b'); return; }
+    // ── DESHACER jugada (cualquiera del historial) ──
+    const handleDeleteJugada = useCallback(async (jugada: Jugada) => {
+        if (!matchData) return;
 
         showConfirm(
-            `¿Deshacer "${ultima.accion.toUpperCase()}" de ${ultima.jugadorNombre}?`,
+            `¿Borrar "${jugada.accion.toUpperCase()}" de ${jugada.jugadorNombre}?`,
             async () => {
                 try {
-                    const pts = ultima.puntos ?? 0;
+                    const pts = jugada.puntos ?? 0;
 
-                    // 1. Borrar la jugada del historial
-                    await deleteDoc(doc(db, 'jugadas_partido', ultima.id));
+                    // 1. Borrar del historial
+                    await deleteDoc(doc(db, 'jugadas_partido', jugada.id));
 
                     // 2. Restar del marcador si tenía puntos
                     if (pts > 0) {
                         await updateDoc(doc(db, colCal, matchData.id), {
-                            [ultima.equipo === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(-pts),
+                            [jugada.equipo === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(-pts),
                         });
                     }
 
                     // 3. Restar de stats_partido
-                    const statDocId = `${matchData.id}_${ultima.jugadorId}`;
-                    const statRef = doc(db, 'stats_partido', statDocId);
+                    const statRef = doc(db, 'stats_partido', `${matchData.id}_${jugada.jugadorId}`);
                     const statSnap = await getDoc(statRef);
-
                     if (statSnap.exists()) {
-                        const updates: Record<string, any> = {
-                            [ultima.accion]: increment(-1),
-                        };
+                        const updates: Record<string, any> = { [jugada.accion]: increment(-1) };
                         if (pts > 0) updates.puntos = increment(-pts);
                         await updateDoc(statRef, updates);
                     }
 
-                    showToast('↩️ Jugada deshecha', '#f59e0b');
+                    showToast('↩️ Jugada borrada', '#f59e0b');
                 } catch (e) {
-                    showToast('Error al deshacer ⚠️', '#ef4444');
+                    showToast('Error al borrar ⚠️', '#ef4444');
                     console.error(e);
                 }
             }
         );
-    }, [recentPlays, matchData, colCal, showToast]);
+    }, [matchData, colCal, showToast]);
+
+    // Atajo para el botón ↩️ DESHACER (borra la última)
+    const handleUndo = useCallback(() => {
+        const ultima = recentPlays[0];
+        if (!ultima) { showToast('No hay jugadas para deshacer', '#f59e0b'); return; }
+        handleDeleteJugada(ultima);
+    }, [recentPlays, handleDeleteJugada, showToast]);
 
     // ── Finalizar partido ──
     const handleFinalize = useCallback(() => {
@@ -895,23 +897,52 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                                     background: i === 0 ? '#0f2d1f' : '#0f172a',
                                     border: `1px solid ${i === 0 ? '#10b981' : '#1e293b'}`,
                                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    gap: 8,
                                 }}>
-                                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                                    {/* Info de la jugada */}
+                                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flex: 1, minWidth: 0 }}>
                                         <span style={{
                                             background: play.equipo === 'local' ? '#1e3a8a' : '#7f1d1d',
-                                            color: 'white', padding: '2px 7px', borderRadius: 4, fontWeight: 900, fontSize: '0.72rem',
+                                            color: 'white', padding: '2px 7px', borderRadius: 4,
+                                            fontWeight: 900, fontSize: '0.72rem', flexShrink: 0,
                                         }}>
                                             #{play.jugadorNumero}
                                         </span>
-                                        <div>
-                                            <div style={{ fontWeight: 700, fontSize: '0.78rem' }}>{play.jugadorNombre}</div>
-                                            {i === 0 && <div style={{ fontSize: '0.55rem', color: '#10b981' }}>← última jugada</div>}
+                                        <div style={{ minWidth: 0 }}>
+                                            <div style={{ fontWeight: 700, fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {play.jugadorNombre}
+                                            </div>
+                                            <div style={{ fontSize: '0.55rem', color: i === 0 ? '#10b981' : '#475569' }}>
+                                                {i === 0 ? '← última' : `#${i + 1}`}
+                                            </div>
                                         </div>
                                     </div>
-                                    <span style={{ fontWeight: 900, color: play.puntos > 0 ? '#10b981' : '#f59e0b', fontSize: '0.75rem' }}>
+
+                                    {/* Acción */}
+                                    <span style={{
+                                        fontWeight: 900, flexShrink: 0,
+                                        color: play.puntos > 0 ? '#10b981' : '#f59e0b',
+                                        fontSize: '0.72rem',
+                                    }}>
                                         {play.accion.toUpperCase()}
                                         {play.puntos > 0 && ` +${play.puntos}`}
                                     </span>
+
+                                    {/* Botón borrar esta jugada */}
+                                    <button
+                                        onClick={() => handleDeleteJugada(play)}
+                                        style={{
+                                            background: 'rgba(239,68,68,0.15)',
+                                            border: '1px solid rgba(239,68,68,0.3)',
+                                            color: '#f87171', borderRadius: 6,
+                                            width: 28, height: 28, flexShrink: 0,
+                                            cursor: 'pointer', fontSize: '0.75rem',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        }}
+                                        title="Borrar esta jugada"
+                                    >
+                                        🗑️
+                                    </button>
                                 </div>
                             ))}
                         </div>

@@ -7,6 +7,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 // Componentes
 import Login from './Login';
 import AdminEquipos from './AdminEquipos';
+import TeamsPublicViewer from './TeamsPublicViewer';
 import CalendarViewer from './CalendarViewer';
 import MesaTecnica from './MesaTecnica';
 import StatsViewer from './StatsViewer';
@@ -507,8 +508,8 @@ function App() {
                                                 <p style={{ fontSize: '0.55rem', fontWeight: 900, marginTop: 5 }}>{resultadosRecientes[juegoIndex].equipoVisitanteNombre}</p>
                                             </div>
                                         </div>
-                                        <button onClick={() => window.open('https://youtube.com/@ligametropolitanadelejeeste?si=XQmFk20xUYp9wKjy', '_blank')} style={{ width: '100%', padding: 10, borderRadius: 15, border: 'none', background: '#f59e0b', color: 'white', fontWeight: 900, fontSize: '0.65rem', cursor: 'pointer' }}>
-                                            ▶ CANAL @ligametropolitanadelejeeste
+                                        <button onClick={() => window.open('https://www.youtube.com/@barbakanzler', '_blank')} style={{ width: '100%', padding: 10, borderRadius: 15, border: 'none', background: '#f59e0b', color: 'white', fontWeight: 900, fontSize: '0.65rem', cursor: 'pointer' }}>
+                                            ▶ CANAL @BARBAKANZLER
                                         </button>
                                     </div>
                                 ) : (
@@ -682,6 +683,7 @@ function App() {
                         {activeView === 'tabla'       && <StandingsViewer equipos={[...equiposA, ...equiposB]} partidos={allMatchesGlobal} categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'calendario'  && <CalendarViewer categoria={categoriaActiva} rol={user?.rol} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'mesa'        && isAdmin && <MesaTecnica categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'equipos_pub'  && <TeamsPublicViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'equipos'     && isAdmin && <AdminEquipos categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'adminVideos' && isAdmin && <AdminVideos onClose={() => setActiveView('dashboard')} />}
                     </>
@@ -692,17 +694,23 @@ function App() {
             <nav style={{
                 position: 'fixed', bottom: 20, left: 20, right: 20,
                 background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(10px)',
-                height: 75, display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+                height: 75, display: 'flex', justifyContent: 'flex-start',
+                alignItems: 'center', overflowX: 'auto',
                 borderRadius: 35, boxShadow: '0 15px 40px rgba(0,0,0,0.12)',
                 border: '1.5px solid #f1f5f9', zIndex: 1000,
-            }}>
+                padding: '0 10px', gap: 2,
+                scrollbarWidth: 'none',
+            }}
+                className="no-scrollbar"
+            >
                 {[
-                    { v: 'calendario', i: '📅', l: 'Juegos'  },
-                    { v: 'tabla',      i: '🏆', l: 'Tablas'  },
-                    { v: 'dashboard',  i: '🏠', l: 'Inicio'  },
-                    { v: 'playoff',    i: '🔥', l: 'Playoff' },
-                    { v: 'stats',      i: '📊', l: 'Líderes' },
-                    { v: 'noticias',   i: '📰', l: 'Noticias'},
+                    { v: 'calendario',  i: '📅', l: 'Juegos'   },
+                    { v: 'tabla',       i: '🏆', l: 'Tablas'   },
+                    { v: 'dashboard',   i: '🏠', l: 'Inicio'   },
+                    { v: 'playoff',     i: '🔥', l: 'Playoff'  },
+                    { v: 'stats',       i: '📊', l: 'Líderes'  },
+                    { v: 'equipos_pub', i: '🛡️', l: 'Equipos'  },
+                    { v: 'noticias',    i: '📰', l: 'Noticias' },
                 ].map(item => (
                     <button
                         key={item.v}
@@ -712,6 +720,7 @@ function App() {
                             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                             color: activeView === item.v ? '#1e3a8a' : '#94a3b8',
                             cursor: 'pointer', transition: '0.3s',
+                            flex: '1 0 auto', minWidth: 52, padding: '0 4px',
                         }}
                     >
                         <span style={{ fontSize: '1.3rem', transform: activeView === item.v ? 'scale(1.25)' : 'scale(1)', transition: '0.3s' }}>{item.i}</span>
