@@ -318,6 +318,13 @@ function App() {
                     if (vis) teamGamesCount[vis] = (teamGamesCount[vis] || 0) + 1;
                 });
 
+                // Fotos de jugadores para el card del líder
+                const colJugadores = getColName('jugadores', categoriaActiva);
+                const jugSnap = await getDocs(collection(db, colJugadores));
+                if (abortToken.cancelled) return;
+                const fotoMap: Record<string, string> = {};
+                jugSnap.forEach(d => { if (d.data().fotoUrl) fotoMap[d.id] = d.data().fotoUrl; });
+
                 const statsSnap = await getDocs(collection(db, 'stats_partido'));
                 if (abortToken.cancelled) return;
 
@@ -330,7 +337,11 @@ function App() {
                     const plyId = stat.jugadorId;
                     const eqKey = (stat.equipo || '').trim().toUpperCase();
                     if (!aggregated[plyId]) {
-                        aggregated[plyId] = { nombre: stat.nombre, equipo: eqKey, pts: 0, reb: 0, pj: 0 };
+                        aggregated[plyId] = {
+                            nombre: stat.nombre, equipo: eqKey,
+                            pts: 0, reb: 0, pj: 0,
+                            fotoUrl: fotoMap[plyId] || '',
+                        };
                     }
                     const acc = aggregated[plyId];
                     acc.pts += (Number(stat.tirosLibres) || 0)
@@ -539,23 +550,54 @@ function App() {
 
                             {/* Líder */}
                             <div onClick={() => setActiveView('stats')} style={{ height: 220, background: '#ffffff', borderRadius: 24, border: `2.5px solid ${leadersList[leaderIndex]?.color || '#eee'}`, cursor: 'pointer', textAlign: 'center', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden', boxShadow: `0 8px 25px ${leadersList[leaderIndex]?.color || '#eee'}20` }}>
-                                {leadersList.length > 0 ? (
-                                    <div key={leaderIndex} className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                                        <div style={{ background: leadersList[leaderIndex].color, padding: '6px 12px', color: 'white', fontSize: '0.6rem', fontWeight: 900 }}>
-                                            {leadersList[leaderIndex].icon} LÍDER REGULAR {leadersList[leaderIndex].label}
-                                        </div>
-                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: 10 }}>
-                                            <div style={{ width: 55, height: 55, borderRadius: '50%', background: 'white', overflow: 'hidden', border: `2.5px solid ${leadersList[leaderIndex].color}`, marginBottom: 8 }}>
-                                                <img src={teamLogos[leadersList[leaderIndex].p?.equipo?.toUpperCase()] || ''} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="" />
+                                {leadersList.length > 0 ? (() => {
+                                    const ldr = leadersList[leaderIndex];
+                                    const fotoUrl = ldr.p?.fotoUrl || '';
+                                    const logoUrl = teamLogos[ldr.p?.equipo?.toUpperCase()] || DEFAULT_LOGO;
+                                    const inicial = (ldr.p?.nombre || '?').charAt(0).toUpperCase();
+                                    return (
+                                        <div key={leaderIndex} className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                                            {/* Header coloreado */}
+                                            <div style={{ background: ldr.color, padding: '6px 10px', color: 'white', fontSize: '0.58rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                                {ldr.icon} LÍDER {ldr.label}
                                             </div>
-                                            <h3 style={{ fontSize: '0.8rem', fontWeight: 900, color: '#1e3a8a', margin: 0 }}>{leadersList[leaderIndex].p?.nombre}</h3>
-                                            <div style={{ fontSize: '1.8rem', fontWeight: 900, color: leadersList[leaderIndex].color }}>
-                                                {leadersList[leaderIndex].val}
-                                                <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>{leadersList[leaderIndex].unit}</span>
+
+                                            {/* Cuerpo */}
+                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '8px 10px', gap: 5 }}>
+                                                {/* Foto del jugador */}
+                                                <div style={{ width: 58, height: 58, borderRadius: '50%', overflow: 'hidden', border: `2.5px solid ${ldr.color}`, background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    {fotoUrl ? (
+                                                        <img src={fotoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt=""
+                                                            onError={e => { e.currentTarget.style.display='none'; (e.currentTarget.nextSibling as any).style.display='flex'; }}
+                                                        />
+                                                    ) : null}
+                                                    <div style={{ display: fotoUrl ? 'none' : 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', background: ldr.color, color: 'white', fontSize: '1.4rem', fontWeight: 900 }}>
+                                                        {inicial}
+                                                    </div>
+                                                </div>
+
+                                                {/* Nombre del jugador */}
+                                                <div style={{ fontSize: '0.72rem', fontWeight: 900, color: '#1e293b', lineHeight: 1.1, textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                                                    {ldr.p?.nombre}
+                                                </div>
+
+                                                {/* Logo + nombre del equipo */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                    <img src={logoUrl} style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: '50%', background: '#f1f5f9', border: '1px solid #e2e8f0' }} alt="" onError={e => { e.currentTarget.src = DEFAULT_LOGO; }} />
+                                                    <span style={{ fontSize: '0.5rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
+                                                        {ldr.p?.equipo}
+                                                    </span>
+                                                </div>
+
+                                                {/* Estadística */}
+                                                <div style={{ fontSize: '1.9rem', fontWeight: 900, color: ldr.color, lineHeight: 1 }}>
+                                                    {ldr.val}
+                                                    <span style={{ fontSize: '0.6rem', color: '#94a3b8', marginLeft: 2 }}>{ldr.unit}</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ) : (
+                                    );
+                                })() : (
                                     <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', color: '#94a3b8', padding: 20 }}>
                                         Cargando líderes...
                                     </div>
