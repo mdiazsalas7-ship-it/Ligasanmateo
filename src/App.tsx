@@ -339,7 +339,7 @@ function App() {
                     if (!aggregated[plyId]) {
                         aggregated[plyId] = {
                             nombre: stat.nombre, equipo: eqKey,
-                            pts: 0, reb: 0, pj: 0,
+                            pts: 0, reb: 0, rob: 0, tri: 0, blq: 0, pj: 0,
                             fotoUrl: fotoMap[plyId] || '',
                         };
                     }
@@ -347,7 +347,10 @@ function App() {
                     acc.pts += (Number(stat.tirosLibres) || 0)
                         + (Number(stat.dobles) || 0) * 2
                         + (Number(stat.triples) || 0) * 3;
-                    acc.reb += (Number(stat.rebotes) || 0);
+                    acc.reb += (Number(stat.rebotes)  || 0);
+                    acc.rob += (Number(stat.robos)    || 0);
+                    acc.tri += (Number(stat.triples)  || 0);
+                    acc.blq += (Number(stat.bloqueos) || 0);
                     acc.pj  += 1;
                 });
 
@@ -355,24 +358,34 @@ function App() {
                     const den = teamGamesCount[p.equipo] || p.pj || 1;
                     return {
                         ...p,
-                        ppg: parseFloat((p.pts / den).toFixed(1)),
-                        rpg: parseFloat((p.reb / den).toFixed(1)),
+                        ppg:  parseFloat((p.pts / den).toFixed(1)),
+                        rpg:  parseFloat((p.reb / den).toFixed(1)),
+                        spg:  parseFloat((p.rob / den).toFixed(1)),
+                        tpg:  parseFloat((p.tri / den).toFixed(1)),
+                        bpg:  parseFloat((p.blq / den).toFixed(1)),
                     };
                 });
 
-                // Solo mostrar líder si tiene al menos 1 partido y stat > 0
+                // Construir un líder por cada categoría estadística
                 if (playerList.length > 0) {
-                    const byPpg = [...playerList].sort((a, b) => b.ppg - a.ppg);
-                    const byRpg = [...playerList].sort((a, b) => b.rpg - a.rpg);
-                    const liderPts = byPpg[0];
-                    const liderReb = byRpg[0];
-
+                    const top = (key: string) => [...playerList].sort((a: any, b: any) => b[key] - a[key])[0];
+                    const cats = [
+                        { key: 'ppg',  label: 'PUNTOS',   unit: 'PPG', icon: '🔥', color: '#ef4444' },
+                        { key: 'rpg',  label: 'REBOTES',  unit: 'RPG', icon: '🖐️', color: '#10b981' },
+                        { key: 'spg',  label: 'ROBOS',    unit: 'RPG', icon: '🛡️', color: '#6366f1' },
+                        { key: 'tpg',  label: 'TRIPLES',  unit: '3PG', icon: '🏹', color: '#8b5cf6' },
+                        { key: 'bpg',  label: 'BLOQUEOS', unit: 'BPG', icon: '🚫', color: '#f43f5e' },
+                    ];
                     const nuevosLideres: any[] = [];
-                    if (liderPts?.ppg > 0) nuevosLideres.push({
-                        label: 'PUNTOS', p: liderPts, val: liderPts.ppg, unit: 'PPG', icon: '🔥', color: '#ef4444',
-                    });
-                    if (liderReb?.rpg > 0) nuevosLideres.push({
-                        label: 'REBOTES', p: liderReb, val: liderReb.rpg, unit: 'RPG', icon: '🖐️', color: '#10b981',
+                    cats.forEach(cat => {
+                        const lider = top(cat.key);
+                        if (lider && (lider[cat.key] as number) > 0) {
+                            nuevosLideres.push({
+                                label: cat.label, unit: cat.unit,
+                                icon: cat.icon, color: cat.color,
+                                p: lider, val: lider[cat.key],
+                            });
+                        }
                     });
                     setLeadersList(nuevosLideres);
                 }
@@ -519,9 +532,22 @@ function App() {
                                                 <p style={{ fontSize: '0.55rem', fontWeight: 900, marginTop: 5 }}>{resultadosRecientes[juegoIndex].equipoVisitanteNombre}</p>
                                             </div>
                                         </div>
-                                        <button onClick={() => window.open('https://www.youtube.com/@barbakanzler', '_blank')} style={{ width: '100%', padding: 10, borderRadius: 15, border: 'none', background: '#f59e0b', color: 'white', fontWeight: 900, fontSize: '0.65rem', cursor: 'pointer' }}>
-                                            ▶ CANAL @BARBAKANZLER
-                                        </button>
+                                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); window.open('https://www.youtube.com/@ligametropolitanadelejeeste', '_blank'); }}
+                                                style={{ flex: 1, padding: '8px 6px', borderRadius: 12, border: 'none', background: '#ff0000', color: 'white', fontWeight: 900, fontSize: '0.55rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                                            >
+                                                <img src="https://i.postimg.cc/XJ6rWrrL/image.png" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
+                                                LIGA OFICIAL
+                                            </button>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); window.open('https://www.tiktok.com/@barbakanzler', '_blank'); }}
+                                                style={{ flex: 1, padding: '8px 6px', borderRadius: 12, border: 'none', background: '#010101', color: 'white', fontWeight: 900, fontSize: '0.55rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                                            >
+                                                <img src="https://i.postimg.cc/RZ9XnGD5/channels4_profile.jpg" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
+                                                @BARBAKANZLER
+                                            </button>
+                                        </div>
                                     </div>
                                 ) : (
                                     <div style={{ height: '100%', background: '#f8fafc', borderRadius: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: '#94a3b8' }}>
