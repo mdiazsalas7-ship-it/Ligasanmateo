@@ -2,10 +2,9 @@ import React, { useState, useEffect, useMemo, memo } from 'react';
 import { db } from './firebase';
 import {
     collection, query, onSnapshot, orderBy,
-    deleteDoc, doc, getDocs, where, updateDoc, writeBatch
+    deleteDoc, doc, getDocs, where, updateDoc, writeBatch, addDoc, setDoc
 } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
-import MatchForm from './MatchForm';
 
 // ─────────────────────────────────────────────
 // TIPOS
@@ -38,6 +37,7 @@ interface Stat {
     nombre: string;
     equipo: string;
     equipoId?: string;
+    fotoUrl?: string;
     dobles?: number;
     triples?: number;
     tirosLibres?: number;
@@ -58,13 +58,11 @@ const getColName = (base: string, categoria: string) => {
     return (cat === 'MASTER40' || cat === 'MASTER') ? base : `${base}_${cat}`;
 };
 
-// FASES que se consideran playoff — cubre todos los valores usados en el proyecto
 const FASES_PLAYOFF = new Set(['FINAL', 'SEMIS', 'SEMIFINAL', 'CUARTOS', 'OCTAVOS', '3ER LUGAR', 'PLAYOFF', 'PLAYOFFS']);
 
 const esFasePlayoff = (fase?: string) =>
     fase ? FASES_PLAYOFF.has(fase.trim().toUpperCase()) : false;
 
-/** Formatea '2026-03-15' → 'Sábado 15 de Marzo' */
 const formatFecha = (dateStr: string): string => {
     try {
         const [y, m, d] = dateStr.split('-').map(Number);
@@ -75,7 +73,6 @@ const formatFecha = (dateStr: string): string => {
     }
 };
 
-/** Agrupa array de partidos por fechaAsignada, preservando el orden */
 const agruparPorFecha = (matches: Match[]): { fecha: string; partidos: Match[] }[] => {
     const map = new Map<string, Match[]>();
     for (const m of matches) {
@@ -112,6 +109,179 @@ const TeamLogo = memo(({ logoUrl, altText }: { logoUrl?: string; altText?: strin
         />
     );
 });
+
+// ─────────────────────────────────────────────
+// COMPONENTE: MatchForm (inline — reemplaza MatchForm.tsx borrado)
+// ─────────────────────────────────────────────
+const MatchForm: React.FC<{
+    matchToEdit: Match | null;
+    categoriaActiva: string;
+    equipos: Equipo[];
+    onSuccess: () => void;
+    onClose: () => void;
+}> = ({ matchToEdit, categoriaActiva, equipos, onSuccess, onClose }) => {
+    const [fecha, setFecha]             = useState(matchToEdit?.fechaAsignada ?? '');
+    const [hora, setHora]               = useState(matchToEdit?.hora ?? '');
+    const [localId, setLocalId]         = useState(matchToEdit?.equipoLocalId ?? '');
+    const [visitanteId, setVisitanteId] = useState(matchToEdit?.equipoVisitanteId ?? '');
+    const [fase, setFase]               = useState(matchToEdit?.fase ?? 'REGULAR');
+    const [grupo, setGrupo]             = useState(matchToEdit?.grupo ?? '');
+    const [estatus, setEstatus]         = useState(matchToEdit?.estatus ?? 'programado');
+    const [marcLocal, setMarcLocal]     = useState<string>(matchToEdit?.marcadorLocal?.toString() ?? '');
+    const [marcVisit, setMarcVisit]     = useState<string>(matchToEdit?.marcadorVisitante?.toString() ?? '');
+    const [saving, setSaving]           = useState(false);
+
+    const colCal = getColName('calendario', categoriaActiva);
+
+    const getEquipoNombre = (id: string) =>
+        equipos.find(e => e.id === id)?.nombre ?? '';
+
+    const handleSave = async () => {
+        if (!fecha || !localId || !visitanteId) {
+            alert('Completa fecha y ambos equipos');
+            return;
+        }
+        if (localId === visitanteId) {
+            alert('Los equipos no pueden ser el mismo');
+            return;
+        }
+        setSaving(true);
+        try {
+            const data: any = {
+                fechaAsignada: fecha,
+                hora: hora || null,
+                equipoLocalId: localId,
+                equipoLocalNombre: getEquipoNombre(localId),
+                equipoVisitanteId: visitanteId,
+                equipoVisitanteNombre: getEquipoNombre(visitanteId),
+                fase,
+                grupo: grupo || null,
+                estatus,
+                categoria: categoriaActiva,
+            };
+            if (estatus === 'finalizado') {
+                data.marcadorLocal     = parseInt(marcLocal) || 0;
+                data.marcadorVisitante = parseInt(marcVisit) || 0;
+            }
+            if (matchToEdit) {
+                await setDoc(doc(db, colCal, matchToEdit.id), data, { merge: true });
+            } else {
+                await addDoc(collection(db, colCal), data);
+            }
+            onSuccess();
+        } catch (e: any) {
+            alert('Error: ' + e.message);
+        }
+        setSaving(false);
+    };
+
+    const inputStyle: React.CSSProperties = {
+        width: '100%', padding: '9px 12px', borderRadius: 8,
+        border: '1px solid #e2e8f0', fontSize: '0.82rem',
+        background: '#f8fafc', boxSizing: 'border-box',
+    };
+    const labelStyle: React.CSSProperties = {
+        fontSize: '0.62rem', fontWeight: 800, color: '#64748b',
+        textTransform: 'uppercase', letterSpacing: '0.5px',
+        display: 'block', marginBottom: 4,
+    };
+
+    return (
+        <div style={{ padding: 20, fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 900, color: '#0f172a' }}>
+                    {matchToEdit ? '✏️ Editar Partido' : '➕ Nuevo Partido'}
+                </h3>
+                <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                {/* Fecha y hora */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                        <label style={labelStyle}>Fecha</label>
+                        <input type="date" style={inputStyle} value={fecha} onChange={e => setFecha(e.target.value)} />
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Hora</label>
+                        <input type="time" style={inputStyle} value={hora} onChange={e => setHora(e.target.value)} />
+                    </div>
+                </div>
+
+                {/* Equipos */}
+                <div>
+                    <label style={labelStyle}>Equipo Local</label>
+                    <select style={inputStyle} value={localId} onChange={e => setLocalId(e.target.value)}>
+                        <option value="">Seleccionar...</option>
+                        {equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.nombre}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label style={labelStyle}>Equipo Visitante</label>
+                    <select style={inputStyle} value={visitanteId} onChange={e => setVisitanteId(e.target.value)}>
+                        <option value="">Seleccionar...</option>
+                        {equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.nombre}</option>)}
+                    </select>
+                </div>
+
+                {/* Fase y Grupo */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                        <label style={labelStyle}>Fase</label>
+                        <select style={inputStyle} value={fase} onChange={e => setFase(e.target.value)}>
+                            {['REGULAR','CUARTOS','SEMIFINAL','3ER LUGAR','FINAL'].map(f =>
+                                <option key={f} value={f}>{f}</option>
+                            )}
+                        </select>
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Grupo</label>
+                        <select style={inputStyle} value={grupo} onChange={e => setGrupo(e.target.value)}>
+                            <option value="">—</option>
+                            <option value="A">Grupo A</option>
+                            <option value="B">Grupo B</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* Estatus */}
+                <div>
+                    <label style={labelStyle}>Estatus</label>
+                    <select style={inputStyle} value={estatus} onChange={e => setEstatus(e.target.value)}>
+                        <option value="programado">Programado</option>
+                        <option value="finalizado">Finalizado</option>
+                        <option value="suspendido">Suspendido</option>
+                    </select>
+                </div>
+
+                {/* Marcador si finalizado */}
+                {estatus === 'finalizado' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <div>
+                            <label style={labelStyle}>Marcador Local</label>
+                            <input type="number" style={inputStyle} value={marcLocal} onChange={e => setMarcLocal(e.target.value)} min={0} />
+                        </div>
+                        <div>
+                            <label style={labelStyle}>Marcador Visitante</label>
+                            <input type="number" style={inputStyle} value={marcVisit} onChange={e => setMarcVisit(e.target.value)} min={0} />
+                        </div>
+                    </div>
+                )}
+
+                {/* Botones */}
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    <button onClick={onClose} style={{ flex: 1, padding: '11px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer' }}>
+                        Cancelar
+                    </button>
+                    <button onClick={handleSave} disabled={saving} style={{ flex: 2, padding: '11px', borderRadius: 8, border: 'none', background: '#1e3a8a', color: 'white', fontWeight: 900, fontSize: '0.82rem', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+                        {saving ? 'Guardando...' : matchToEdit ? '💾 Guardar cambios' : '➕ Crear partido'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // ─────────────────────────────────────────────
 // COMPONENTE: BoxScore Modal
@@ -211,7 +381,6 @@ const BoxScoreModal = memo(({
 
         return (
             <div style={{ marginBottom: 24, border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
-                {/* Header equipo */}
                 <div style={{
                     background: '#f8fafc', padding: '10px 14px',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -286,7 +455,6 @@ const BoxScoreModal = memo(({
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 3000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
             <div style={{ background: '#fff', width: '100%', maxWidth: 720, borderRadius: 14, maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.3)' }}>
-                {/* Header */}
                 <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
                     <div>
                         <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 900 }}>{isEditing ? '✏️ EDITAR ESTADÍSTICAS' : '📊 BOX SCORE'}</h3>
@@ -305,7 +473,6 @@ const BoxScoreModal = memo(({
                 </div>
 
                 <div style={{ padding: '16px 20px', overflowY: 'auto', flex: 1 }}>
-                    {/* MVP Banner */}
                     {!loading && mvp && !isEditing && (
                         <div style={{ background: 'linear-gradient(to right, #fff9db, #fffbeb)', padding: '12px 16px', borderRadius: 10, marginBottom: 20, border: '1px solid #fcd34d', display: 'flex', alignItems: 'center', gap: 14 }}>
                             <span style={{ fontSize: '2rem' }}>🏆</span>
@@ -319,12 +486,17 @@ const BoxScoreModal = memo(({
                                     {' · '}{mvp.bloqueos ?? mvp.tapones ?? 0} TAP
                                 </div>
                             </div>
-                            <div style={{ width: 48, height: 48, borderRadius: '50%', border: '2px solid #fcd34d', overflow: 'hidden', background: '#fff' }}>
-                                <TeamLogo logoUrl={getLogo(mvp.equipoId, mvp.equipo)} />
+                            <div style={{ width: 48, height: 48, borderRadius: '50%', border: '2px solid #fcd34d', overflow: 'hidden', background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                {mvp.fotoUrl ? (
+                                    <img src={mvp.fotoUrl} alt={mvp.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+                                ) : (
+                                    <span style={{ fontWeight: 900, fontSize: '1.3rem', color: 'white' }}>
+                                        {(mvp.nombre || '?').charAt(0).toUpperCase()}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     )}
-
                     {loading
                         ? <p style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>Cargando estadísticas...</p>
                         : <>
@@ -370,14 +542,12 @@ const MatchCard = memo(({
         <div style={{
             display: 'flex', background: '#fff', borderRadius: 12,
             border: `1.5px solid ${themeColor}25`,
-            overflow: 'hidden',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+            overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
             transition: 'box-shadow 0.2s',
         }}
             onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)')}
             onMouseLeave={e => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)')}
         >
-            {/* Barra lateral de estado/hora */}
             <div style={{
                 width: 62, flexShrink: 0,
                 display: 'flex', flexDirection: 'column',
@@ -394,9 +564,7 @@ const MatchCard = memo(({
                 </span>
             </div>
 
-            {/* Equipos y marcador */}
             <div style={{ flex: 1, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {/* Local */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', border: '1px solid #f1f5f9', flexShrink: 0 }}>
@@ -413,7 +581,6 @@ const MatchCard = memo(({
                     )}
                 </div>
 
-                {/* Visitante */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', border: '1px solid #f1f5f9', flexShrink: 0 }}>
@@ -431,7 +598,6 @@ const MatchCard = memo(({
                 </div>
             </div>
 
-            {/* Acciones */}
             <div style={{ width: 72, borderLeft: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 6, padding: '8px 0' }}>
                 {isFinished ? (
                     <button onClick={() => onBoxScore(m)} style={{ background: 'none', border: 'none', color: '#3b82f6', fontSize: '0.65rem', fontWeight: 800, cursor: 'pointer', letterSpacing: '0.5px' }}>
@@ -465,11 +631,7 @@ const DateDivider = ({ fecha, isToday, isFuture }: { fecha: string; isToday: boo
         }}>
             {isToday && <span style={{ fontSize: '0.6rem' }}>📍</span>}
             {isFuture && !isToday && <span style={{ fontSize: '0.6rem' }}>📅</span>}
-            <span style={{
-                fontSize: '0.65rem', fontWeight: 900,
-                color: isToday ? 'white' : '#475569',
-                textTransform: 'capitalize',
-            }}>
+            <span style={{ fontSize: '0.65rem', fontWeight: 900, color: isToday ? 'white' : '#475569', textTransform: 'capitalize' }}>
                 {isToday ? 'HOY — ' : ''}{formatFecha(fecha)}
             </span>
         </div>
@@ -485,13 +647,13 @@ type FilterType = 'TODOS' | 'A' | 'B' | 'PLAYOFFS' | 'PENDIENTES' | 'FINALIZADOS
 const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: string }> = ({
     rol, onClose, categoria,
 }) => {
-    const [matches, setMatches] = useState<Match[]>([]);
-    const [equipos, setEquipos] = useState<Equipo[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [showMatchForm, setShowMatchForm] = useState(false);
+    const [matches, setMatches]               = useState<Match[]>([]);
+    const [equipos, setEquipos]               = useState<Equipo[]>([]);
+    const [loading, setLoading]               = useState(true);
+    const [showMatchForm, setShowMatchForm]   = useState(false);
     const [selectedBoxScore, setSelectedBoxScore] = useState<Match | null>(null);
-    const [activeFilter, setActiveFilter] = useState<FilterType>('TODOS');
-    const [matchToEdit, setMatchToEdit] = useState<Match | null>(null);
+    const [activeFilter, setActiveFilter]     = useState<FilterType>('TODOS');
+    const [matchToEdit, setMatchToEdit]       = useState<Match | null>(null);
 
     const today = new Date().toISOString().split('T')[0];
 
@@ -500,12 +662,11 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
         const catStr = categoria.trim().toUpperCase();
         const isMaster = catStr === 'MASTER40' || catStr === 'MASTER';
         const colCal = getColName('calendario', categoria);
-        const colEq = getColName('equipos', categoria);
+        const colEq  = getColName('equipos',    categoria);
 
         const qM = query(collection(db, colCal), orderBy('fechaAsignada', 'asc'));
         const unsubM = onSnapshot(qM, snap => {
             let all = snap.docs.map(d => ({ id: d.id, ...d.data() } as Match));
-            // Filtrar categorías que no pertenecen a MASTER40
             if (isMaster) {
                 const EXCLUIR = new Set(['U19', 'FEMENINO', 'LIBRE', 'INTERINDUSTRIAL']);
                 all = all.filter(m => !EXCLUIR.has((m.categoria ?? '').trim().toUpperCase()));
@@ -535,34 +696,21 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
         return porNombre?.logoUrl ?? DEFAULT_LOGO;
     };
 
-    // ── Borrado en cascada: partido + stats + jugadas ──
     const handleDelete = (id: string) => {
         if (!window.confirm('¿Eliminar partido? También se borrarán sus estadísticas.')) return;
         const colCal = getColName('calendario', categoria);
         const doDelete = async () => {
             const batch = writeBatch(db);
-
-            // Borrar stats_partido del partido
-            const statsSnap = await getDocs(
-                query(collection(db, 'stats_partido'), where('partidoId', '==', id))
-            );
+            const statsSnap = await getDocs(query(collection(db, 'stats_partido'), where('partidoId', '==', id)));
             statsSnap.forEach(d => batch.delete(d.ref));
-
-            // Borrar jugadas_partido del partido
-            const jugadasSnap = await getDocs(
-                query(collection(db, 'jugadas_partido'), where('partidoId', '==', id))
-            );
+            const jugadasSnap = await getDocs(query(collection(db, 'jugadas_partido'), where('partidoId', '==', id)));
             jugadasSnap.forEach(d => batch.delete(d.ref));
-
-            // Borrar el partido
             batch.delete(doc(db, colCal, id));
-
             await batch.commit();
         };
         doDelete().catch(console.error);
     };
 
-    // ── Filtrado reactivo ──
     const filtered = useMemo(() => {
         return matches.filter(m => {
             switch (activeFilter) {
@@ -577,7 +725,6 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
         });
     }, [matches, activeFilter]);
 
-    // ── Agrupación por fecha ──
     const grupos = useMemo(() => agruparPorFecha(filtered), [filtered]);
 
     const filters: { id: FilterType; label: string }[] = [
@@ -607,9 +754,7 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
                     <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
                         📅 Calendario {categoria}
                     </h2>
-                    <p style={{ margin: '2px 0 0', fontSize: '0.6rem', color: '#94a3b8' }}>
-                        Liga Metropolitana Eje Este
-                    </p>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.6rem', color: '#94a3b8' }}>Liga Metropolitana Eje Este</p>
                 </div>
                 <button onClick={onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>
                     ← VOLVER
@@ -619,18 +764,13 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
             {/* Filtros */}
             <div className="no-scrollbar" style={{ background: '#fff', padding: '10px 16px', display: 'flex', gap: 8, overflowX: 'auto', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
                 {filters.map(f => (
-                    <button
-                        key={f.id}
-                        onClick={() => setActiveFilter(f.id)}
-                        style={{
-                            padding: '6px 14px', borderRadius: 20, whiteSpace: 'nowrap',
-                            border: activeFilter === f.id ? '1px solid #1e3a8a' : '1px solid #e2e8f0',
-                            background: activeFilter === f.id ? '#1e3a8a' : '#fff',
-                            color: activeFilter === f.id ? '#fff' : '#64748b',
-                            fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer',
-                            transition: 'all 0.2s',
-                        }}
-                    >
+                    <button key={f.id} onClick={() => setActiveFilter(f.id)} style={{
+                        padding: '6px 14px', borderRadius: 20, whiteSpace: 'nowrap',
+                        border: activeFilter === f.id ? '1px solid #1e3a8a' : '1px solid #e2e8f0',
+                        background: activeFilter === f.id ? '#1e3a8a' : '#fff',
+                        color: activeFilter === f.id ? '#fff' : '#64748b',
+                        fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
+                    }}>
                         {f.label}
                     </button>
                 ))}
@@ -640,7 +780,6 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
             <div style={{ flex: 1, overflowY: 'auto', padding: '0 14px 100px' }}>
                 <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
-                    {/* Botón agregar (admin) */}
                     {rol === 'admin' && (
                         <button
                             onClick={() => { setMatchToEdit(null); setShowMatchForm(true); }}
@@ -648,8 +787,7 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
                                 width: '100%', marginTop: 16, padding: '12px',
                                 background: '#fff', border: '1.5px dashed #cbd5e1',
                                 borderRadius: 10, fontWeight: 700, fontSize: '0.78rem',
-                                color: '#475569', cursor: 'pointer',
-                                transition: 'border-color 0.2s, color 0.2s',
+                                color: '#475569', cursor: 'pointer', transition: 'border-color 0.2s, color 0.2s',
                             }}
                             onMouseEnter={e => { e.currentTarget.style.borderColor = '#1e3a8a'; e.currentTarget.style.color = '#1e3a8a'; }}
                             onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#475569'; }}
@@ -658,26 +796,19 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
                         </button>
                     )}
 
-                    {/* Loading */}
                     {loading && (
-                        <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', fontSize: '0.85rem' }}>
-                            Cargando calendario...
-                        </div>
+                        <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', fontSize: '0.85rem' }}>Cargando calendario...</div>
                     )}
 
-                    {/* Estado vacío */}
                     {!loading && grupos.length === 0 && (
                         <div style={{ textAlign: 'center', padding: '60px 20px' }}>
                             <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>
                                 {activeFilter === 'PLAYOFFS' ? '🏆' : activeFilter === 'PENDIENTES' ? '📅' : '🏀'}
                             </div>
                             <p style={{ fontWeight: 700, color: '#475569', fontSize: '0.85rem', margin: 0 }}>
-                                {activeFilter === 'PLAYOFFS'
-                                    ? 'No hay partidos de playoffs registrados'
-                                    : activeFilter === 'PENDIENTES'
-                                    ? 'No hay partidos próximos'
-                                    : activeFilter === 'FINALIZADOS'
-                                    ? 'No hay resultados aún'
+                                {activeFilter === 'PLAYOFFS' ? 'No hay partidos de playoffs registrados'
+                                    : activeFilter === 'PENDIENTES' ? 'No hay partidos próximos'
+                                    : activeFilter === 'FINALIZADOS' ? 'No hay resultados aún'
                                     : `No hay partidos para ${activeFilter}`}
                             </p>
                             {activeFilter !== 'TODOS' && (
@@ -688,7 +819,6 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
                         </div>
                     )}
 
-                    {/* Grupos por fecha */}
                     {!loading && grupos.map(({ fecha, partidos }) => {
                         const isToday = fecha === today;
                         const isFuture = fecha > today;
@@ -698,10 +828,7 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                     {partidos.map(m => (
                                         <MatchCard
-                                            key={m.id}
-                                            m={m}
-                                            getLogo={getLogo}
-                                            rol={rol}
+                                            key={m.id} m={m} getLogo={getLogo} rol={rol}
                                             onBoxScore={setSelectedBoxScore}
                                             onEdit={match => { setMatchToEdit(match); setShowMatchForm(true); }}
                                             onDelete={handleDelete}
@@ -714,13 +841,14 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
                 </div>
             </div>
 
-            {/* Modal MatchForm */}
+            {/* Modal MatchForm inline */}
             {showMatchForm && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-                    <div style={{ width: '100%', maxWidth: 440, background: '#fff', borderRadius: 14, overflow: 'hidden' }}>
+                    <div style={{ width: '100%', maxWidth: 440, background: '#fff', borderRadius: 14, overflow: 'hidden', maxHeight: '90vh', overflowY: 'auto' }}>
                         <MatchForm
                             matchToEdit={matchToEdit}
                             categoriaActiva={categoria}
+                            equipos={equipos}
                             onSuccess={() => setShowMatchForm(false)}
                             onClose={() => setShowMatchForm(false)}
                         />

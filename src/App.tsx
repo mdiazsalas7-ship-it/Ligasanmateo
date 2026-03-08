@@ -1,22 +1,40 @@
-import { useEffect, useState, useRef, memo } from 'react';
+import { useEffect, useState, useRef, memo, lazy, Suspense } from 'react';
 import './App.css';
 import { db, auth } from './firebase';
 import { doc, onSnapshot, collection, query, orderBy, getDocs, limit } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
-// Componentes
-import Login from './Login';
-import AdminEquipos from './AdminEquipos';
-import TeamsPublicViewer from './TeamsPublicViewer';
-import CalendarViewer from './CalendarViewer';
-import MesaTecnica from './MesaTecnica';
-import StatsViewer from './StatsViewer';
-import StandingsViewer from './StandingsViewer';
-import NewsAdmin from './NewsAdmin';
+// Componentes que cargan siempre (críticos)
+import Login    from './Login';
 import NewsFeed from './NewsFeed';
-import PlayoffViewer from './PlayoffViewer';
-import AdminVideos from './AdminVideos';
-import ResetTemporada from './ResetTemporada';
+
+// Componentes lazy — solo cargan cuando el usuario los abre
+const AdminEquipos      = lazy(() => import('./AdminEquipos'));
+const TeamsPublicViewer = lazy(() => import('./TeamsPublicViewer'));
+const CalendarViewer    = lazy(() => import('./CalendarViewer'));
+const MesaTecnica       = lazy(() => import('./MesaTecnica'));
+const StatsViewer       = lazy(() => import('./StatsViewer'));
+const StandingsViewer   = lazy(() => import('./StandingsViewer'));
+const NewsAdmin         = lazy(() => import('./NewsAdmin'));
+const PlayoffViewer     = lazy(() => import('./PlayoffViewer'));
+const AdminVideos       = lazy(() => import('./AdminVideos'));
+const ResetTemporada    = lazy(() => import('./ResetTemporada'));
+
+// Spinner de carga mientras se descarga el componente
+const PageLoader = () => (
+    <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minHeight: 200, flexDirection: 'column', gap: 12,
+    }}>
+        <div style={{
+            width: 36, height: 36, borderRadius: '50%',
+            border: '4px solid #e2e8f0', borderTop: '4px solid #1e3a8a',
+            animation: 'spin 0.7s linear infinite',
+        }} />
+        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700 }}>Cargando...</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+);
 
 // ─────────────────────────────────────────────
 // CONSTANTES
@@ -540,6 +558,7 @@ function App() {
 
             {/* ── Contenido principal ── */}
             <main style={{ padding: 15, maxWidth: 500, margin: '0 auto' }}>
+                <Suspense fallback={<PageLoader />}>
                 {activeView === 'login' ? (
                     <div className="fade-in">
                         <Login />
@@ -811,6 +830,7 @@ function App() {
                         {activeView === 'adminVideos' && isAdmin && <AdminVideos onClose={() => setActiveView('dashboard')} />}
                     </>
                 )}
+                </Suspense>
             </main>
 
             {/* ── Barra de navegación ── */}
