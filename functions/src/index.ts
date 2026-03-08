@@ -1,4 +1,4 @@
-// ─────────────────────────────────────────────────────────────
+// deploy inicial
 // functions/src/index.ts
 // ─────────────────────────────────────────────────────────────
 // Cloud Functions que envían notificaciones push automáticas:
