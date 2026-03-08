@@ -434,58 +434,96 @@ function App() {
 
             {/* ── Header ── */}
             <header style={{
-                background: '#ffffff', padding: '15px 15px 10px',
-                borderBottom: '1px solid #f1f5f9',
+                background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #1d4ed8 100%)',
+                padding: '12px 15px 0',
                 position: 'sticky', top: 0, zIndex: 1000,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                {/* Fondo con textura sutil de puntos */}
+                <div style={{
+                    position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none',
+                    backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
+                    backgroundSize: '18px 18px',
+                }} />
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, position: 'relative', zIndex: 1 }}>
+
+                    {/* Logo en circunferencia */}
+                    <div
+                        onClick={() => setActiveView('dashboard')}
+                        style={{
+                            width: 54, height: 54, borderRadius: '50%', flexShrink: 0,
+                            background: 'rgba(255,255,255,0.12)',
+                            border: '2px solid rgba(255,255,255,0.35)',
+                            boxShadow: '0 4px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            overflow: 'hidden', cursor: 'pointer',
+                            backdropFilter: 'blur(4px)',
+                        }}
+                    >
                         <img
-                            src="https://i.postimg.cc/hhF5fTPn/image.png"
+                            src="https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg"
                             alt="Logo"
-                            style={{ height: 45, cursor: 'pointer' }}
-                            onClick={() => setActiveView('dashboard')}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
-                        <div
-                            onClick={() => setActiveView('login')}
-                            style={{ fontSize: '0.7rem', opacity: 0.1, marginTop: 2, cursor: 'pointer' }}
-                        >🔑</div>
                     </div>
+
+                    {/* Nombre central */}
                     <div style={{ textAlign: 'center', flex: 2 }}>
-                        <h1 style={{ fontSize: '0.85rem', fontWeight: 900, color: '#1e3a8a', margin: 0, textTransform: 'uppercase' }}>
+                        <h1 style={{
+                            fontSize: '0.9rem', fontWeight: 900, color: 'white',
+                            margin: 0, textTransform: 'uppercase', letterSpacing: '1.5px',
+                            textShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                        }}>
                             Liga Metropolitana
                         </h1>
-                        <p style={{ fontSize: '0.5rem', color: '#94a3b8', margin: 0, fontWeight: 'bold' }}>EJE ESTE • 2026</p>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 3 }}>
+                            <div style={{ height: 1, width: 20, background: 'rgba(255,255,255,0.3)' }} />
+                            <p style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.65)', margin: 0, fontWeight: 800, letterSpacing: 2 }}>
+                                EJE ESTE • 2026
+                            </p>
+                            <div style={{ height: 1, width: 20, background: 'rgba(255,255,255,0.3)' }} />
+                        </div>
                     </div>
+
+                    {/* Botón reglamento */}
                     <div style={{ flex: 1, textAlign: 'right' }}>
                         <button
                             onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=ee680a1c-b93d-4159-ae99-0aef67cb4703', '_blank')}
                             style={{
-                                background: 'white', border: '1px solid #e2e8f0',
+                                background: 'rgba(255,255,255,0.12)',
+                                border: '1px solid rgba(255,255,255,0.25)',
                                 padding: '6px 8px', borderRadius: 10,
-                                display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                float: 'right', cursor: 'pointer',
-                                boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
+                                display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
+                                cursor: 'pointer', backdropFilter: 'blur(4px)',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                             }}
                         >
                             <span style={{ fontSize: '1.2rem' }}>📜</span>
-                            <span style={{ fontSize: '0.35rem', fontWeight: 900, color: '#1e3a8a' }}>REGLAMENTO</span>
+                            <span style={{ fontSize: '0.35rem', fontWeight: 900, color: 'rgba(255,255,255,0.85)', letterSpacing: 1 }}>REGLAMENTO</span>
                         </button>
+                        <div
+                            onClick={() => setActiveView('login')}
+                            style={{ fontSize: '0.7rem', opacity: 0.08, marginTop: 2, cursor: 'pointer', textAlign: 'right' }}
+                        >🔑</div>
                     </div>
                 </div>
 
                 {/* Selector de categorías */}
-                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 10 }} className="no-scrollbar">
+                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 10, position: 'relative', zIndex: 1 }} className="no-scrollbar">
                     {CATEGORIAS_DISPONIBLES.map(cat => (
                         <button
                             key={cat.id}
                             onClick={() => setCategoriaActiva(cat.id)}
                             style={{
-                                padding: '8px 16px', borderRadius: 20, border: 'none',
+                                padding: '7px 14px', borderRadius: 20, border: 'none',
                                 whiteSpace: 'nowrap',
-                                background: categoriaActiva === cat.id ? '#1e3a8a' : '#f1f5f9',
-                                color: categoriaActiva === cat.id ? 'white' : '#64748b',
-                                fontSize: '0.65rem', fontWeight: 900, transition: '0.3s',
+                                background: categoriaActiva === cat.id
+                                    ? 'rgba(255,255,255,1)'
+                                    : 'rgba(255,255,255,0.12)',
+                                color: categoriaActiva === cat.id ? '#1e3a8a' : 'rgba(255,255,255,0.75)',
+                                fontSize: '0.65rem', fontWeight: 900, transition: '0.2s',
+                                boxShadow: categoriaActiva === cat.id ? '0 3px 10px rgba(0,0,0,0.25)' : 'none',
                             }}
                         >
                             {cat.label}

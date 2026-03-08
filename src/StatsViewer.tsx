@@ -129,94 +129,141 @@ const LeaderSection = memo(({
             background: 'white', borderRadius: 28, overflow: 'hidden',
             boxShadow: '0 15px 35px rgba(0,0,0,0.1)', border: '1px solid #e2e8f0',
         }}>
-            {/* Card del líder */}
+            {/* ── BARAJITA UPPER DECK ── */}
             <div style={{
-                padding: '36px 25px', textAlign: 'center',
-                background: `radial-gradient(circle at top right, ${cat.color}dd, ${cat.color})`,
-                position: 'relative', color: 'white',
+                background: `linear-gradient(160deg, #0f172a 0%, ${cat.color}cc 100%)`,
+                position: 'relative', color: 'white', overflow: 'hidden',
+                padding: '10px 10px 0',
             }}>
+                {/* Franja superior: categoría + ranking */}
                 <div style={{
-                    position: 'absolute', top: 16, right: 16,
-                    background: 'rgba(255,255,255,0.2)', padding: '5px 12px',
-                    borderRadius: 10, fontSize: '0.6rem', fontWeight: 900,
-                    border: '1px solid rgba(255,255,255,0.3)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    marginBottom: 8,
                 }}>
-                    RANKING #1
-                </div>
-
-                {/* Foto del jugador líder #1 */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
                     <div style={{
-                        width: 88, height: 88, borderRadius: '50%',
-                        border: '4px solid white', overflow: 'hidden',
-                        boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
-                        background: 'white',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        fontSize: '0.6rem', fontWeight: 900, letterSpacing: 2,
+                        textTransform: 'uppercase', opacity: 0.9,
                     }}>
-                        {leader.fotoUrl ? (
-                            <img
-                                src={leader.fotoUrl}
-                                alt={leader.nombre}
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                onError={e => {
-                                    e.currentTarget.style.display = 'none';
-                                    (e.currentTarget.nextSibling as HTMLElement)?.style.setProperty('display','flex');
-                                }}
-                            />
-                        ) : null}
-                        {/* Fallback: inicial del nombre */}
-                        <div style={{
-                            display: leader.fotoUrl ? 'none' : 'flex',
-                            width: '100%', height: '100%',
-                            alignItems: 'center', justifyContent: 'center',
-                            background: 'rgba(255,255,255,0.25)',
-                            fontSize: '2.2rem', fontWeight: 900, color: 'white',
-                        }}>
-                            {(leader.nombre || '?').charAt(0).toUpperCase()}
-                        </div>
+                        <span style={{ fontSize: '0.9rem' }}>{cat.icon}</span>
+                        LÍDER {cat.label}
+                    </div>
+                    <div style={{
+                        background: 'rgba(255,255,255,0.15)',
+                        border: '1px solid rgba(255,255,255,0.35)',
+                        padding: '3px 10px', borderRadius: 6,
+                        fontSize: '0.52rem', fontWeight: 900, letterSpacing: 1.5,
+                    }}>
+                        #1
                     </div>
                 </div>
 
-                {/* Nombre */}
+                {/* Foto protagonista — marco cuadrado con borde dorado */}
                 <div style={{
-                    fontWeight: 900, fontSize: '1.7rem',
-                    textTransform: 'uppercase', lineHeight: 1.1,
-                    textShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                    width: '100%', aspectRatio: '1 / 1',
+                    borderRadius: 12, overflow: 'hidden',
+                    border: '3px solid rgba(255,255,255,0.25)',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.1)',
+                    background: 'rgba(0,0,0,0.4)', position: 'relative',
                 }}>
-                    {leader.nombre}
-                </div>
-                <div style={{ fontSize: '0.72rem', fontWeight: 700, opacity: 0.9, marginTop: 5, textTransform: 'uppercase' }}>
-                    {leader.equipo} • {leader.juegosDelEquipo} PARTIDOS REGULARES
-                </div>
+                    {/* Gradiente inferior para legibilidad */}
+                    <div style={{
+                        position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%',
+                        background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)',
+                        zIndex: 1,
+                    }} />
 
-                {/* Valor principal */}
-                <div style={{ marginTop: 18 }}>
-                    <span style={{
-                        fontSize: '4.5rem', fontWeight: 900, lineHeight: 1,
-                        textShadow: '2px 4px 10px rgba(0,0,0,0.2)',
+                    {leader.fotoUrl ? (
+                        <img
+                            src={leader.fotoUrl}
+                            alt={leader.nombre}
+                            style={{
+                                width: '100%', height: '100%',
+                                objectFit: 'cover', objectPosition: 'top center',
+                                display: 'block',
+                            }}
+                            onError={e => {
+                                e.currentTarget.style.display = 'none';
+                                (e.currentTarget.nextSibling as HTMLElement)?.style.setProperty('display','flex');
+                            }}
+                        />
+                    ) : null}
+                    <div style={{
+                        display: leader.fotoUrl ? 'none' : 'flex',
+                        width: '100%', height: '100%',
+                        alignItems: 'center', justifyContent: 'center',
+                        fontSize: '5rem', fontWeight: 900,
+                        background: 'rgba(255,255,255,0.08)',
                     }}>
-                        {leader[primaryKey] as number}
-                    </span>
-                    <span style={{ fontSize: '1.2rem', marginLeft: 6, fontWeight: 800, opacity: 0.8 }}>
-                        {primaryUnit}
-                    </span>
+                        {(leader.nombre || '?').charAt(0).toUpperCase()}
+                    </div>
                 </div>
 
-                {/* Valor secundario (el otro modo) */}
+                {/* Franja inferior de la "barajita": stats + nombre + equipo */}
                 <div style={{
-                    marginTop: 8,
-                    background: 'rgba(0,0,0,0.15)', display: 'inline-flex',
-                    alignItems: 'center', gap: 6,
-                    padding: '4px 14px', borderRadius: 20,
-                    fontSize: '0.72rem', fontWeight: 700,
+                    padding: '12px 4px 14px',
+                    display: 'flex', flexDirection: 'column', gap: 6,
                 }}>
-                    <span style={{ opacity: 0.7 }}>
-                        {viewMode === 'promedio' ? '📊' : '📈'}
-                    </span>
-                    {leader[secondKey] as number} {secondUnit}
-                    <span style={{ opacity: 0.6, fontSize: '0.6rem' }}>
-                        {viewMode === 'promedio' ? 'total temporada' : 'por partido'}
-                    </span>
+                    {/* Nombre */}
+                    <div style={{
+                        fontWeight: 900, fontSize: '1.1rem',
+                        textTransform: 'uppercase', lineHeight: 1,
+                        letterSpacing: 0.5,
+                        textShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                    }}>
+                        {leader.nombre}
+                    </div>
+
+                    {/* Stat principal */}
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        <span style={{
+                            fontSize: '3.6rem', fontWeight: 900, lineHeight: 1,
+                            textShadow: `0 4px 12px ${cat.color}99`,
+                        }}>
+                            {leader[primaryKey] as number}
+                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '1rem', fontWeight: 900, opacity: 0.9 }}>
+                                {primaryUnit}
+                            </span>
+                            <span style={{ fontSize: '0.55rem', opacity: 0.6, fontWeight: 700 }}>
+                                {viewMode === 'promedio' ? 'POR PARTIDO' : 'TOTAL'}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Stat secundaria */}
+                    <div style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        borderRadius: 8, padding: '5px 10px',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        fontSize: '0.65rem', fontWeight: 700,
+                    }}>
+                        <span style={{ opacity: 0.75 }}>
+                            {viewMode === 'promedio' ? 'TOTAL TEMPORADA' : 'PROMEDIO'}
+                        </span>
+                        <span style={{ fontWeight: 900, fontSize: '0.8rem' }}>
+                            {leader[secondKey] as number} {secondUnit}
+                        </span>
+                    </div>
+
+                    {/* Equipo y partidos */}
+                    <div style={{
+                        borderTop: '1px solid rgba(255,255,255,0.15)',
+                        paddingTop: 8, marginTop: 2,
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    }}>
+                        <span style={{ fontSize: '0.6rem', fontWeight: 800, opacity: 0.8, textTransform: 'uppercase' }}>
+                            {leader.equipo}
+                        </span>
+                        <span style={{
+                            fontSize: '0.55rem', fontWeight: 700,
+                            background: 'rgba(255,255,255,0.12)', borderRadius: 6,
+                            padding: '2px 8px', opacity: 0.85,
+                        }}>
+                            {leader.juegosDelEquipo} JJ
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -252,16 +299,48 @@ const LeaderSection = memo(({
                             {i + 2}
                         </span>
 
-                        {/* Logo */}
-                        <img
-                            src={p.logoUrl || DEFAULT_LOGO}
-                            alt={p.equipo}
-                            style={{
-                                width: 36, height: 36, borderRadius: '50%',
-                                border: '1px solid #f1f5f9', objectFit: 'contain', flexShrink: 0,
-                            }}
-                            onError={e => { e.currentTarget.src = DEFAULT_LOGO; }}
-                        />
+                        {/* Foto jugador + logo equipo superpuesto */}
+                        <div style={{ position: 'relative', flexShrink: 0, width: 38, height: 38 }}>
+                            {/* Foto del jugador */}
+                            <div style={{
+                                width: 38, height: 38, borderRadius: '50%',
+                                overflow: 'hidden', border: '2px solid #e2e8f0',
+                                background: '#f1f5f9',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                {p.fotoUrl ? (
+                                    <img
+                                        src={p.fotoUrl}
+                                        alt={p.nombre}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}
+                                        onError={e => {
+                                            e.currentTarget.style.display = 'none';
+                                            (e.currentTarget.nextSibling as HTMLElement)?.style.setProperty('display','flex');
+                                        }}
+                                    />
+                                ) : null}
+                                <div style={{
+                                    display: p.fotoUrl ? 'none' : 'flex',
+                                    width: '100%', height: '100%',
+                                    alignItems: 'center', justifyContent: 'center',
+                                    fontWeight: 900, fontSize: '1rem', color: '#94a3b8',
+                                }}>
+                                    {(p.nombre || '?').charAt(0).toUpperCase()}
+                                </div>
+                            </div>
+                            {/* Logo equipo — esquina inferior derecha */}
+                            <img
+                                src={p.logoUrl || DEFAULT_LOGO}
+                                alt={p.equipo}
+                                style={{
+                                    position: 'absolute', bottom: -2, right: -4,
+                                    width: 18, height: 18, borderRadius: '50%',
+                                    border: '1.5px solid white', objectFit: 'contain',
+                                    background: 'white',
+                                }}
+                                onError={e => { e.currentTarget.src = DEFAULT_LOGO; }}
+                            />
+                        </div>
 
                         {/* Nombre y equipo */}
                         <div style={{ flex: 1, minWidth: 0 }}>
