@@ -108,154 +108,78 @@ const TeamLogo: React.FC<{
 };
 
 // ─────────────────────────────────────────────
-// COMPONENTE: Fila de equipo dentro de MatchCard
+// COMPONENTE: Tarjeta compacta de partido para el bracket
 // ─────────────────────────────────────────────
-interface TeamRowProps {
-    teamName?: string; logoPath: string; categoria: string;
-    score?: number; isWinner: boolean; isPending: boolean;
-    editMode: boolean; onEditChange: (v: number) => void; initialScore: number;
+interface BracketCardProps {
+    partido: Partido;
+    highlight?: boolean;
+    x: number; y: number;
+    cardW: number; cardH: number;
 }
 
-const TeamRow: React.FC<TeamRowProps> = ({
-    teamName, logoPath, categoria, score, isWinner, isPending,
-    editMode, onEditChange, initialScore,
-}) => (
-    <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '8px 10px', borderRadius: 8,
-        background: isWinner ? 'rgba(251,191,36,0.07)' : 'transparent',
-    }}>
-        <TeamLogo logoPath={logoPath} teamName={teamName ?? ''} categoria={categoria} size={26} />
-        <span style={{
-            flex: 1, fontSize: '0.8rem',
-            fontWeight: isWinner ? 900 : 500,
-            color: isWinner ? '#fbbf24'
-                : teamName === 'TBD' ? '#334155'
-                : 'rgba(255,255,255,0.85)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-            {teamName ?? 'TBD'}
-        </span>
-        {editMode ? (
-            <input
-                type="number"
-                defaultValue={initialScore}
-                onChange={e => onEditChange(Number(e.target.value))}
-                style={{
-                    width: 38, textAlign: 'center', flexShrink: 0,
-                    background: '#0f172a', color: 'white',
-                    border: '1px solid #3b82f6', borderRadius: 6,
-                    padding: '4px 2px', fontSize: '0.85rem',
-                }}
-            />
-        ) : (
-            <span style={{
-                fontSize: '1rem', fontWeight: 900, flexShrink: 0,
-                minWidth: 22, textAlign: 'right',
-                color: isWinner ? '#fbbf24'
-                    : isPending ? '#1e293b'
-                    : 'rgba(255,255,255,0.5)',
-            }}>
-                {isPending ? '—' : (score ?? '—')}
-            </span>
-        )}
-    </div>
-);
-
 // ─────────────────────────────────────────────
-// COMPONENTE: Tarjeta de partido
+// COMPONENTE: Tarjeta compacta para bracket horizontal
 // ─────────────────────────────────────────────
-const MatchCard: React.FC<{
-    partido: Partido; highlight?: boolean; wide?: boolean;
-}> = ({ partido: m, highlight = false, wide = false }) => {
+const BracketCard: React.FC<BracketCardProps> = ({ partido: m, highlight = false, x, y, cardW, cardH }) => {
     const { editMode, editScores, setEditScore, handleSaveScore, categoria } = useEditContext();
-    const [hovered, setHovered] = useState(false);
 
     const finalizado    = m.estatus === 'finalizado';
     const isPending     = !finalizado;
     const localGana     = finalizado && (m.marcadorLocal  ?? -1) > (m.marcadorVisitante ?? -1);
     const visitanteGana = finalizado && (m.marcadorVisitante ?? -1) > (m.marcadorLocal  ?? -1);
+    const rowH          = cardH / 2;
+
+    const TeamRow = ({ nombre, logo, gana, score, side }: {
+        nombre?: string; logo: string; gana: boolean; score?: number; side: 'l'|'v';
+    }) => (
+        <div style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            height: rowH, padding: '0 7px',
+            background: gana ? 'rgba(251,191,36,0.08)' : 'transparent',
+            borderBottom: side === 'l' ? '1px solid rgba(255,255,255,0.06)' : 'none',
+        }}>
+            <TeamLogo logoPath={logo} teamName={nombre ?? ''} categoria={categoria} size={22} />
+            <span style={{
+                flex: 1, fontSize: '0.6rem', fontWeight: gana ? 900 : 500,
+                color: gana ? '#fbbf24' : nombre ? 'rgba(255,255,255,0.85)' : '#334155',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+                {nombre ?? 'TBD'}
+            </span>
+            {editMode ? (
+                <input type="number" defaultValue={side === 'l' ? (m.marcadorLocal ?? 0) : (m.marcadorVisitante ?? 0)}
+                    onChange={e => setEditScore(m.id, side, Number(e.target.value))}
+                    style={{ width: 32, textAlign: 'center', background: '#0f172a', color: 'white', border: '1px solid #3b82f6', borderRadius: 4, padding: '2px 1px', fontSize: '0.7rem', flexShrink: 0 }} />
+            ) : (
+                <span style={{
+                    fontSize: '0.85rem', fontWeight: 900, minWidth: 20, textAlign: 'right', flexShrink: 0,
+                    color: gana ? '#fbbf24' : isPending ? 'transparent' : 'rgba(255,255,255,0.5)',
+                }}>
+                    {isPending ? '—' : (score ?? '—')}
+                </span>
+            )}
+        </div>
+    );
 
     return (
-        <div
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-            style={{
-                width: wide ? 300 : 260,
-                borderRadius: 14, overflow: 'hidden',
-                background: highlight
-                    ? 'linear-gradient(135deg,rgba(251,191,36,0.12),rgba(251,191,36,0.04))'
-                    : 'rgba(255,255,255,0.04)',
-                border: highlight
-                    ? '1.5px solid rgba(251,191,36,0.5)'
-                    : hovered
-                        ? '1px solid rgba(255,255,255,0.14)'
-                        : '1px solid rgba(255,255,255,0.07)',
-                boxShadow: highlight
-                    ? '0 8px 32px rgba(251,191,36,0.15)'
-                    : hovered ? '0 8px 24px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.3)',
-                transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
-                transition: 'all 0.2s ease',
-            }}
-        >
-            {/* Badge estado */}
-            <div style={{
-                padding: '5px 10px',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                borderBottom: '1px solid rgba(255,255,255,0.05)',
-            }}>
-                <span style={{
-                    fontSize: '0.5rem', fontWeight: 900, letterSpacing: '1.5px',
-                    color: finalizado ? '#10b981' : highlight ? '#fbbf24' : '#475569',
-                    background: finalizado ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.04)',
-                    padding: '2px 7px', borderRadius: 20,
-                }}>
-                    {finalizado ? '✓ FINALIZADO' : '⏳ PENDIENTE'}
-                </span>
-                {highlight && <span style={{ fontSize: '0.65rem' }}>👑</span>}
-            </div>
-
-            {/* Equipos */}
-            <div style={{ padding: '4px 4px' }}>
-                <TeamRow
-                    teamName={m.equipoLocalNombre}
-                    logoPath={m.equipoLocalLogo ?? ''}
-                    categoria={categoria}
-                    score={m.marcadorLocal}
-                    isWinner={localGana}
-                    isPending={isPending}
-                    editMode={editMode}
-                    onEditChange={val => setEditScore(m.id, 'l', val)}
-                    initialScore={m.marcadorLocal ?? 0}
-                />
-                <div style={{ height: 1, background: 'rgba(255,255,255,0.04)', margin: '2px 10px' }} />
-                <TeamRow
-                    teamName={m.equipoVisitanteNombre}
-                    logoPath={m.equipoVisitanteLogo ?? ''}
-                    categoria={categoria}
-                    score={m.marcadorVisitante}
-                    isWinner={visitanteGana}
-                    isPending={isPending}
-                    editMode={editMode}
-                    onEditChange={val => setEditScore(m.id, 'v', val)}
-                    initialScore={m.marcadorVisitante ?? 0}
-                />
-            </div>
-
-            {/* Botón guardar */}
+        <div style={{
+            position: 'absolute', left: x, top: y,
+            width: cardW, height: cardH,
+            borderRadius: 8, overflow: 'hidden',
+            background: highlight
+                ? 'linear-gradient(135deg,rgba(251,191,36,0.12),rgba(15,23,42,0.98))'
+                : 'rgba(255,255,255,0.05)',
+            border: `1.5px solid ${highlight ? 'rgba(251,191,36,0.5)' : finalizado ? 'rgba(16,185,129,0.25)' : 'rgba(255,255,255,0.08)'}`,
+            boxShadow: highlight ? '0 0 20px rgba(251,191,36,0.15)' : '0 2px 8px rgba(0,0,0,0.4)',
+        }}>
+            <TeamRow nombre={m.equipoLocalNombre}    logo={m.equipoLocalLogo ?? ''}    gana={localGana}     score={m.marcadorLocal}    side="l" />
+            <TeamRow nombre={m.equipoVisitanteNombre} logo={m.equipoVisitanteLogo ?? ''} gana={visitanteGana} score={m.marcadorVisitante} side="v" />
             {editMode && (
-                <button
-                    onClick={() => handleSaveScore(m)}
-                    style={{
-                        width: '100%', padding: '7px 0',
-                        background: 'linear-gradient(135deg,#10b981,#059669)',
-                        color: 'white', border: 'none',
-                        fontSize: '0.62rem', fontWeight: 900,
-                        cursor: 'pointer', letterSpacing: '1px',
-                    }}
-                >
-                    GUARDAR
-                </button>
+                <button onClick={() => handleSaveScore(m)} style={{
+                    position: 'absolute', bottom: 0, left: 0, right: 0,
+                    padding: '3px 0', background: 'rgba(16,185,129,0.9)',
+                    color: 'white', border: 'none', fontSize: '0.45rem', fontWeight: 900, cursor: 'pointer',
+                }}>GUARDAR</button>
             )}
         </div>
     );
@@ -265,57 +189,7 @@ const MatchCard: React.FC<{
 // COMPONENTE: Conector SVG vertical
 // Une N tarjetas de arriba con 1 entrada abajo
 // ─────────────────────────────────────────────
-const VerticalConnector: React.FC<{ fromCount: number }> = ({ fromCount }) => {
-    const CARD_W = 260;
-    const GAP    = 12;
-    const H      = 36;
-    const stroke = 'rgba(100,116,139,0.4)';
 
-    const totalW = fromCount * CARD_W + (fromCount - 1) * GAP;
-    const midX   = totalW / 2;
-    const pts    = Array.from({ length: fromCount }, (_, i) =>
-        i * (CARD_W + GAP) + CARD_W / 2
-    );
-
-    return (
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <svg width={totalW} height={H} style={{ display: 'block' }}>
-                {pts.map((x, i) => (
-                    <line key={i} x1={x} y1={0} x2={x} y2={H / 2}
-                        stroke={stroke} strokeWidth={1.5} />
-                ))}
-                {fromCount > 1 && (
-                    <line x1={pts[0]} y1={H / 2} x2={pts[fromCount - 1]} y2={H / 2}
-                        stroke={stroke} strokeWidth={1.5} />
-                )}
-                <line x1={midX} y1={H / 2} x2={midX} y2={H}
-                    stroke={stroke} strokeWidth={1.5} />
-            </svg>
-        </div>
-    );
-};
-
-// ─────────────────────────────────────────────
-// COMPONENTE: Etiqueta de fase con líneas
-// ─────────────────────────────────────────────
-const PhaseLabel: React.FC<{ text: string; gold?: boolean }> = ({ text, gold = false }) => (
-    <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        width: '100%', maxWidth: 560,
-        margin: '0 auto 14px',
-    }}>
-        <div style={{ flex: 1, height: 1, background: gold ? 'rgba(251,191,36,0.25)' : 'rgba(255,255,255,0.06)' }} />
-        <span style={{
-            fontSize: '0.58rem', fontWeight: 900,
-            letterSpacing: '3px', textTransform: 'uppercase',
-            color: gold ? '#fbbf24' : '#475569',
-            whiteSpace: 'nowrap',
-        }}>
-            {text}
-        </span>
-        <div style={{ flex: 1, height: 1, background: gold ? 'rgba(251,191,36,0.25)' : 'rgba(255,255,255,0.06)' }} />
-    </div>
-);
 
 // ─────────────────────────────────────────────
 // ESTADOS DE CARGA Y ERROR
@@ -520,74 +394,190 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                     </div>
                  ) : (
 
-                    // ── BRACKET VERTICAL ──
-                    <main style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center',
-                        padding: '28px 16px 80px',
-                        position: 'relative', zIndex: 1,
-                        gap: 0,
-                    }}>
+                    // ── BRACKET HORIZONTAL ──
+                    <main style={{ padding: '16px 0 80px', position: 'relative', zIndex: 1 }}>
+                    {(() => {
+                        // ── Dimensiones ──
+                        const CW = 155; // card width
+                        const CH = 68;  // card height (2 rows)
+                        const LW = 34;  // line connector width
+                        const PG = 12;  // gap entre partidos del mismo par
+                        const BG = 36;  // gap entre llave superior e inferior
 
-                        {/* OCTAVOS */}
-                        {octavos.length > 0 && (
-                            <>
-                                <PhaseLabel text="Octavos de Final" />
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
-                                    {octavos.map(p => <MatchCard key={p.id} partido={p} />)}
+                        // ── Determinar columnas ──
+                        // Columna más temprana que existe
+                        const hasOct  = octavos.length  > 0;
+                        const hasQtr  = cuartos.length  > 0;
+                        const hasSemi = semis.length    > 0;
+                        const hasFin  = finalP.length   > 0;
+
+                        // Construir rondas de izquierda a derecha
+                        type Round = { matches: Partido[]; label: string; col: number };
+                        const rounds: Round[] = [];
+                        let col = 0;
+                        if (hasOct)  { rounds.push({ matches: octavos, label: 'OCTAVOS', col }); col++; }
+                        if (hasQtr)  { rounds.push({ matches: cuartos, label: 'CUARTOS', col }); col++; }
+                        if (hasSemi) { rounds.push({ matches: semis,   label: 'SEMIS',   col }); col++; }
+                        if (hasFin)  { rounds.push({ matches: finalP,  label: 'FINAL',   col }); col++; }
+
+                        const numCols  = col;
+                        const totalW   = numCols * CW + (numCols - 1) * LW + 32;
+
+                        // ── Calcular posición Y de cada tarjeta ──
+                        // Lógica: la primera ronda determina el espaciado base
+                        // Cada ronda siguiente tiene mitad de tarjetas, centradas entre pares
+                        const firstRound = rounds[0];
+                        const nFirst     = firstRound?.matches.length ?? 0;
+
+                        // Y base para primera ronda: pares de tarjetas con gap entre pares
+                        const getFirstYs = (n: number): number[] => {
+                            const ys: number[] = [];
+                            for (let i = 0; i < n; i++) {
+                                // Pair index (every 2 = same semi)
+                                const pair   = Math.floor(i / 2);
+                                const inPair = i % 2;
+                                ys.push(pair * (2 * CH + PG + BG) + inPair * (CH + PG));
+                            }
+                            return ys;
+                        };
+
+                        // Y para ronda siguiente: centrar entre cada par previo
+                        const getNextYs = (prevYs: number[]): number[] => {
+                            const ys: number[] = [];
+                            for (let i = 0; i < prevYs.length; i += 2) {
+                                const y1 = prevYs[i];
+                                const y2 = prevYs[i + 1] ?? y1;
+                                ys.push((y1 + y2) / 2);
+                            }
+                            // If odd number, just use first half
+                            if (prevYs.length === 1) ys.push(prevYs[0]);
+                            return ys;
+                        };
+
+                        // Build Y positions for each round
+                        const roundYs: number[][] = [];
+                        let prevYs = getFirstYs(nFirst);
+                        rounds.forEach((r, ri) => {
+                            if (ri === 0) {
+                                roundYs.push(prevYs);
+                            } else {
+                                const ys = getNextYs(prevYs);
+                                roundYs.push(ys);
+                                prevYs = ys;
+                            }
+                        });
+
+                        // Total height
+                        const lastFirstY = prevYs.length > 0 ? prevYs[0] : 0;
+                        const totalH = nFirst > 0
+                            ? getFirstYs(nFirst)[nFirst - 1] + CH + 16
+                            : CH + 16;
+
+                        // ── SVG lines between consecutive rounds ──
+                        const lines: React.ReactNode[] = [];
+                        const stroke     = 'rgba(100,116,139,0.45)';
+                        const strokeGold = 'rgba(251,191,36,0.5)';
+
+                        for (let ri = 0; ri < rounds.length - 1; ri++) {
+                            const fromRound = rounds[ri];
+                            const toRound   = rounds[ri + 1];
+                            const fromYs    = roundYs[ri];
+                            const toYs      = roundYs[ri + 1];
+                            const isFinalConn = ri === rounds.length - 2;
+                            const sc = isFinalConn ? strokeGold : stroke;
+
+                            const x1 = fromRound.col * (CW + LW) + CW + 16;  // right edge of from card
+                            const x2 = toRound.col   * (CW + LW) + 16;        // left edge of to card
+                            const mx = (x1 + x2) / 2;                          // midpoint x
+
+                            // Pair up from matches → to match
+                            for (let ti = 0; ti < toYs.length; ti++) {
+                                const fi1 = ti * 2;
+                                const fi2 = ti * 2 + 1;
+                                const fy1 = (fromYs[fi1] ?? fromYs[0]) + CH / 2;
+                                const fy2 = (fromYs[fi2] !== undefined ? fromYs[fi2] : fromYs[fi1] ?? fromYs[0]) + CH / 2;
+                                const ty  = toYs[ti] + CH / 2;
+
+                                if (fromYs[fi2] !== undefined) {
+                                    // Two inputs → vertical bracket → one output
+                                    lines.push(
+                                        <g key={`line-${ri}-${ti}`}>
+                                            {/* From match 1 → midX */}
+                                            <polyline points={`${x1},${fy1} ${mx},${fy1} ${mx},${ty} ${x2},${ty}`}
+                                                fill="none" stroke={sc} strokeWidth="1.5" />
+                                            {/* From match 2 → midX */}
+                                            <polyline points={`${x1},${fy2} ${mx},${fy2} ${mx},${ty}`}
+                                                fill="none" stroke={sc} strokeWidth="1.5" />
+                                        </g>
+                                    );
+                                } else {
+                                    // Single input → straight line
+                                    lines.push(
+                                        <line key={`line-${ri}-${ti}`}
+                                            x1={x1} y1={fy1} x2={x2} y2={ty}
+                                            stroke={sc} strokeWidth="1.5" />
+                                    );
+                                }
+                            }
+                        }
+
+                        return (
+                            <div style={{ overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch', paddingBottom: 8 }}>
+                                {/* Column labels */}
+                                <div style={{ display: 'flex', width: totalW, paddingLeft: 16, marginBottom: 10 }}>
+                                    {rounds.map((r) => (
+                                        <div key={r.col} style={{ width: CW, marginRight: LW, textAlign: 'center', flexShrink: 0 }}>
+                                            <span style={{
+                                                fontSize: '0.48rem', fontWeight: 900, letterSpacing: '2px',
+                                                color: r.label === 'FINAL' ? '#fbbf24' : '#475569',
+                                                textTransform: 'uppercase',
+                                            }}>
+                                                {r.label === 'SEMIS' ? 'SEMIFINAL' : r.label === 'FINAL' ? '👑 GRAN FINAL' : r.label}
+                                            </span>
+                                        </div>
+                                    ))}
                                 </div>
-                                <VerticalConnector fromCount={octavos.length} />
-                            </>
-                        )}
 
-                        {/* CUARTOS */}
-                        {cuartos.length > 0 && (
-                            <>
-                                <PhaseLabel text="Cuartos de Final" />
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
-                                    {cuartos.map(p => <MatchCard key={p.id} partido={p} />)}
-                                </div>
-                                <VerticalConnector fromCount={cuartos.length} />
-                            </>
-                        )}
+                                {/* Bracket canvas */}
+                                <div style={{ position: 'relative', width: totalW, height: totalH, marginLeft: 16 }}>
+                                    {/* SVG lines layer */}
+                                    <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible' }}>
+                                        {lines}
+                                    </svg>
 
-                        {/* SEMIS */}
-                        {semis.length > 0 && (
-                            <>
-                                <PhaseLabel text="Semifinal" />
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
-                                    {semis.map(p => <MatchCard key={p.id} partido={p} />)}
-                                </div>
-                                <VerticalConnector fromCount={semis.length} />
-                            </>
-                        )}
-
-                        {/* GRAN FINAL */}
-                        {finalP.length > 0 && (
-                            <>
-                                <PhaseLabel text="👑 Gran Final" gold />
-                                <div style={{ position: 'relative' }}>
-                                    {/* Aura dorada */}
-                                    <div style={{
-                                        position: 'absolute', inset: -16, borderRadius: 28,
-                                        background: 'radial-gradient(circle,rgba(251,191,36,0.14) 0%,transparent 70%)',
-                                        pointerEvents: 'none',
-                                    }} />
-                                    {finalP.map(p => <MatchCard key={p.id} partido={p} highlight wide />)}
-                                </div>
-                            </>
-                        )}
-
-                        {/* 3ER LUGAR */}
-                        {tercerLugar.length > 0 && (
-                            <div style={{ marginTop: 36, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                <div style={{ width: '100%', maxWidth: 400, height: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 24 }} />
-                                <PhaseLabel text="🥉 Tercer Lugar" />
-                                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-                                    {tercerLugar.map(p => <MatchCard key={p.id} partido={p} />)}
+                                    {/* Cards */}
+                                    {rounds.map((r, ri) =>
+                                        r.matches.map((m, mi) => (
+                                            <BracketCard
+                                                key={m.id}
+                                                partido={m}
+                                                highlight={r.label === 'FINAL'}
+                                                x={r.col * (CW + LW)}
+                                                y={roundYs[ri]?.[mi] ?? 0}
+                                                cardW={CW}
+                                                cardH={CH}
+                                            />
+                                        ))
+                                    )}
                                 </div>
                             </div>
-                        )}
+                        );
+                    })()}
 
+                    {/* 3er lugar fuera del bracket principal */}
+                    {tercerLugar.length > 0 && (
+                        <div style={{ margin: '24px 16px 0', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 20 }}>
+                            <div style={{ textAlign: 'center', marginBottom: 10, fontSize: '0.52rem', fontWeight: 900, letterSpacing: '2px', color: '#78716c' }}>
+                                🥉 TERCER LUGAR
+                            </div>
+                            {tercerLugar.map(m => (
+                                <BracketCard key={m.id} partido={m} highlight={false}
+                                    x={0} y={0} cardW={300} cardH={68}
+                                />
+                            ))}
+                            <div style={{ height: 68 }} />
+                        </div>
+                    )}
                     </main>
                 )}
 

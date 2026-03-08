@@ -38,6 +38,7 @@ interface Jugada {
     accion: string;
     puntos: number;
     timestamp: number;
+    cuarto?: number;
 }
 
 // ─────────────────────────────────────────────
@@ -50,6 +51,10 @@ const getColName = (base: string, categoria: string) => {
 
 const puntosDeAccion = (accion: string) =>
     accion === 'tirosLibres' ? 1 : accion === 'dobles' ? 2 : accion === 'triples' ? 3 : 0;
+
+// Fases que se consideran playoff → sus stats NO cuentan para líderes de ronda regular
+const FASES_PLAYOFF = new Set(['FINAL', 'SEMIS', 'SEMIFINAL', 'CUARTOS', 'OCTAVOS', '3ER LUGAR', 'PLAYOFF', 'PLAYOFFS']);
+const esFasePlayoff = (fase?: string) => fase ? FASES_PLAYOFF.has(fase.trim().toUpperCase()) : false;
 
 // ─────────────────────────────────────────────
 // COMPONENTE: Modal de confirmación (reemplaza window.confirm)
@@ -129,59 +134,59 @@ const PlayerRow = memo(({
                     background: isFlashing ? '#ffffff' : bg,
                     border: 'none', borderRadius: 6,
                     color: isFlashing ? bg : 'white',
-                    fontWeight: 900, fontSize: '0.58rem',
+                    fontWeight: 900, fontSize: '0.52rem',
                     cursor: 'pointer',
                     transform: isFlashing ? 'scale(0.93)' : 'scale(1)',
                     transition: 'transform 0.15s, background 0.15s',
                     lineHeight: 1.2,
                     boxShadow: isFlashing ? `0 0 0 2px ${bg}` : 'none',
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center',
                 }}
             >
-                <span style={{ fontSize: '0.55rem', letterSpacing: '0px' }}>{label}</span>
-                <span style={{ fontSize: '0.82rem', fontWeight: 900, lineHeight: 1 }}>{count}</span>
+                {label}<br />
+                <span style={{ fontSize: '0.75rem' }}>{count}</span>
             </button>
         );
     };
 
     return (
         <div style={{
-            marginBottom: 4, padding: '5px 6px 5px',
-            borderRadius: 8, background: '#1a1a1a',
+            marginBottom: 8, padding: '10px 10px 8px',
+            borderRadius: 12, background: '#1a1a1a',
             border: `1px solid #2d2d2d`,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
         }}>
-            {/* Nombre + número + cambio — todo en una fila compacta */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-                <span style={{
-                    background: teamColor, color: 'white',
-                    padding: '2px 6px', borderRadius: 4,
-                    fontWeight: 900, fontSize: '0.75rem',
-                    minWidth: 24, textAlign: 'center', flexShrink: 0,
-                }}>
-                    {player.numero ?? '??'}
-                </span>
-                <span style={{
-                    fontWeight: 700, color: 'white', fontSize: '0.7rem',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    flex: 1,
-                }}>
-                    {player.nombre}
-                </span>
+            {/* Nombre y número */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <span style={{
+                        background: teamColor, color: 'white',
+                        padding: '3px 8px', borderRadius: 6,
+                        fontWeight: 900, fontSize: '0.85rem',
+                        minWidth: 28, textAlign: 'center', flexShrink: 0,
+                    }}>
+                        {player.numero ?? '??'}
+                    </span>
+                    <span style={{
+                        fontWeight: 800, color: 'white', fontSize: '0.82rem',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                        {player.nombre}
+                    </span>
+                </div>
                 <button
                     onClick={() => onSub(player.id)}
                     style={{
-                        background: '#1e293b', color: '#60a5fa',
-                        border: '1px solid #334155', borderRadius: 4,
-                        padding: '2px 6px', fontSize: '0.52rem',
+                        background: '#334155', color: '#60a5fa',
+                        border: 'none', borderRadius: 6,
+                        padding: '5px 10px', fontSize: '0.65rem',
                         cursor: 'pointer', fontWeight: 700, flexShrink: 0,
                     }}
                 >
-                    🔄
+                    🔄 CAMBIO
                 </button>
             </div>
 
-            {/* 6 botones en UNA sola fila — sin scroll */}
+            {/* Botones de stat — compactos, 1 fila */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3 }}>
                 <StatBtn accion="tirosLibres" label="+1 TL" count={s.tirosLibres ?? 0} bg="#475569" />
                 <StatBtn accion="dobles"      label="+2 PT" count={s.dobles ?? 0}      bg="#1e40af" />
@@ -232,6 +237,9 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
 
     // null = verificando Firestore | false = sin estado guardado | true = estado restaurado
     const [estadoRestaurado, setEstadoRestaurado] = useState<boolean | null>(null);
+
+    // Cuartos
+    const [cuartoActual, setCuartoActual] = useState(1);
 
     const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/166/166344.png';
 
@@ -399,13 +407,18 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 equipo: team,
                 accion,
                 puntos: pts,
+                cuarto: cuartoActual,
                 timestamp: Date.now(),
             });
 
-            // 2. Marcador
+            // 2. Marcador + puntos por cuarto
             if (pts > 0) {
+                const cuartoKey = team === 'local'
+                    ? `cuartosLocal.Q${cuartoActual}`
+                    : `cuartosVisitante.Q${cuartoActual}`;
                 await updateDoc(doc(db, colCal, matchData.id), {
                     [team === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(pts),
+                    [cuartoKey]: increment(pts),
                 });
             }
 
@@ -442,10 +455,15 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     // 1. Borrar del historial
                     await deleteDoc(doc(db, 'jugadas_partido', jugada.id));
 
-                    // 2. Restar del marcador si tenía puntos
+                    // 2. Restar del marcador y del cuarto correspondiente
                     if (pts > 0) {
+                        const cuartoUndo = jugada.cuarto ?? 1;
+                        const cuartoKey = jugada.equipo === 'local'
+                            ? `cuartosLocal.Q${cuartoUndo}`
+                            : `cuartosVisitante.Q${cuartoUndo}`;
                         await updateDoc(doc(db, colCal, matchData.id), {
                             [jugada.equipo === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(-pts),
+                            [cuartoKey]: increment(-pts),
                         });
                     }
 
@@ -498,21 +516,33 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     batch.update(vRef, { puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
                 }
 
-                // Stats por jugador
+                // Stats por jugador — solo en ronda regular (no playoff)
+                const esPlayoff = esFasePlayoff(matchData.fase);
                 const statsSnap = await getDocs(
                     query(collection(db, 'stats_partido'), where('partidoId', '==', matchData.id))
                 );
-                statsSnap.forEach(sDoc => {
-                    const s = sDoc.data();
-                    batch.update(doc(db, colPlayers, s.jugadorId), {
-                        puntos: increment(Number(s.puntos) || 0),
-                        triples: increment(Number(s.triples) || 0),
-                        rebotes: increment(Number(s.rebotes) || 0),
-                        robos: increment(Number(s.robos) || 0),
-                        bloqueos: increment(Number(s.bloqueos) || 0),
-                        partidosJugados: increment(1),
+
+                if (!esPlayoff) {
+                    // Ronda regular → acumular en el perfil del jugador (líderes)
+                    statsSnap.forEach(sDoc => {
+                        const s = sDoc.data();
+                        batch.update(doc(db, colPlayers, s.jugadorId), {
+                            puntos: increment(Number(s.puntos) || 0),
+                            triples: increment(Number(s.triples) || 0),
+                            rebotes: increment(Number(s.rebotes) || 0),
+                            robos: increment(Number(s.robos) || 0),
+                            bloqueos: increment(Number(s.bloqueos) || 0),
+                            partidosJugados: increment(1),
+                        });
                     });
-                });
+                }
+                // Playoff → marcar cada stat_partido con esPlayoff:true (para filtros futuros)
+                // pero NO tocar jugadores_* acumulado
+                if (esPlayoff) {
+                    statsSnap.forEach(sDoc => {
+                        batch.update(sDoc.ref, { esPlayoff: true });
+                    });
+                }
 
                 batch.update(doc(db, colCal, matchData.id), { estatus: 'finalizado' });
                 await batch.commit();
@@ -774,36 +804,74 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
 
             {/* ── Scoreboard ── */}
             <div style={{
-                minHeight: 52, background: '#111', borderBottom: '2px solid #222',
-                display: 'flex', alignItems: 'center', padding: '5px 12px',
-                justifyContent: 'center', gap: 8,
+                background: '#111', borderBottom: '2px solid #222',
+                padding: '6px 10px 4px',
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end', overflow: 'hidden' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.72rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {matchData?.equipoLocalNombre}
-                    </span>
-                    <img src={logos.local} alt="L" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #3b82f6', flexShrink: 0 }} />
+                {/* Fila principal: logos + marcador + cuarto */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'flex-end', overflow: 'hidden' }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.65rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {matchData?.equipoLocalNombre}
+                        </span>
+                        <img src={logos.local} alt="L" style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #3b82f6', flexShrink: 0 }} />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                        {/* Marcador */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1e293b', padding: '4px 14px', borderRadius: 8, border: '1px solid #334155' }}>
+                            <span style={{ fontSize: '1.4rem', fontWeight: 900 }}>{matchData?.marcadorLocal ?? 0}</span>
+                            <span style={{ fontSize: '0.55rem', color: '#475569' }}>VS</span>
+                            <span style={{ fontSize: '1.4rem', fontWeight: 900 }}>{matchData?.marcadorVisitante ?? 0}</span>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'flex-start', overflow: 'hidden' }}>
+                        <img src={logos.visitante} alt="V" style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #ef4444', flexShrink: 0 }} />
+                        <span style={{ fontWeight: 700, fontSize: '0.65rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {matchData?.equipoVisitanteNombre}
+                        </span>
+                    </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#1e293b', padding: '6px 18px', borderRadius: 10, border: '1px solid #334155', flexShrink: 0 }}>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 900 }}>{matchData?.marcadorLocal ?? 0}</span>
-                    <span style={{ fontSize: '0.6rem', color: '#475569' }}>VS</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: 900 }}>{matchData?.marcadorVisitante ?? 0}</span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-start', overflow: 'hidden' }}>
-                    <img src={logos.visitante} alt="V" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #ef4444', flexShrink: 0 }} />
-                    <span style={{ fontWeight: 700, fontSize: '0.72rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {matchData?.equipoVisitanteNombre}
-                    </span>
+                {/* Indicador de cuarto + botón siguiente */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center', marginTop: 2 }}>
+                    {[1,2,3,4].map(q => (
+                        <div key={q} style={{
+                            width: 22, height: 22, borderRadius: 4,
+                            background: cuartoActual === q ? '#f59e0b' : q < cuartoActual ? '#10b981' : '#1e293b',
+                            border: `1px solid ${cuartoActual === q ? '#f59e0b' : q < cuartoActual ? '#10b981' : '#334155'}`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.5rem', fontWeight: 900, color: 'white',
+                        }}>
+                            {q < cuartoActual ? '✓' : `Q${q}`}
+                        </div>
+                    ))}
+                    <button
+                        onClick={() => {
+                            if (cuartoActual < 4) {
+                                setCuartoActual(q => q + 1);
+                                showToast(`🏀 Inicia Q${cuartoActual + 1}`, '#f59e0b');
+                            }
+                        }}
+                        disabled={cuartoActual >= 4}
+                        style={{
+                            background: cuartoActual < 4 ? '#f59e0b' : '#334155',
+                            border: 'none', borderRadius: 6, padding: '4px 10px',
+                            color: 'white', fontSize: '0.5rem', fontWeight: 900,
+                            cursor: cuartoActual < 4 ? 'pointer' : 'default',
+                            whiteSpace: 'nowrap',
+                        }}
+                    >
+                        {cuartoActual < 4 ? `▶ Q${cuartoActual + 1}` : 'Q4 ✓'}
+                    </button>
                 </div>
             </div>
 
             {/* ── Jugadores en cancha ── */}
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                 {/* LOCAL */}
-                <div style={{ flex: 1, padding: '4px 4px', borderRight: '1px solid #1e293b', overflowY: 'auto' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 4, background: '#1e3a8a', padding: '3px 0', borderRadius: 5, fontSize: '0.58rem', fontWeight: 900 }}>
+                <div style={{ flex: 1, padding: '6px 5px', borderRight: '1px solid #1e293b', overflowY: 'auto' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 6, background: '#1e3a8a', padding: '4px 0', borderRadius: 6, fontSize: '0.62rem', fontWeight: 900 }}>
                         LOCAL
                     </div>
                     {playersLocal.filter(p => onCourtLocal.includes(p.id)).map(p => (
@@ -820,8 +888,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 </div>
 
                 {/* VISITANTE */}
-                <div style={{ flex: 1, padding: '4px 4px', overflowY: 'auto' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 4, background: '#7f1d1d', padding: '3px 0', borderRadius: 5, fontSize: '0.58rem', fontWeight: 900 }}>
+                <div style={{ flex: 1, padding: '6px 5px', overflowY: 'auto' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 6, background: '#7f1d1d', padding: '4px 0', borderRadius: 6, fontSize: '0.62rem', fontWeight: 900 }}>
                         VISITANTE
                     </div>
                     {playersVisitante.filter(p => onCourtVisitante.includes(p.id)).map(p => (
@@ -839,7 +907,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             </div>
 
             {/* ── Barra de acciones ── */}
-            <div style={{ padding: '7px 8px', background: '#0f172a', display: 'flex', gap: 5, borderTop: '2px solid #1e293b' }}>
+            <div style={{ padding: '10px 10px', background: '#0f172a', display: 'flex', gap: 6, borderTop: '2px solid #1e293b' }}>
                 <button onClick={() => setSelectedMatchId(null)} style={actionBtnStyle('#1e293b')}>SALIR</button>
                 <button onClick={handleUndo} style={actionBtnStyle('#92400e')}>↩️ DESHACER</button>
                 <button onClick={() => setIsHistoryOpen(true)} style={actionBtnStyle('#334155')}>📜 HIST.</button>

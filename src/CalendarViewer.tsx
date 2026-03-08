@@ -525,6 +525,43 @@ const BoxScoreModal = memo(({
                             </div>
                         </div>
                     )}
+                    {/* Tabla de cuartos */}
+                    {(match.cuartosLocal || match.cuartosVisitante) && (
+                        <div style={{ marginBottom: 20, border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', textAlign: 'center' }}>
+                                <thead>
+                                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                        <th style={{ textAlign: 'left', padding: '8px 14px', fontWeight: 800, color: '#64748b', fontSize: '0.65rem' }}>EQUIPO</th>
+                                        {['Q1','Q2','Q3','Q4'].map(q => (
+                                            <th key={q} style={{ padding: '8px', fontWeight: 900, color: '#1e3a8a', fontSize: '0.65rem' }}>{q}</th>
+                                        ))}
+                                        <th style={{ padding: '8px', fontWeight: 900, color: '#0f172a', fontSize: '0.7rem' }}>TOT</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                        <td style={{ textAlign: 'left', padding: '8px 14px', fontWeight: 700, fontSize: '0.72rem' }}>{match.equipoLocalNombre}</td>
+                                        {['Q1','Q2','Q3','Q4'].map(q => (
+                                            <td key={q} style={{ padding: '8px', color: '#3b82f6', fontWeight: 700 }}>
+                                                {match.cuartosLocal?.[q] ?? 0}
+                                            </td>
+                                        ))}
+                                        <td style={{ fontWeight: 900, fontSize: '0.9rem' }}>{match.marcadorLocal ?? 0}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style={{ textAlign: 'left', padding: '8px 14px', fontWeight: 700, fontSize: '0.72rem' }}>{match.equipoVisitanteNombre}</td>
+                                        {['Q1','Q2','Q3','Q4'].map(q => (
+                                            <td key={q} style={{ padding: '8px', color: '#ef4444', fontWeight: 700 }}>
+                                                {match.cuartosVisitante?.[q] ?? 0}
+                                            </td>
+                                        ))}
+                                        <td style={{ fontWeight: 900, fontSize: '0.9rem' }}>{match.marcadorVisitante ?? 0}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
                     {loading
                         ? <p style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>Cargando estadísticas...</p>
                         : <>
