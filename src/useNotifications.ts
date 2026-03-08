@@ -66,17 +66,10 @@ export function useNotifications(userId?: string) {
                 console.log('[FCM] ✅ Token registrado:', token.slice(0, 20) + '...');
 
                 // 5. Notificaciones cuando la app está en FOREGROUND
+                // El SW (firebase-messaging-sw.js) ya muestra la notificación.
+                // Aquí solo logueamos para debug.
                 onMessage(messaging, payload => {
-                    console.log('[FCM] Foreground:', payload);
-                    const { title, body } = payload.notification ?? {};
-
-                    if (Notification.permission === 'granted') {
-                        new Notification(title ?? '🏀 Liga Metropolitana', {
-                            body:  body  ?? 'Hay novedades en la liga',
-                            icon:  LOGO,
-                            badge: LOGO,
-                        });
-                    }
+                    console.log('[FCM] Foreground mensaje recibido:', payload.notification?.title);
                 });
 
             } catch (err) {
