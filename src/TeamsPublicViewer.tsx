@@ -127,24 +127,8 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
                         }}
                     >✕</button>
 
-                    {/* Logo del equipo en círculo */}
-                    <div style={{
-                        width: 40, height: 40, borderRadius: '50%',
-                        background: 'rgba(255,255,255,0.15)',
-                        border: '2px solid rgba(255,255,255,0.3)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        overflow: 'hidden', marginBottom: 12, flexShrink: 0,
-                    }}>
-                        <img
-                            src={team.logoUrl || DEFAULT_LOGO}
-                            alt={team.nombre}
-                            style={{ width: 30, height: 30, objectFit: 'contain' }}
-                            onError={e => { e.currentTarget.src = DEFAULT_LOGO; }}
-                        />
-                    </div>
-
-                    {/* Foto del jugador grande */}
-                    <Avatar player={player} size={130} />
+                    {/* Foto del jugador — sin logo encima, más grande */}
+                    <Avatar player={player} size={160} />
 
                     {/* Número de dorsal */}
                     {player.numero != null && (
