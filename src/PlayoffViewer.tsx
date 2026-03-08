@@ -19,6 +19,8 @@ interface Partido {
     equipoVisitanteLogo?: string;
     marcadorLocal?: number;
     marcadorVisitante?: number;
+    cuartosLocal?: Record<string, number>;
+    cuartosVisitante?: Record<string, number>;
     lado?: 'izquierda' | 'derecha';
     posicion?: number;
 }
@@ -127,53 +129,83 @@ const BracketCard: React.FC<BracketCardProps> = ({ partido: m, highlight = false
     const isPending     = !finalizado;
     const localGana     = finalizado && (m.marcadorLocal  ?? -1) > (m.marcadorVisitante ?? -1);
     const visitanteGana = finalizado && (m.marcadorVisitante ?? -1) > (m.marcadorLocal  ?? -1);
-    const rowH          = cardH / 2;
 
-    const TeamRow = ({ nombre, logo, gana, score, side }: {
-        nombre?: string; logo: string; gana: boolean; score?: number; side: 'l'|'v';
-    }) => (
-        <div style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            height: rowH, padding: '0 7px',
-            background: gana ? 'rgba(251,191,36,0.08)' : 'transparent',
-            borderBottom: side === 'l' ? '1px solid rgba(255,255,255,0.06)' : 'none',
-        }}>
-            <TeamLogo logoPath={logo} teamName={nombre ?? ''} categoria={categoria} size={22} />
-            <span style={{
-                flex: 1, fontSize: '0.6rem', fontWeight: gana ? 900 : 500,
-                color: gana ? '#fbbf24' : nombre ? 'rgba(255,255,255,0.85)' : '#334155',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-                {nombre ?? 'TBD'}
-            </span>
-            {editMode ? (
-                <input type="number" defaultValue={side === 'l' ? (m.marcadorLocal ?? 0) : (m.marcadorVisitante ?? 0)}
-                    onChange={e => setEditScore(m.id, side, Number(e.target.value))}
-                    style={{ width: 32, textAlign: 'center', background: '#0f172a', color: 'white', border: '1px solid #3b82f6', borderRadius: 4, padding: '2px 1px', fontSize: '0.7rem', flexShrink: 0 }} />
-            ) : (
-                <span style={{
-                    fontSize: '0.85rem', fontWeight: 900, minWidth: 20, textAlign: 'right', flexShrink: 0,
-                    color: gana ? '#fbbf24' : isPending ? 'transparent' : 'rgba(255,255,255,0.5)',
-                }}>
-                    {isPending ? '—' : (score ?? '—')}
-                </span>
-            )}
-        </div>
-    );
+
+    // Teams rendered inline below
+
+    // Puntos por cuarto (si existen)
+    const qL = m.cuartosLocal    as Record<string,number> | undefined;
+    const qV = m.cuartosVisitante as Record<string,number> | undefined;
+    const hasQuarters = finalizado && (qL || qV) && ['Q1','Q2','Q3','Q4'].some(q => (qL?.[q] ?? 0) + (qV?.[q] ?? 0) > 0);
+    const quarterH = hasQuarters ? 18 : 0;
+    const teamRowH = (cardH - quarterH) / 2;
 
     return (
         <div style={{
-            position: 'absolute', left: x, top: y,
+            position: 'relative', left: 0, top: 0,
             width: cardW, height: cardH,
             borderRadius: 8, overflow: 'hidden',
             background: highlight
                 ? 'linear-gradient(135deg,rgba(251,191,36,0.12),rgba(15,23,42,0.98))'
-                : 'rgba(255,255,255,0.05)',
+                : 'rgba(30,41,59,0.95)',
             border: `1.5px solid ${highlight ? 'rgba(251,191,36,0.5)' : finalizado ? 'rgba(16,185,129,0.25)' : 'rgba(255,255,255,0.08)'}`,
-            boxShadow: highlight ? '0 0 20px rgba(251,191,36,0.15)' : '0 2px 8px rgba(0,0,0,0.4)',
+            boxShadow: highlight ? '0 0 20px rgba(251,191,36,0.15)' : '0 2px 8px rgba(0,0,0,0.5)',
         }}>
-            <TeamRow nombre={m.equipoLocalNombre}    logo={m.equipoLocalLogo ?? ''}    gana={localGana}     score={m.marcadorLocal}    side="l" />
-            <TeamRow nombre={m.equipoVisitanteNombre} logo={m.equipoVisitanteLogo ?? ''} gana={visitanteGana} score={m.marcadorVisitante} side="v" />
+            {/* Fila local */}
+            <div style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                height: teamRowH, padding: '0 6px',
+                background: localGana ? 'rgba(251,191,36,0.08)' : 'transparent',
+                borderBottom: '1px solid rgba(255,255,255,0.06)',
+            }}>
+                <TeamLogo logoPath={m.equipoLocalLogo ?? ''} teamName={m.equipoLocalNombre ?? ''} categoria={categoria} size={20} />
+                <span style={{ flex: 1, fontSize: '0.58rem', fontWeight: localGana ? 900 : 500, color: localGana ? '#fbbf24' : 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {m.equipoLocalNombre ?? 'TBD'}
+                </span>
+                {editMode
+                    ? <input type="number" defaultValue={m.marcadorLocal ?? 0} onChange={e => setEditScore(m.id,'l',Number(e.target.value))} style={{ width: 28, textAlign: 'center', background: '#0f172a', color: 'white', border: '1px solid #3b82f6', borderRadius: 4, padding: '1px', fontSize: '0.65rem', flexShrink: 0 }} />
+                    : <span style={{ fontSize: '0.82rem', fontWeight: 900, minWidth: 18, textAlign: 'right', flexShrink: 0, color: localGana ? '#fbbf24' : isPending ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)' }}>{isPending ? '—' : (m.marcadorLocal ?? '—')}</span>
+                }
+            </div>
+
+            {/* Fila visitante */}
+            <div style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                height: teamRowH, padding: '0 6px',
+                background: visitanteGana ? 'rgba(251,191,36,0.08)' : 'transparent',
+            }}>
+                <TeamLogo logoPath={m.equipoVisitanteLogo ?? ''} teamName={m.equipoVisitanteNombre ?? ''} categoria={categoria} size={20} />
+                <span style={{ flex: 1, fontSize: '0.58rem', fontWeight: visitanteGana ? 900 : 500, color: visitanteGana ? '#fbbf24' : 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {m.equipoVisitanteNombre ?? 'TBD'}
+                </span>
+                {editMode
+                    ? <input type="number" defaultValue={m.marcadorVisitante ?? 0} onChange={e => setEditScore(m.id,'v',Number(e.target.value))} style={{ width: 28, textAlign: 'center', background: '#0f172a', color: 'white', border: '1px solid #3b82f6', borderRadius: 4, padding: '1px', fontSize: '0.65rem', flexShrink: 0 }} />
+                    : <span style={{ fontSize: '0.82rem', fontWeight: 900, minWidth: 18, textAlign: 'right', flexShrink: 0, color: visitanteGana ? '#fbbf24' : isPending ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)' }}>{isPending ? '—' : (m.marcadorVisitante ?? '—')}</span>
+                }
+            </div>
+
+            {/* Puntos por cuarto */}
+            {hasQuarters && (
+                <div style={{
+                    height: quarterH, background: 'rgba(0,0,0,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3,
+                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                }}>
+                    {['Q1','Q2','Q3','Q4'].map(q => {
+                        const l = qL?.[q] ?? 0;
+                        const v = qV?.[q] ?? 0;
+                        if (l === 0 && v === 0) return null;
+                        return (
+                            <div key={q} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 22 }}>
+                                <span style={{ fontSize: '0.38rem', color: '#475569', fontWeight: 700, letterSpacing: '0.5px' }}>{q}</span>
+                                <span style={{ fontSize: '0.48rem', color: localGana || l > v ? '#60a5fa' : '#94a3b8', fontWeight: 800 }}>{l}</span>
+                                <span style={{ fontSize: '0.48rem', color: visitanteGana || v > l ? '#f87171' : '#94a3b8', fontWeight: 800 }}>{v}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
             {editMode && (
                 <button onClick={() => handleSaveScore(m)} style={{
                     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -394,188 +426,175 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                     </div>
                  ) : (
 
-                    // ── BRACKET HORIZONTAL ──
-                    <main style={{ padding: '16px 0 80px', position: 'relative', zIndex: 1 }}>
+                    // ── BRACKET HORIZONTAL — conectores CSS puro, sin SVG ──
+                    <main style={{ padding: '12px 0 80px', position: 'relative', zIndex: 1 }}>
                     {(() => {
-                        // ── Dimensiones ──
-                        const CW = 155; // card width
-                        const CH = 68;  // card height (2 rows)
-                        const LW = 34;  // line connector width
-                        const PG = 12;  // gap entre partidos del mismo par
-                        const BG = 36;  // gap entre llave superior e inferior
-
-                        // ── Determinar columnas ──
-                        // Columna más temprana que existe
                         const hasOct  = octavos.length  > 0;
                         const hasQtr  = cuartos.length  > 0;
                         const hasSemi = semis.length    > 0;
                         const hasFin  = finalP.length   > 0;
 
-                        // Construir rondas de izquierda a derecha
-                        type Round = { matches: Partido[]; label: string; col: number };
+                        type Round = { matches: Partido[]; label: string };
                         const rounds: Round[] = [];
-                        let col = 0;
-                        if (hasOct)  { rounds.push({ matches: octavos, label: 'OCTAVOS', col }); col++; }
-                        if (hasQtr)  { rounds.push({ matches: cuartos, label: 'CUARTOS', col }); col++; }
-                        if (hasSemi) { rounds.push({ matches: semis,   label: 'SEMIS',   col }); col++; }
-                        if (hasFin)  { rounds.push({ matches: finalP,  label: 'FINAL',   col }); col++; }
+                        if (hasOct)  rounds.push({ matches: octavos, label: 'OCTAVOS' });
+                        if (hasQtr)  rounds.push({ matches: cuartos, label: 'CUARTOS' });
+                        if (hasSemi) rounds.push({ matches: semis,   label: 'SEMIS'   });
+                        if (hasFin)  rounds.push({ matches: finalP,  label: 'FINAL'   });
 
-                        const numCols  = col;
-                        const totalW   = numCols * CW + (numCols - 1) * LW + 32;
+                        const PAD    = 10;
+                        const CH     = 82;   // altura de tarjeta
+                        const PG     = 8;    // gap entre par de tarjetas
+                        const BG     = 28;   // gap entre grupos
+                        const nCols  = rounds.length;
+                        const scrW   = Math.min(window.innerWidth, 500);
+                        const usable = scrW - PAD * 2;
+                        // connector width = 14% of card width
+                        // CW * nCols + CW*0.14*(nCols-1) = usable
+                        const CW     = Math.floor(usable / (nCols + 0.14 * Math.max(nCols - 1, 0)));
+                        const CONN   = Math.floor(CW * 0.14);
+                        const bc     = 'rgba(100,116,139,0.5)';    // border color normal
+                        const bcG    = 'rgba(251,191,36,0.6)';     // border color final
 
-                        // ── Calcular posición Y de cada tarjeta ──
-                        // Lógica: la primera ronda determina el espaciado base
-                        // Cada ronda siguiente tiene mitad de tarjetas, centradas entre pares
-                        const firstRound = rounds[0];
-                        const nFirst     = firstRound?.matches.length ?? 0;
-
-                        // Y base para primera ronda: pares de tarjetas con gap entre pares
-                        const getFirstYs = (n: number): number[] => {
+                        // Compute Y positions per round (absolute within column)
+                        const getYs = (n: number, roundIdx: number): number[] => {
+                            if (roundIdx === 0) {
+                                const ys: number[] = [];
+                                for (let i = 0; i < n; i++) {
+                                    const pair = Math.floor(i / 2);
+                                    const pos  = i % 2;
+                                    ys.push(pair * (2 * CH + PG + BG) + pos * (CH + PG));
+                                }
+                                return ys;
+                            }
+                            const prevYs = getYs(rounds[roundIdx - 1].matches.length, roundIdx - 1);
                             const ys: number[] = [];
                             for (let i = 0; i < n; i++) {
-                                // Pair index (every 2 = same semi)
-                                const pair   = Math.floor(i / 2);
-                                const inPair = i % 2;
-                                ys.push(pair * (2 * CH + PG + BG) + inPair * (CH + PG));
-                            }
-                            return ys;
-                        };
-
-                        // Y para ronda siguiente: centrar entre cada par previo
-                        const getNextYs = (prevYs: number[]): number[] => {
-                            const ys: number[] = [];
-                            for (let i = 0; i < prevYs.length; i += 2) {
-                                const y1 = prevYs[i];
-                                const y2 = prevYs[i + 1] ?? y1;
+                                const y1 = prevYs[i * 2]       ?? prevYs[0] ?? 0;
+                                const y2 = prevYs[i * 2 + 1]   ?? y1;
                                 ys.push((y1 + y2) / 2);
                             }
-                            // If odd number, just use first half
-                            if (prevYs.length === 1) ys.push(prevYs[0]);
                             return ys;
                         };
 
-                        // Build Y positions for each round
-                        const roundYs: number[][] = [];
-                        let prevYs = getFirstYs(nFirst);
-                        rounds.forEach((r, ri) => {
-                            if (ri === 0) {
-                                roundYs.push(prevYs);
-                            } else {
-                                const ys = getNextYs(prevYs);
-                                roundYs.push(ys);
-                                prevYs = ys;
-                            }
-                        });
+                        const allYs  = rounds.map((r, ri) => getYs(r.matches.length, ri));
+                        const firstYs = allYs[0] ?? [];
+                        const totalH  = firstYs.length > 0
+                            ? firstYs[firstYs.length - 1] + CH + 20
+                            : CH + 20;
 
-                        // Total height
-                        const lastFirstY = prevYs.length > 0 ? prevYs[0] : 0;
-                        const totalH = nFirst > 0
-                            ? getFirstYs(nFirst)[nFirst - 1] + CH + 16
-                            : CH + 16;
+                        // ── Render connector divs between col ri and ri+1 ──
+                        const renderConnectors = (ri: number) => {
+                            const fromYs = allYs[ri]     ?? [];
+                            const toYs   = allYs[ri + 1] ?? [];
+                            const isFinal = ri === rounds.length - 2;
+                            const color  = isFinal ? bcG : bc;
 
-                        // ── SVG lines between consecutive rounds ──
-                        const lines: React.ReactNode[] = [];
-                        const stroke     = 'rgba(100,116,139,0.45)';
-                        const strokeGold = 'rgba(251,191,36,0.5)';
-
-                        for (let ri = 0; ri < rounds.length - 1; ri++) {
-                            const fromRound = rounds[ri];
-                            const toRound   = rounds[ri + 1];
-                            const fromYs    = roundYs[ri];
-                            const toYs      = roundYs[ri + 1];
-                            const isFinalConn = ri === rounds.length - 2;
-                            const sc = isFinalConn ? strokeGold : stroke;
-
-                            const x1 = fromRound.col * (CW + LW) + CW + 16;  // right edge of from card
-                            const x2 = toRound.col   * (CW + LW) + 16;        // left edge of to card
-                            const mx = (x1 + x2) / 2;                          // midpoint x
-
-                            // Pair up from matches → to match
-                            for (let ti = 0; ti < toYs.length; ti++) {
+                            return toYs.map((toY, ti) => {
                                 const fi1 = ti * 2;
                                 const fi2 = ti * 2 + 1;
-                                const fy1 = (fromYs[fi1] ?? fromYs[0]) + CH / 2;
-                                const fy2 = (fromYs[fi2] !== undefined ? fromYs[fi2] : fromYs[fi1] ?? fromYs[0]) + CH / 2;
-                                const ty  = toYs[ti] + CH / 2;
+                                const y1  = (fromYs[fi1] ?? fromYs[0] ?? 0) + CH / 2;
+                                const y2  = (fromYs[fi2] !== undefined ? fromYs[fi2] : fromYs[fi1] ?? 0) + CH / 2;
+                                const yTo = toY + CH / 2;
+                                const hasPair = fromYs[fi2] !== undefined;
 
-                                if (fromYs[fi2] !== undefined) {
-                                    // Two inputs → vertical bracket → one output
-                                    lines.push(
-                                        <g key={`line-${ri}-${ti}`}>
-                                            {/* From match 1 → midX */}
-                                            <polyline points={`${x1},${fy1} ${mx},${fy1} ${mx},${ty} ${x2},${ty}`}
-                                                fill="none" stroke={sc} strokeWidth="1.5" />
-                                            {/* From match 2 → midX */}
-                                            <polyline points={`${x1},${fy2} ${mx},${fy2} ${mx},${ty}`}
-                                                fill="none" stroke={sc} strokeWidth="1.5" />
-                                        </g>
-                                    );
-                                } else {
-                                    // Single input → straight line
-                                    lines.push(
-                                        <line key={`line-${ri}-${ti}`}
-                                            x1={x1} y1={fy1} x2={x2} y2={ty}
-                                            stroke={sc} strokeWidth="1.5" />
+                                if (!hasPair) {
+                                    // Straight horizontal line
+                                    return (
+                                        <div key={ti} style={{
+                                            position: 'absolute',
+                                            top: y1 - 1, left: 0, right: 0, height: 2,
+                                            background: color,
+                                        }} />
                                     );
                                 }
-                            }
-                        }
+
+                                // Bracket shape: top arm + bottom arm + vertical spine + right exit
+                                const top    = Math.min(y1, y2);
+                                const bot    = Math.max(y1, y2);
+                                const half   = CONN / 2;
+
+                                return (
+                                    <div key={ti} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+                                        {/* Horizontal from top card → spine */}
+                                        <div style={{ position: 'absolute', top: y1 - 1, left: 0, width: half, height: 2, background: color }} />
+                                        {/* Horizontal from bottom card → spine */}
+                                        <div style={{ position: 'absolute', top: y2 - 1, left: 0, width: half, height: 2, background: color }} />
+                                        {/* Vertical spine */}
+                                        <div style={{ position: 'absolute', top: top - 1, left: half - 1, width: 2, height: bot - top + 2, background: color }} />
+                                        {/* Horizontal from spine → right (to next card) */}
+                                        <div style={{ position: 'absolute', top: yTo - 1, left: half, right: 0, height: 2, background: color }} />
+                                    </div>
+                                );
+                            });
+                        };
 
                         return (
-                            <div style={{ overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch', paddingBottom: 8 }}>
-                                {/* Column labels */}
-                                <div style={{ display: 'flex', width: totalW, paddingLeft: 16, marginBottom: 10 }}>
-                                    {rounds.map((r) => (
-                                        <div key={r.col} style={{ width: CW, marginRight: LW, textAlign: 'center', flexShrink: 0 }}>
-                                            <span style={{
-                                                fontSize: '0.48rem', fontWeight: 900, letterSpacing: '2px',
-                                                color: r.label === 'FINAL' ? '#fbbf24' : '#475569',
-                                                textTransform: 'uppercase',
-                                            }}>
-                                                {r.label === 'SEMIS' ? 'SEMIFINAL' : r.label === 'FINAL' ? '👑 GRAN FINAL' : r.label}
-                                            </span>
-                                        </div>
+                            <div style={{ padding: `0 ${PAD}px` }}>
+                                {/* Headers */}
+                                <div style={{ display: 'flex', marginBottom: 8 }}>
+                                    {rounds.map((r, ri) => (
+                                        <React.Fragment key={ri}>
+                                            <div style={{ width: CW, textAlign: 'center', flexShrink: 0 }}>
+                                                <span style={{
+                                                    fontSize: '0.45rem', fontWeight: 900, letterSpacing: '2px',
+                                                    color: r.label === 'FINAL' ? '#fbbf24' : '#475569',
+                                                    textTransform: 'uppercase',
+                                                }}>
+                                                    {r.label === 'SEMIS' ? 'SEMIFINAL' : r.label === 'FINAL' ? '👑 GRAN FINAL' : r.label}
+                                                </span>
+                                            </div>
+                                            {ri < rounds.length - 1 && <div style={{ width: CONN, flexShrink: 0 }} />}
+                                        </React.Fragment>
                                     ))}
                                 </div>
 
-                                {/* Bracket canvas */}
-                                <div style={{ position: 'relative', width: totalW, height: totalH, marginLeft: 16 }}>
-                                    {/* SVG lines layer */}
-                                    <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible' }}>
-                                        {lines}
-                                    </svg>
+                                {/* Bracket */}
+                                <div style={{ display: 'flex', position: 'relative', height: totalH }}>
+                                    {rounds.map((r, ri) => (
+                                        <React.Fragment key={ri}>
+                                            {/* Cards column — absolute positioned */}
+                                            <div style={{ position: 'relative', width: CW, flexShrink: 0, height: totalH }}>
+                                                {r.matches.map((m, mi) => (
+                                                    <div key={m.id} style={{
+                                                        position: 'absolute',
+                                                        top: allYs[ri]?.[mi] ?? 0,
+                                                        left: 0, width: CW,
+                                                    }}>
+                                                        <BracketCard
+                                                            partido={m}
+                                                            highlight={r.label === 'FINAL'}
+                                                            x={0} y={0}
+                                                            cardW={CW}
+                                                            cardH={CH}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
 
-                                    {/* Cards */}
-                                    {rounds.map((r, ri) =>
-                                        r.matches.map((m, mi) => (
-                                            <BracketCard
-                                                key={m.id}
-                                                partido={m}
-                                                highlight={r.label === 'FINAL'}
-                                                x={r.col * (CW + LW)}
-                                                y={roundYs[ri]?.[mi] ?? 0}
-                                                cardW={CW}
-                                                cardH={CH}
-                                            />
-                                        ))
-                                    )}
+                                            {/* Connector column */}
+                                            {ri < rounds.length - 1 && (
+                                                <div style={{ position: 'relative', width: CONN, flexShrink: 0, height: totalH }}>
+                                                    {renderConnectors(ri)}
+                                                </div>
+                                            )}
+                                        </React.Fragment>
+                                    ))}
                                 </div>
                             </div>
                         );
                     })()}
 
-                    {/* 3er lugar fuera del bracket principal */}
+                    {/* 3er lugar */}
                     {tercerLugar.length > 0 && (
-                        <div style={{ margin: '24px 16px 0', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 20 }}>
-                            <div style={{ textAlign: 'center', marginBottom: 10, fontSize: '0.52rem', fontWeight: 900, letterSpacing: '2px', color: '#78716c' }}>
+                        <div style={{ margin: '20px 10px 0', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+                            <div style={{ textAlign: 'center', marginBottom: 8, fontSize: '0.5rem', fontWeight: 900, letterSpacing: '2px', color: '#78716c' }}>
                                 🥉 TERCER LUGAR
                             </div>
                             {tercerLugar.map(m => (
-                                <BracketCard key={m.id} partido={m} highlight={false}
-                                    x={0} y={0} cardW={300} cardH={68}
-                                />
+                                <div key={m.id} style={{ position: 'relative', height: 82, marginBottom: 8 }}>
+                                    <BracketCard partido={m} highlight={false} x={0} y={0} cardW={280} cardH={82} />
+                                </div>
                             ))}
-                            <div style={{ height: 68 }} />
                         </div>
                     )}
                     </main>

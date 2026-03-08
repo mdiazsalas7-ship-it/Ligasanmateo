@@ -195,6 +195,7 @@ function App() {
     const [equiposB, setEquiposB]                   = useState<any[]>([]);
     const [noticias, setNoticias]                   = useState<any[]>([]);
     const [entrevistas, setEntrevistas]             = useState<any[]>([]);
+    const [entrevistasCargadas, setEntrevistasCargadas] = useState(false);
     const [videoSeleccionado, setVideoSeleccionado] = useState<any>(null);
     const [proximosJuegos, setProximosJuegos]       = useState<any[]>([]);
     const [resultadosRecientes, setResultadosRecientes] = useState<any[]>([]);
@@ -420,6 +421,7 @@ function App() {
 
                 setNoticias(newsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
                 setEntrevistas(interviewsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                setEntrevistasCargadas(true);
 
                 setLoading(false);
             } catch (e) {
@@ -761,21 +763,67 @@ function App() {
                                 🎙️ Zona de Entrevistas
                             </h2>
                             <div style={{ display: 'flex', overflowX: 'auto', gap: 12, paddingBottom: 10, scrollSnapType: 'x mandatory' }} className="no-scrollbar">
-                                {entrevistas.length > 0 ? entrevistas.map(video => (
-                                    <div key={video.id} onClick={() => setVideoSeleccionado(video)} style={{ minWidth: 100, cursor: 'pointer', scrollSnapAlign: 'start', textAlign: 'center', flexShrink: 0 }}>
-                                        <div style={{ width: 100, height: 140, borderRadius: 15, overflow: 'hidden', border: '2px solid #1e3a8a', position: 'relative', background: '#000' }}>
-                                            <video src={`${video.videoUrl}#t=0.1`} muted preload="metadata" playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                <span style={{ fontSize: '1.5rem', color: 'white', background: 'rgba(255,255,255,0.2)', borderRadius: '50%', width: 35, height: 35, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid white' }}>▶</span>
+                                {!entrevistasCargadas ? (
+                                    <p style={{ textAlign: 'center', fontSize: '0.6rem', color: '#94a3b8', width: '100%' }}>Cargando...</p>
+                                ) : entrevistas.length === 0 ? (
+                                    <p style={{ textAlign: 'center', fontSize: '0.6rem', color: '#94a3b8', width: '100%' }}>No hay videos disponibles</p>
+                                ) : entrevistas.map(video => (
+                                    <div key={video.id} onClick={() => setVideoSeleccionado(video)}
+                                        style={{ minWidth: 110, cursor: 'pointer', scrollSnapAlign: 'start', textAlign: 'center', flexShrink: 0 }}>
+                                        {/* Thumbnail — fondo oscuro + ícono play, sin cargar el video */}
+                                        <div style={{
+                                            width: 110, height: 150, borderRadius: 12,
+                                            overflow: 'hidden', border: '2px solid #1e3a8a',
+                                            position: 'relative', background: 'linear-gradient(135deg,#0f172a,#1e3a8a)',
+                                            display: 'flex', flexDirection: 'column',
+                                            alignItems: 'center', justifyContent: 'center', gap: 8,
+                                        }}>
+                                            {/* Si hay miniatura guardada la usamos, sino ícono */}
+                                            {video.thumbnailUrl ? (
+                                                <img src={video.thumbnailUrl} alt={video.titulo}
+                                                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                                                    onError={e => { e.currentTarget.style.display = 'none'; }} />
+                                            ) : (
+                                                <span style={{ fontSize: '2rem' }}>🎥</span>
+                                            )}
+                                            {/* Overlay con botón play */}
+                                            <div style={{
+                                                position: 'absolute', inset: 0,
+                                                background: 'rgba(0,0,0,0.35)',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            }}>
+                                                <div style={{
+                                                    width: 38, height: 38, borderRadius: '50%',
+                                                    background: 'rgba(255,255,255,0.9)',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
+                                                }}>
+                                                    <span style={{ fontSize: '1rem', marginLeft: 3 }}>▶</span>
+                                                </div>
                                             </div>
+                                            {/* Fecha abajo */}
+                                            {video.fecha && (
+                                                <div style={{
+                                                    position: 'absolute', bottom: 0, left: 0, right: 0,
+                                                    background: 'rgba(0,0,0,0.6)',
+                                                    fontSize: '0.38rem', color: '#cbd5e1',
+                                                    padding: '3px 5px', textAlign: 'center',
+                                                }}>
+                                                    {video.fecha}
+                                                </div>
+                                            )}
                                         </div>
-                                        <p style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#1e293b', marginTop: 6, lineHeight: 1.1, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 100 }}>
+                                        <p style={{
+                                            fontSize: '0.52rem', fontWeight: 700, color: '#1e293b',
+                                            marginTop: 6, lineHeight: 1.2, textTransform: 'uppercase',
+                                            overflow: 'hidden', textOverflow: 'ellipsis',
+                                            display: '-webkit-box', WebkitLineClamp: 2,
+                                            WebkitBoxOrient: 'vertical', maxWidth: 110,
+                                        }}>
                                             {video.titulo}
                                         </p>
                                     </div>
-                                )) : (
-                                    <p style={{ textAlign: 'center', fontSize: '0.6rem', color: '#94a3b8', width: '100%' }}>Cargando entrevistas...</p>
-                                )}
+                                ))}
                             </div>
                         </section>
 
