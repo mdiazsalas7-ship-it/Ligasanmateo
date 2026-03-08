@@ -144,7 +144,7 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
                     </div>
 
                     {/* Foto del jugador grande */}
-                    <Avatar player={player} size={100} />
+                    <Avatar player={player} size={130} />
 
                     {/* Número de dorsal */}
                     {player.numero != null && (
@@ -625,45 +625,51 @@ const TeamsPublicViewer: React.FC<{
                                     <div style={{ fontSize: '2rem', marginBottom: 8 }}>🏀</div>
                                     <p style={{ margin: 0, fontWeight: 700 }}>Sin jugadores registrados</p>
                                 </div>
-                            ) : roster.map((p, i) => (
-                                <div
-                                    key={p.id}
-                                    onClick={() => setSelectedPlayer(p)}
-                                    style={{
-                                        padding: '10px 16px',
-                                        borderBottom: i !== roster.length - 1 ? '1px solid #f1f5f9' : 'none',
-                                        display: 'flex', alignItems: 'center', gap: 12,
-                                        cursor: 'pointer', transition: 'background 0.15s',
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                                >
-                                    {/* Foto */}
-                                    <Avatar player={p} size={44} />
+                            ) : (
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(3, 1fr)',
+                                    gap: 1, background: '#f1f5f9',
+                                }}>
+                                    {roster.map(p => (
+                                        <div
+                                            key={p.id}
+                                            onClick={() => setSelectedPlayer(p)}
+                                            style={{
+                                                background: 'white', cursor: 'pointer',
+                                                display: 'flex', flexDirection: 'column',
+                                                alignItems: 'center',
+                                                padding: '14px 8px 10px',
+                                                gap: 8, transition: 'background 0.15s',
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'white'; }}
+                                        >
+                                            {/* Foto grande */}
+                                            <Avatar player={p} size={80} />
 
-                                    {/* Dorsal */}
-                                    <div style={{
-                                        width: 30, height: 30, borderRadius: 8,
-                                        background: '#eff6ff', flexShrink: 0,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    }}>
-                                        <span style={{ fontWeight: 900, fontSize: '0.8rem', color: '#1e3a8a' }}>
-                                            {p.numero ?? '—'}
-                                        </span>
-                                    </div>
+                                            {/* Dorsal */}
+                                            <div style={{
+                                                background: '#1e3a8a', color: 'white',
+                                                borderRadius: 6, padding: '2px 10px',
+                                                fontWeight: 900, fontSize: '0.75rem',
+                                            }}>
+                                                #{p.numero ?? '—'}
+                                            </div>
 
-                                    {/* Nombre */}
-                                    <span style={{
-                                        flex: 1, fontWeight: 700, fontSize: '0.88rem',
-                                        color: '#1e293b', textTransform: 'uppercase',
-                                    }}>
-                                        {p.nombre}
-                                    </span>
-
-                                    {/* Flecha */}
-                                    <span style={{ color: '#cbd5e1', fontSize: '0.8rem', flexShrink: 0 }}>›</span>
+                                            {/* Nombre */}
+                                            <span style={{
+                                                fontWeight: 800, fontSize: '0.62rem',
+                                                color: '#1e293b', textTransform: 'uppercase',
+                                                textAlign: 'center', lineHeight: 1.2,
+                                                wordBreak: 'break-word',
+                                            }}>
+                                                {p.nombre}
+                                            </span>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
+                            )}
                         </div>
 
                         <p style={{ textAlign: 'center', fontSize: '0.6rem', color: '#94a3b8', marginTop: 12 }}>
