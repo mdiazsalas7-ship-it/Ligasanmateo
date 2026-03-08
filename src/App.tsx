@@ -452,6 +452,11 @@ function App() {
                     <div
                         onClick={() => setActiveView('dashboard')}
                         style={{
+                            flex: 1,
+                            display: 'flex', alignItems: 'center',
+                        }}
+                    >
+                    <div style={{
                             width: 54, height: 54, borderRadius: '50%', flexShrink: 0,
                             background: 'rgba(255,255,255,0.12)',
                             border: '2px solid rgba(255,255,255,0.35)',
@@ -466,6 +471,7 @@ function App() {
                             alt="Logo"
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
+                    </div>
                     </div>
 
                     {/* Nombre central */}
