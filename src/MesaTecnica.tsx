@@ -125,64 +125,64 @@ const PlayerRow = memo(({
             <button
                 onClick={() => onStat(player, team, accion, 1)}
                 style={{
-                    padding: '12px 4px',
+                    padding: '5px 2px',
                     background: isFlashing ? '#ffffff' : bg,
-                    border: 'none', borderRadius: 8,
+                    border: 'none', borderRadius: 6,
                     color: isFlashing ? bg : 'white',
-                    fontWeight: 900, fontSize: '0.72rem',
+                    fontWeight: 900, fontSize: '0.58rem',
                     cursor: 'pointer',
                     transform: isFlashing ? 'scale(0.93)' : 'scale(1)',
                     transition: 'transform 0.15s, background 0.15s',
-                    lineHeight: 1.3,
+                    lineHeight: 1.2,
                     boxShadow: isFlashing ? `0 0 0 2px ${bg}` : 'none',
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
                 }}
             >
-                {label}<br />
-                <span style={{ fontSize: '0.9rem' }}>{count}</span>
+                <span style={{ fontSize: '0.55rem', letterSpacing: '0px' }}>{label}</span>
+                <span style={{ fontSize: '0.82rem', fontWeight: 900, lineHeight: 1 }}>{count}</span>
             </button>
         );
     };
 
     return (
         <div style={{
-            marginBottom: 8, padding: '10px 10px 8px',
-            borderRadius: 12, background: '#1a1a1a',
+            marginBottom: 4, padding: '5px 6px 5px',
+            borderRadius: 8, background: '#1a1a1a',
             border: `1px solid #2d2d2d`,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
         }}>
-            {/* Nombre y número */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    <span style={{
-                        background: teamColor, color: 'white',
-                        padding: '3px 8px', borderRadius: 6,
-                        fontWeight: 900, fontSize: '0.85rem',
-                        minWidth: 28, textAlign: 'center', flexShrink: 0,
-                    }}>
-                        {player.numero ?? '??'}
-                    </span>
-                    <span style={{
-                        fontWeight: 800, color: 'white', fontSize: '0.82rem',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                        {player.nombre}
-                    </span>
-                </div>
+            {/* Nombre + número + cambio — todo en una fila compacta */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+                <span style={{
+                    background: teamColor, color: 'white',
+                    padding: '2px 6px', borderRadius: 4,
+                    fontWeight: 900, fontSize: '0.75rem',
+                    minWidth: 24, textAlign: 'center', flexShrink: 0,
+                }}>
+                    {player.numero ?? '??'}
+                </span>
+                <span style={{
+                    fontWeight: 700, color: 'white', fontSize: '0.7rem',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    flex: 1,
+                }}>
+                    {player.nombre}
+                </span>
                 <button
                     onClick={() => onSub(player.id)}
                     style={{
-                        background: '#334155', color: '#60a5fa',
-                        border: 'none', borderRadius: 6,
-                        padding: '5px 10px', fontSize: '0.65rem',
+                        background: '#1e293b', color: '#60a5fa',
+                        border: '1px solid #334155', borderRadius: 4,
+                        padding: '2px 6px', fontSize: '0.52rem',
                         cursor: 'pointer', fontWeight: 700, flexShrink: 0,
                     }}
                 >
-                    🔄 CAMBIO
+                    🔄
                 </button>
             </div>
 
-            {/* Botones de stat — más grandes */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+            {/* 6 botones en UNA sola fila — sin scroll */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3 }}>
                 <StatBtn accion="tirosLibres" label="+1 TL" count={s.tirosLibres ?? 0} bg="#475569" />
                 <StatBtn accion="dobles"      label="+2 PT" count={s.dobles ?? 0}      bg="#1e40af" />
                 <StatBtn accion="triples"     label="+3 PT" count={s.triples ?? 0}     bg="#7c3aed" />
@@ -774,7 +774,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
 
             {/* ── Scoreboard ── */}
             <div style={{
-                minHeight: 68, background: '#111', borderBottom: '2px solid #222',
+                minHeight: 52, background: '#111', borderBottom: '2px solid #222',
                 display: 'flex', alignItems: 'center', padding: '5px 12px',
                 justifyContent: 'center', gap: 8,
             }}>
@@ -786,9 +786,9 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#1e293b', padding: '6px 18px', borderRadius: 10, border: '1px solid #334155', flexShrink: 0 }}>
-                    <span style={{ fontSize: '1.6rem', fontWeight: 900 }}>{matchData?.marcadorLocal ?? 0}</span>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 900 }}>{matchData?.marcadorLocal ?? 0}</span>
                     <span style={{ fontSize: '0.6rem', color: '#475569' }}>VS</span>
-                    <span style={{ fontSize: '1.6rem', fontWeight: 900 }}>{matchData?.marcadorVisitante ?? 0}</span>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 900 }}>{matchData?.marcadorVisitante ?? 0}</span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-start', overflow: 'hidden' }}>
@@ -802,8 +802,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             {/* ── Jugadores en cancha ── */}
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                 {/* LOCAL */}
-                <div style={{ flex: 1, padding: '6px 5px', borderRight: '1px solid #1e293b', overflowY: 'auto' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 6, background: '#1e3a8a', padding: '4px 0', borderRadius: 6, fontSize: '0.62rem', fontWeight: 900 }}>
+                <div style={{ flex: 1, padding: '4px 4px', borderRight: '1px solid #1e293b', overflowY: 'auto' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 4, background: '#1e3a8a', padding: '3px 0', borderRadius: 5, fontSize: '0.58rem', fontWeight: 900 }}>
                         LOCAL
                     </div>
                     {playersLocal.filter(p => onCourtLocal.includes(p.id)).map(p => (
@@ -820,8 +820,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 </div>
 
                 {/* VISITANTE */}
-                <div style={{ flex: 1, padding: '6px 5px', overflowY: 'auto' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 6, background: '#7f1d1d', padding: '4px 0', borderRadius: 6, fontSize: '0.62rem', fontWeight: 900 }}>
+                <div style={{ flex: 1, padding: '4px 4px', overflowY: 'auto' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 4, background: '#7f1d1d', padding: '3px 0', borderRadius: 5, fontSize: '0.58rem', fontWeight: 900 }}>
                         VISITANTE
                     </div>
                     {playersVisitante.filter(p => onCourtVisitante.includes(p.id)).map(p => (
@@ -839,7 +839,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             </div>
 
             {/* ── Barra de acciones ── */}
-            <div style={{ padding: '10px 10px', background: '#0f172a', display: 'flex', gap: 6, borderTop: '2px solid #1e293b' }}>
+            <div style={{ padding: '7px 8px', background: '#0f172a', display: 'flex', gap: 5, borderTop: '2px solid #1e293b' }}>
                 <button onClick={() => setSelectedMatchId(null)} style={actionBtnStyle('#1e293b')}>SALIR</button>
                 <button onClick={handleUndo} style={actionBtnStyle('#92400e')}>↩️ DESHACER</button>
                 <button onClick={() => setIsHistoryOpen(true)} style={actionBtnStyle('#334155')}>📜 HIST.</button>

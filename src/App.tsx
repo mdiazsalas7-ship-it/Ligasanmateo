@@ -6,6 +6,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 // Componentes
 import Login from './Login';
+import { useNotifications } from './useNotifications';
 import AdminEquipos from './AdminEquipos';
 import TeamsPublicViewer from './TeamsPublicViewer';
 import CalendarViewer from './CalendarViewer';
@@ -426,6 +427,9 @@ function App() {
 
     const isAdmin = user?.rol === 'admin';
 
+    // ── Notificaciones push (FCM) ──
+    useNotifications(user?.uid);
+
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#ffffff', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: 110 }}>
 
@@ -533,19 +537,33 @@ function App() {
                                             </div>
                                         </div>
                                         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+
+                                            {/* ── Botón YouTube Liga Oficial ── */}
                                             <button
                                                 onClick={e => { e.stopPropagation(); window.open('https://www.youtube.com/@ligametropolitanadelejeeste', '_blank'); }}
-                                                style={{ flex: 1, padding: '8px 6px', borderRadius: 12, border: 'none', background: '#ff0000', color: 'white', fontWeight: 900, fontSize: '0.55rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                                                style={{ flex: 1, padding: '7px 5px', borderRadius: 12, border: 'none', background: '#ff0000', color: 'white', fontWeight: 900, fontSize: '0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
                                             >
-                                                <img src="https://i.postimg.cc/XJ6rWrrL/image.png" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
-                                                LIGA OFICIAL
+                                                {/* Ícono YouTube */}
+                                                <svg width="14" height="10" viewBox="0 0 24 17" fill="white" style={{ flexShrink: 0 }}>
+                                                    <path d="M23.5 2.5S23.2.7 22.4 0C21.4-1 20.3 0 19.8 0 16.5.2 12 .2 12 .2S7.5.2 4.2 0C3.7 0 2.6-1 1.6 0 .8.7.5 2.5.5 2.5S.2 4.6.2 6.7v2c0 2.1.3 4.2.3 4.2S.8 14.7 1.6 15.4c1 1 2.3.9 2.9 1C6.5 16.6 12 16.7 12 16.7s4.5 0 7.8-.3c.5 0 1.6 1 2.6 0 .8-.7 1.1-2.5 1.1-2.5s.3-2.1.3-4.2v-2C23.8 4.6 23.5 2.5 23.5 2.5zM9.7 11.5V5l6.4 3.3-6.4 3.2z"/>
+                                                </svg>
+                                                {/* Avatar canal liga */}
+                                                <img src="https://i.postimg.cc/NFJGKF0G/image.png" style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '1px solid rgba(255,255,255,0.4)' }} alt="" />
+                                                LIGA
                                             </button>
+
+                                            {/* ── Botón TikTok Barba ── */}
                                             <button
                                                 onClick={e => { e.stopPropagation(); window.open('https://www.tiktok.com/@barbakanzler', '_blank'); }}
-                                                style={{ flex: 1, padding: '8px 6px', borderRadius: 12, border: 'none', background: '#010101', color: 'white', fontWeight: 900, fontSize: '0.55rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                                                style={{ flex: 1, padding: '7px 5px', borderRadius: 12, border: 'none', background: '#010101', color: 'white', fontWeight: 900, fontSize: '0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
                                             >
-                                                <img src="https://i.postimg.cc/RZ9XnGD5/channels4_profile.jpg" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
-                                                @BARBAKANZLER
+                                                {/* Ícono TikTok */}
+                                                <svg width="11" height="13" viewBox="0 0 24 28" fill="white" style={{ flexShrink: 0 }}>
+                                                    <path d="M19.6 0h-4v19a4.2 4.2 0 01-4.2 3.8 4.2 4.2 0 01-4.2-4.2 4.2 4.2 0 014.2-4.2c.4 0 .8.1 1.2.2V10.4a8.6 8.6 0 00-1.2-.1 8.6 8.6 0 00-8.6 8.6 8.6 8.6 0 008.6 8.6 8.6 8.6 0 008.6-8.6V9.3a11.9 11.9 0 006.9 2.2V7.5a7.5 7.5 0 01-7.3-7.5z"/>
+                                                </svg>
+                                                {/* Avatar canal barba */}
+                                                <img src="https://i.postimg.cc/mrfLz0TF/image.png" style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '1px solid rgba(255,255,255,0.4)' }} alt="" />
+                                                BARBA
                                             </button>
                                         </div>
                                     </div>
