@@ -1,4 +1,4 @@
-// deploy v2
+// ─────────────────────────────────────────────────────────────
 // functions/src/index.ts
 // ─────────────────────────────────────────────────────────────
 // Cloud Functions que envían notificaciones push automáticas:
@@ -50,28 +50,19 @@ async function sendPush(
     const BATCH = 500;
     for (let i = 0; i < tokens.length; i += BATCH) {
         const batch = tokens.slice(i, i + BATCH);
+        // Data-only: sin campo "notification" para que solo el SW muestre una notif
         const response = await fcm.sendEachForMulticast({
             tokens: batch,
-            notification: {
+            data: {
+                ...data,
                 title,
                 body,
-                imageUrl: 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg',
+                icon: 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg',
             },
-            data,
-            webpush: {
-                notification: {
-                    icon:  'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg',
-                    badge: 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg',
-                    vibrate: [200, 100, 200],
-                },
-                fcmOptions: { link: '/' },
-            },
-            android: {
-                priority: 'high',
-                notification: { sound: 'default', channelId: 'liga_metro' },
-            },
+            android: { priority: 'high' },
             apns: {
-                payload: { aps: { sound: 'default', badge: 1 } },
+                payload: { aps: { contentAvailable: true } },
+                headers: { 'apns-priority': '5' },
             },
         });
 
