@@ -16,16 +16,6 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 
-    <script>
-      // firebase-messaging-sw.js ya incluye la lógica de PWA (install/activate/fetch)
-      // Reemplaza completamente a sw.js — no necesitas los dos.
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' })
-            .then((reg) => console.log('[SW] Registrado:', reg.scope))
-            .catch((err) => console.warn('[SW] Error:', err));
-        });
-      }
-    </script>
+    <!-- SW registrado por useNotifications.ts para evitar duplicados -->
   </body>
 </html>
