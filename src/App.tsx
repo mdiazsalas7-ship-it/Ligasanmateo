@@ -415,12 +415,15 @@ function App() {
                 // 6. Noticias y entrevistas
                 const [newsSnap, interviewsSnap] = await Promise.all([
                     getDocs(query(collection(db, 'noticias'),    orderBy('fecha', 'desc'), limit(5))),
-                    getDocs(query(collection(db, 'entrevistas'), orderBy('fecha', 'desc'), limit(5))),
+                    getDocs(query(collection(db, 'entrevistas'), limit(20))),
                 ]);
                 if (abortToken.cancelled) return;
 
                 setNoticias(newsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-                setEntrevistas(interviewsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const todasEntrevistas = interviewsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                // Ordenar: los que tienen createdAt primero, luego por fecha string, tomar 5 más recientes
+                todasEntrevistas.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+                setEntrevistas(todasEntrevistas.slice(0, 5));
                 setEntrevistasCargadas(true);
 
                 setLoading(false);
@@ -770,44 +773,44 @@ function App() {
                                 ) : entrevistas.map(video => (
                                     <div key={video.id} onClick={() => setVideoSeleccionado(video)}
                                         style={{ minWidth: 110, cursor: 'pointer', scrollSnapAlign: 'start', textAlign: 'center', flexShrink: 0 }}>
-                                        {/* Thumbnail — fondo oscuro + ícono play, sin cargar el video */}
                                         <div style={{
                                             width: 110, height: 150, borderRadius: 12,
                                             overflow: 'hidden', border: '2px solid #1e3a8a',
-                                            position: 'relative', background: 'linear-gradient(135deg,#0f172a,#1e3a8a)',
-                                            display: 'flex', flexDirection: 'column',
-                                            alignItems: 'center', justifyContent: 'center', gap: 8,
+                                            position: 'relative', background: '#000',
                                         }}>
-                                            {/* Si hay miniatura guardada la usamos, sino ícono */}
+                                            {/* Si hay thumbnail guardado usarlo, sino capturar frame del video */}
                                             {video.thumbnailUrl ? (
                                                 <img src={video.thumbnailUrl} alt={video.titulo}
-                                                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                                                    onError={e => { e.currentTarget.style.display = 'none'; }} />
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                             ) : (
-                                                <span style={{ fontSize: '2rem' }}>🎥</span>
+                                                <video
+                                                    src={`${video.videoUrl}#t=2`}
+                                                    muted playsInline preload="metadata"
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                                                    onLoadedMetadata={e => { (e.target as HTMLVideoElement).currentTime = 2; }}
+                                                />
                                             )}
-                                            {/* Overlay con botón play */}
+                                            {/* Overlay semitransparente con play */}
                                             <div style={{
                                                 position: 'absolute', inset: 0,
-                                                background: 'rgba(0,0,0,0.35)',
+                                                background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)',
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             }}>
                                                 <div style={{
-                                                    width: 38, height: 38, borderRadius: '50%',
-                                                    background: 'rgba(255,255,255,0.9)',
+                                                    width: 36, height: 36, borderRadius: '50%',
+                                                    background: 'rgba(255,255,255,0.88)',
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
+                                                    boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
                                                 }}>
-                                                    <span style={{ fontSize: '1rem', marginLeft: 3 }}>▶</span>
+                                                    <span style={{ fontSize: '0.9rem', marginLeft: 3 }}>▶</span>
                                                 </div>
                                             </div>
-                                            {/* Fecha abajo */}
+                                            {/* Fecha en la parte de abajo */}
                                             {video.fecha && (
                                                 <div style={{
                                                     position: 'absolute', bottom: 0, left: 0, right: 0,
-                                                    background: 'rgba(0,0,0,0.6)',
-                                                    fontSize: '0.38rem', color: '#cbd5e1',
-                                                    padding: '3px 5px', textAlign: 'center',
+                                                    padding: '4px 6px', textAlign: 'center',
+                                                    fontSize: '0.4rem', color: 'rgba(255,255,255,0.85)', fontWeight: 600,
                                                 }}>
                                                     {video.fecha}
                                                 </div>
