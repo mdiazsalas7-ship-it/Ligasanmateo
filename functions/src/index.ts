@@ -117,6 +117,8 @@ const CALENDARIO_COLS = [
     'calendario',
     'calendario_LIBRE',
     'calendario_INTERINDUSTRIAL',
+    'calendario_U16_FEMENINO',
+    'calendario_U16M',
 ];
 
 CALENDARIO_COLS.forEach(colName => {
