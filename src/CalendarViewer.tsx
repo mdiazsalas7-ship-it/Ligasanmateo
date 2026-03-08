@@ -306,9 +306,37 @@ const BoxScoreModal = memo(({
                     query(collection(db, 'stats_partido'), where('partidoId', '==', match.id))
                 );
                 const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Stat));
-                setStats(data);
+
+                // Buscar fotos en todas las colecciones de jugadores posibles
+                const jugadorIds = [...new Set(data.map(s => s.jugadorId).filter(Boolean))];
+                const fotoMap: Record<string, string> = {};
+
+                if (jugadorIds.length > 0) {
+                    const colsJugadores = [
+                        'jugadores_MASTER40', 'jugadores', 'jugadores_LIBRE',
+                        'jugadores_INTERINDUSTRIAL', 'jugadores_U16_FEMENINO', 'jugadores_U16M',
+                    ];
+                    await Promise.all(colsJugadores.map(async col => {
+                        try {
+                            const jSnap = await getDocs(collection(db, col));
+                            jSnap.forEach(d => {
+                                if (jugadorIds.includes(d.id) && d.data().fotoUrl) {
+                                    fotoMap[d.id] = d.data().fotoUrl;
+                                }
+                            });
+                        } catch { /* colección no existe, ignorar */ }
+                    }));
+                }
+
+                // Inyectar fotoUrl en cada stat
+                const dataConFoto = data.map(s => ({
+                    ...s,
+                    fotoUrl: fotoMap[s.jugadorId] || s.fotoUrl || '',
+                }));
+
+                setStats(dataConFoto);
                 const init: Record<string, Stat> = {};
-                data.forEach(s => { init[s.id] = { ...s, bloqueos: s.bloqueos ?? s.tapones ?? 0 }; });
+                dataConFoto.forEach(s => { init[s.id] = { ...s, bloqueos: s.bloqueos ?? s.tapones ?? 0 }; });
                 setEditedStats(init);
             } catch (e) { console.error(e); }
             setLoading(false);
