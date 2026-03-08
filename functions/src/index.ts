@@ -3,8 +3,9 @@
 // ─────────────────────────────────────────────────────────────
 // Cloud Functions que envían notificaciones push automáticas:
 //
-//  1. onNoticiaCreada   → cuando se crea un doc en `noticias`
-//  2. onPartidoFinalizado → cuando estatus → 'finalizado' en
+//  1. onNoticiaCreada      → cuando se crea un doc en `noticias`
+//  2. onVideoPublicado     → cuando se crea un doc en `entrevistas`
+//  3. onPartidoFinalizado  → cuando estatus → 'finalizado' en
 //     cualquier colección de calendario
 //
 // DEPLOY:
@@ -110,7 +111,26 @@ export const onNoticiaCreada = functions
     });
 
 // ─────────────────────────────────────────────────────────────
-// TRIGGER 2: Partido finalizado
+// TRIGGER 2: Video / Entrevista publicada
+// ─────────────────────────────────────────────────────────────
+exports.onVideoPublicado = functions
+    .region('us-central1')
+    .firestore
+    .document('entrevistas/{videoId}')
+    .onCreate(async (snap) => {
+        const data  = snap.data();
+        const titulo = data.titulo || data.title || 'Nuevo video';
+        const desc   = data.descripcion || data.description || 'Mira el nuevo contenido de la liga';
+
+        await sendPush(
+            '🎥 Nuevo Video · Liga Metropolitana',
+            `${titulo} — ${desc}`,
+            { type: 'video', id: snap.id }
+        );
+    });
+
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 3: Partido finalizado
 // Cubre: calendario, calendario_LIBRE, calendario_INTERINDUSTRIAL
 // ─────────────────────────────────────────────────────────────
 const CALENDARIO_COLS = [
