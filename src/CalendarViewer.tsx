@@ -391,6 +391,308 @@ const BoxScoreModal = memo(({
         } catch (e: any) { alert(`Error: ${e.message}`); }
     };
 
+    const [sharing, setSharing] = useState(false);
+
+    // Fetch imagen como blob → base64 (evita bloqueo CORS de Firebase Storage en canvas)
+    const toBase64 = async (url: string): Promise<string> => {
+        if (!url) return '';
+        try {
+            const res = await fetch(url);
+            if (!res.ok) return '';
+            const blob = await res.blob();
+            return new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror  = () => resolve('');
+                reader.readAsDataURL(blob);
+            });
+        } catch { return ''; }
+    };
+
+    const compartirResultado = async () => {
+        setSharing(true);
+        try {
+            const W = 800, H = 500;
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d')!;
+
+            // Carga imagen remota como base64 (funciona con CORS configurado)
+            const loadRemoteImg = (url: string): Promise<HTMLImageElement | null> =>
+                new Promise(async resolve => {
+                    try {
+                        const res = await fetch(url);
+                        if (!res.ok) { resolve(null); return; }
+                        const blob = await res.blob();
+                        const b64 = await new Promise<string>(r => {
+                            const fr = new FileReader();
+                            fr.onloadend = () => r(fr.result as string);
+                            fr.onerror   = () => r('');
+                            fr.readAsDataURL(blob);
+                        });
+                        if (!b64) { resolve(null); return; }
+                        const img = new Image();
+                        img.onload  = () => resolve(img);
+                        img.onerror = () => resolve(null);
+                        img.src = b64;
+                    } catch { resolve(null); }
+                });
+
+            const PALETTE = ['#ef4444','#f97316','#eab308','#22c55e','#14b8a6','#3b82f6','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
+
+            // Dibuja imagen circular con fallback a iniciales
+            const drawCircleImg = async (url: string | undefined, name: string, cx: number, cy: number, r: number, borderColor = 'rgba(255,255,255,0.3)', borderW = 1.5) => {
+                let h = 0;
+                for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % PALETTE.length;
+                const color = PALETTE[Math.abs(h)];
+                const img = url ? await loadRemoteImg(url) : null;
+                ctx.save();
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                if (img) {
+                    ctx.fillStyle = '#fff'; ctx.fill(); ctx.clip();
+                    ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
+                } else {
+                    const gr = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r);
+                    gr.addColorStop(0, color + 'ff'); gr.addColorStop(1, color + '99');
+                    ctx.fillStyle = gr; ctx.fill(); ctx.clip();
+                    const words = name.trim().split(' ');
+                    const initials = words.length >= 2 ? (words[0][0] + words[1][0]).toUpperCase() : name.substring(0, 2).toUpperCase();
+                    ctx.font = 'bold ' + Math.round(r * 0.72) + 'px system-ui';
+                    ctx.fillStyle = 'white'; ctx.textAlign = 'center';
+                    ctx.fillText(initials, cx, cy + r * 0.27);
+                }
+                ctx.restore();
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.strokeStyle = borderColor; ctx.lineWidth = borderW; ctx.stroke();
+            };
+
+            // Color único por nombre de equipo
+            const teamColor = (name: string) => {
+                let h = 0;
+                for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % PALETTE.length;
+                return PALETTE[Math.abs(h)];
+            };
+
+            // Círculo con iniciales del equipo
+            const drawTeamBadge = (name: string, cx: number, cy: number, r: number, winner: boolean) => {
+                const color = teamColor(name);
+                const words = name.trim().split(' ');
+                const initials = words.length >= 2
+                    ? (words[0][0] + words[1][0]).toUpperCase()
+                    : name.substring(0, 2).toUpperCase();
+                // Glow si ganador
+                if (winner) { ctx.save(); ctx.shadowColor = color; ctx.shadowBlur = 30; }
+                // Relleno
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                const gr = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r);
+                gr.addColorStop(0, color + 'ff');
+                gr.addColorStop(1, color + '99');
+                ctx.fillStyle = gr; ctx.fill();
+                if (winner) ctx.restore();
+                // Borde
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.strokeStyle = winner ? '#fbbf24' : 'rgba(255,255,255,0.25)';
+                ctx.lineWidth = winner ? 3 : 1.5; ctx.stroke();
+                // Iniciales
+                ctx.font = `bold ${Math.round(r * 0.72)}px system-ui`;
+                ctx.fillStyle = 'white'; ctx.textAlign = 'center';
+                ctx.fillText(initials, cx, cy + r * 0.27);
+            };
+
+            // Círculo MVP dorado
+            const drawMvpBadge = (name: string, cx: number, cy: number, r: number) => {
+                ctx.save(); ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 20;
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                const gr = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r);
+                gr.addColorStop(0, '#fde68a'); gr.addColorStop(1, '#b45309');
+                ctx.fillStyle = gr; ctx.fill(); ctx.restore();
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.font = `bold ${Math.round(r * 0.85)}px system-ui`;
+                ctx.fillStyle = 'white'; ctx.textAlign = 'center';
+                ctx.fillText((name || '?').charAt(0).toUpperCase(), cx, cy + r * 0.32);
+            };
+
+            // ── Fondo ──
+            const bg = ctx.createLinearGradient(0, 0, W, H);
+            bg.addColorStop(0, '#050d20'); bg.addColorStop(0.5, '#0d1f5c'); bg.addColorStop(1, '#050d20');
+            ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+            // Puntos
+            ctx.fillStyle = 'rgba(255,255,255,0.03)';
+            for (let x = 0; x < W; x += 20) for (let y = 0; y < H; y += 20) ctx.fillRect(x, y, 2, 2);
+
+            // ── Logo liga (con fallback a emoji) ──
+            const LIGA_LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+            const ligaImg = await loadRemoteImg(LIGA_LOGO);
+            if (ligaImg) {
+                const lr = 38;
+                ctx.save();
+                ctx.beginPath(); ctx.arc(W / 2, 46, lr, 0, Math.PI * 2);
+                ctx.fillStyle = '#fff'; ctx.fill(); ctx.clip();
+                ctx.drawImage(ligaImg, W / 2 - lr, 46 - lr, lr * 2, lr * 2);
+                ctx.restore();
+                ctx.beginPath(); ctx.arc(W / 2, 46, lr, 0, Math.PI * 2);
+                ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.stroke();
+            } else {
+                ctx.font = '52px system-ui'; ctx.textAlign = 'center';
+                ctx.fillText('🏀', W / 2, 58);
+            }
+
+            // ── Título ──
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 24px system-ui';
+            ctx.fillText('LIGA METROPOLITANA EJE ESTE', W / 2, 108);
+            ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '13px system-ui';
+            ctx.fillText(`${(match.categoria || '').toUpperCase()}  ·  ${match.fechaAsignada || ''}`, W / 2, 128);
+
+            // Línea dorada
+            const gl = ctx.createLinearGradient(80, 0, W - 80, 0);
+            gl.addColorStop(0, 'transparent'); gl.addColorStop(0.35, 'rgba(251,191,36,0.5)');
+            gl.addColorStop(0.65, 'rgba(251,191,36,0.5)'); gl.addColorStop(1, 'transparent');
+            ctx.strokeStyle = gl; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(80, 140); ctx.lineTo(W - 80, 140); ctx.stroke();
+
+            const localGana = (match.marcadorLocal ?? 0) > (match.marcadorVisitante ?? 0);
+            const visitGana = (match.marcadorVisitante ?? 0) > (match.marcadorLocal ?? 0);
+
+            // Truncar texto al ancho máximo
+            const fitText = (text: string, maxW: number, font: string) => {
+                ctx.font = font;
+                if (ctx.measureText(text).width <= maxW) return text;
+                let t = text;
+                while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+                return t + '…';
+            };
+
+            // ── Zona de equipos: local izquierda, visitante derecha ──
+            // Logo centrado en x=170 y x=W-170, nombre debajo a 2 líneas si largo
+            const logoLocalUrl  = getLogo(match.equipoLocalId,     match.equipoLocalNombre);
+            const logoVisitUrl  = getLogo(match.equipoVisitanteId, match.equipoVisitanteNombre);
+            const LX = 190, RX = W - 190, LY = 240, R = 52;
+
+            await drawCircleImg(logoLocalUrl,  match.equipoLocalNombre,  LX, LY, R, localGana ? '#fbbf24' : 'rgba(255,255,255,0.2)', localGana ? 3 : 1.5);
+            await drawCircleImg(logoVisitUrl,  match.equipoVisitanteNombre, RX, LY, R, visitGana ? '#fbbf24' : 'rgba(255,255,255,0.2)', visitGana ? 3 : 1.5);
+
+            // Nombres de equipos — dos líneas si no caben
+            const drawTeamName = (name: string, cx: number, startY: number, winner: boolean) => {
+                ctx.fillStyle = winner ? '#fbbf24' : 'rgba(255,255,255,0.9)';
+                ctx.textAlign = 'center';
+                const maxW = 270;
+                const font = 'bold 16px system-ui';
+                ctx.font = font;
+                const upper = name.toUpperCase();
+                if (ctx.measureText(upper).width <= maxW) {
+                    ctx.fillText(upper, cx, startY);
+                } else {
+                    // Cortar en palabras
+                    const words = upper.split(' ');
+                    let line1 = '', line2 = '';
+                    for (const w of words) {
+                        if (ctx.measureText(line1 + ' ' + w).width <= maxW) line1 = (line1 + ' ' + w).trim();
+                        else line2 = (line2 + ' ' + w).trim();
+                    }
+                    ctx.fillText(line1, cx, startY);
+                    if (line2) ctx.fillText(line2, cx, startY + 18);
+                }
+            };
+            drawTeamName(match.equipoLocalNombre,     LX, LY + R + 16, localGana);
+            drawTeamName(match.equipoVisitanteNombre, RX, LY + R + 16, visitGana);
+
+            // ── Caja marcador central ──
+            const MBW = 230, MBH = 108, MBX = W / 2 - MBW / 2, MBY = 168;
+            ctx.fillStyle = 'rgba(255,255,255,0.06)';
+            ctx.beginPath(); ctx.roundRect(MBX, MBY, MBW, MBH, 18); ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.roundRect(MBX, MBY, MBW, MBH, 18); ctx.stroke();
+
+            ctx.textAlign = 'center';
+            // Marcador local
+            ctx.font = 'bold 74px system-ui';
+            ctx.fillStyle = localGana ? '#fbbf24' : 'white';
+            ctx.fillText(String(match.marcadorLocal ?? 0), W / 2 - 58, 258);
+            // Guión visible
+            ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = 'bold 40px system-ui';
+            ctx.fillText('-', W / 2, 254);
+            // Marcador visitante
+            ctx.font = 'bold 74px system-ui';
+            ctx.fillStyle = visitGana ? '#fbbf24' : 'white';
+            ctx.fillText(String(match.marcadorVisitante ?? 0), W / 2 + 58, 258);
+            // Etiqueta finalizado
+            ctx.fillStyle = '#10b981'; ctx.font = 'bold 11px system-ui';
+            ctx.fillText('✓  FINALIZADO', W / 2, 276);
+
+            // ── Cuartos ──
+            const qL = (match as any).cuartosLocal;
+            const qV = (match as any).cuartosVisitante;
+            if (qL || qV) {
+                const qs = ['Q1','Q2','Q3','Q4'];
+                const cw = 80; const sx = W / 2 - (qs.length * cw) / 2; const ry = 310;
+                // Fondo cuartos
+                ctx.fillStyle = 'rgba(255,255,255,0.04)';
+                ctx.beginPath(); ctx.roundRect(sx - 10, ry - 12, qs.length * cw + 20, 52, 8); ctx.fill();
+                ctx.font = 'bold 10px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.35)';
+                qs.forEach((q, i) => { ctx.textAlign = 'center'; ctx.fillText(q, sx + i * cw + cw / 2, ry); });
+                ctx.font = 'bold 16px system-ui';
+                qs.forEach((q, i) => {
+                    const lv = qL?.[q] ?? 0; const vv = qV?.[q] ?? 0;
+                    ctx.fillStyle = lv > vv ? '#60a5fa' : 'rgba(255,255,255,0.65)';
+                    ctx.fillText(String(lv), sx + i * cw + cw / 2, ry + 18);
+                    ctx.fillStyle = vv > lv ? '#f87171' : 'rgba(255,255,255,0.65)';
+                    ctx.fillText(String(vv), sx + i * cw + cw / 2, ry + 35);
+                });
+            }
+
+            // ── MVP ──
+            if (mvp) {
+                const hasQ = !!(qL || qV);
+                const mvpY = hasQ ? 380 : 320;
+                const mvpPts = Number(mvp.dobles ?? 0) * 2 + Number(mvp.triples ?? 0) * 3 + Number(mvp.tirosLibres ?? 0);
+                // Foto centrada en x, banner centrado también
+                const pr = 28;
+                const bannerW = 420, bannerH = 66;
+                const bannerX = W / 2 - bannerW / 2;
+                const pcy = mvpY + bannerH / 2;
+                const px  = bannerX + pr + 8;
+
+                // Fondo MVP
+                ctx.fillStyle = 'rgba(251,191,36,0.1)';
+                ctx.beginPath(); ctx.roundRect(bannerX, mvpY, bannerW, bannerH, 12); ctx.fill();
+                ctx.strokeStyle = 'rgba(251,191,36,0.3)'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.roundRect(bannerX, mvpY, bannerW, bannerH, 12); ctx.stroke();
+
+                await drawCircleImg(mvp.fotoUrl, mvp.nombre, px, pcy, pr, '#fbbf24', 2.5);
+
+                ctx.textAlign = 'left';
+                ctx.font = 'bold 11px system-ui'; ctx.fillStyle = '#fbbf24';
+                ctx.fillText('🏆  MVP DEL PARTIDO', px + pr + 12, mvpY + 18);
+                ctx.font = 'bold 18px system-ui'; ctx.fillStyle = 'white';
+                ctx.fillText(fitText(mvp.nombre.toUpperCase(), 290, 'bold 18px system-ui'), px + pr + 12, mvpY + 38);
+                ctx.font = '13px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.55)';
+                ctx.fillText(`${mvpPts} PTS  ·  ${mvp.rebotes ?? 0} REB  ·  ${mvp.robos ?? 0} ROB`, px + pr + 12, mvpY + 56);
+            }
+
+            // ── Footer ──
+            ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('Liga Metropolitana Eje Este  ·  San Mateo, Aragua', W / 2, H - 14);
+
+            // ── Compartir / Descargar ──
+            canvas.toBlob(async (blob) => {
+                if (!blob) return;
+                const file = new File([blob], 'resultado.png', { type: 'image/png' });
+                try {
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        await navigator.share({ files: [file], title: `${match.equipoLocalNombre} ${match.marcadorLocal} - ${match.marcadorVisitante} ${match.equipoVisitanteNombre}` });
+                    } else {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a'); a.href = url; a.download = 'resultado.png'; a.click();
+                        setTimeout(() => URL.revokeObjectURL(url), 2000);
+                    }
+                } catch {}
+                setSharing(false);
+            }, 'image/png');
+        } catch (e) { console.error(e); setSharing(false); }
+    };
+
     const inputStyle: React.CSSProperties = {
         width: 40, padding: '5px 2px', textAlign: 'center',
         border: '1px solid #cbd5e1', borderRadius: 4, fontSize: '0.8rem',
@@ -491,6 +793,15 @@ const BoxScoreModal = memo(({
                         </p>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
+                        {match.estatus === 'finalizado' && !isEditing && (
+                            <button
+                                onClick={compartirResultado}
+                                disabled={sharing}
+                                style={btnStyle('#1e3a8a', 'white')}
+                            >
+                                {sharing ? '⏳...' : '📤 COMPARTIR'}
+                            </button>
+                        )}
                         {rol === 'admin' && (
                             isEditing
                                 ? <button onClick={saveChanges} style={btnStyle('#10b981')}>💾 GUARDAR</button>
