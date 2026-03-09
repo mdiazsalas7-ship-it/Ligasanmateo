@@ -26,28 +26,65 @@ const AdminVideos = ({ onClose }: { onClose: () => void }) => {
     useEffect(() => { fetchVideos(); }, []);
 
     // Captura un frame del video y devuelve un blob JPEG
+    // Estrategia: play→pause es la más confiable para forzar decodificación
     const capturarThumbnail = (file: File): Promise<Blob | null> => {
         return new Promise(resolve => {
             const video   = document.createElement('video');
             const canvas  = document.createElement('canvas');
-            video.preload = 'metadata';
-            video.muted   = true;
-            video.playsInline = true;
-            video.src = URL.createObjectURL(file);
-            video.onloadedmetadata = () => {
-                // Saltar al 20% del video para una imagen representativa
-                video.currentTime = Math.min(video.duration * 0.2, 5);
-            };
-            video.onseeked = () => {
-                canvas.width  = video.videoWidth  || 320;
-                canvas.height = video.videoHeight || 180;
+            const blobUrl = URL.createObjectURL(file);
+            let captured  = false;
+
+            const cleanup = () => { try { URL.revokeObjectURL(blobUrl); video.src = ''; } catch {} };
+
+            const capturar = () => {
+                if (captured) return;
+                captured = true;
+                canvas.width  = video.videoWidth  || 640;
+                canvas.height = video.videoHeight || 360;
                 const ctx = canvas.getContext('2d');
-                if (!ctx) { resolve(null); return; }
+                if (!ctx) { cleanup(); resolve(null); return; }
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.75);
-                URL.revokeObjectURL(video.src);
+                canvas.toBlob(blob => { cleanup(); resolve(blob); }, 'image/jpeg', 0.85);
             };
-            video.onerror = () => resolve(null);
+
+            video.muted       = true;
+            video.playsInline = true;
+            video.preload     = 'auto';
+            video.src         = blobUrl;
+
+            // Al tener metadata: ir a 1 segundo (o 10% si el video es corto)
+            video.onloadedmetadata = () => {
+                video.currentTime = Math.min(video.duration * 0.1, 1);
+            };
+
+            // onseeked: el browser llegó al tiempo pedido → capturar
+            video.onseeked = capturar;
+
+            // Fallback 1: si onseeked no disparó, usar play+pause
+            // El primer timeupdate tras play garantiza que hay un frame decodificado
+            video.oncanplay = () => {
+                if (!captured) {
+                    video.play().then(() => {
+                        video.pause();
+                    }).catch(() => {
+                        // autoplay bloqueado → capturar de todas formas
+                        capturar();
+                    });
+                }
+            };
+
+            video.ontimeupdate = () => {
+                if (video.currentTime > 0 && !captured) {
+                    video.pause();
+                    capturar();
+                }
+            };
+
+            // Fallback 2: timeout de 10s
+            setTimeout(() => { if (!captured) capturar(); }, 10000);
+
+            video.onerror = () => { cleanup(); resolve(null); };
+            video.load();
         });
     };
 

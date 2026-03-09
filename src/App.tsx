@@ -778,16 +778,25 @@ function App() {
                                             overflow: 'hidden', border: '2px solid #1e3a8a',
                                             position: 'relative', background: '#000',
                                         }}>
-                                            {/* Si hay thumbnail guardado usarlo, sino capturar frame del video */}
+                                            {/* Thumbnail guardado (preferido) o frame del video */}
                                             {video.thumbnailUrl ? (
                                                 <img src={video.thumbnailUrl} alt={video.titulo}
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                             ) : (
                                                 <video
-                                                    src={`${video.videoUrl}#t=2`}
+                                                    src={video.videoUrl}
                                                     muted playsInline preload="metadata"
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
-                                                    onLoadedMetadata={e => { (e.target as HTMLVideoElement).currentTime = 2; }}
+                                                    onLoadedMetadata={e => {
+                                                        const v = e.target as HTMLVideoElement;
+                                                        v.currentTime = Math.min(v.duration * 0.15, 3);
+                                                    }}
+                                                    onSeeked={e => {
+                                                        // forzar repaint para que el frame aparezca
+                                                        const v = e.target as HTMLVideoElement;
+                                                        v.style.opacity = '0.99';
+                                                        setTimeout(() => { v.style.opacity = '1'; }, 50);
+                                                    }}
                                                 />
                                             )}
                                             {/* Overlay semitransparente con play */}

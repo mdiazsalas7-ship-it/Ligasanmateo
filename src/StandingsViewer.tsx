@@ -22,11 +22,14 @@ interface Partido {
     marcadorVisitante: number;
     estatus: string;
     fase?: string;
+    fechaAsignada?: string;
 }
 
 interface EquipoConStats extends Equipo {
     jj: number;
     dif: number;
+    forma: ('G' | 'P')[];   // últimos 5 resultados, más reciente al final
+    playoffZone: boolean;   // clasifica a playoff
 }
 
 interface Props {
@@ -55,6 +58,24 @@ const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/166/166344.png';
 // solo para ese subgrupo. Esta implementación aplica eso correctamente
 // mediante ordenación estable iterativa.
 // ─────────────────────────────────────────────
+
+/** Calcula los últimos N resultados de un equipo */
+const calcForma = (equipoId: string, partidos: Partido[], n = 5): ('G' | 'P')[] => {
+    const finalizados = partidos
+        .filter(p => {
+            const fase = (p.fase ?? '').trim().toUpperCase();
+            return p.estatus === 'finalizado' && (fase === 'REGULAR' || fase === '')
+                && (p.equipoLocalId === equipoId || p.equipoVisitanteId === equipoId);
+        })
+        .sort((a, b) => (a.fechaAsignada || '').localeCompare(b.fechaAsignada || ''));
+
+    return finalizados.slice(-n).map(p => {
+        const esLocal = p.equipoLocalId === equipoId;
+        const mio  = esLocal ? p.marcadorLocal    : p.marcadorVisitante;
+        const suyo = esLocal ? p.marcadorVisitante : p.marcadorLocal;
+        return mio > suyo ? 'G' : 'P';
+    });
+};
 
 /** Filtra partidos de fase regular finalizados */
 const esPartidoRegular = (p: Partido) => {
@@ -176,31 +197,42 @@ const TeamRow = memo(({ eq, index, color }: { eq: EquipoConStats; index: number;
             borderBottom: '1px solid #f1f5f9',
             background: esLider ? `${color}08` : 'transparent',
             transition: 'background 0.15s',
+            borderLeft: eq.playoffZone ? `3px solid ${color}` : '3px solid transparent',
         }}
             onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
             onMouseLeave={e => (e.currentTarget.style.background = esLider ? `${color}08` : 'transparent')}
         >
-            {/* Posición */}
-            <td style={{ padding: '12px 10px', textAlign: 'center', width: 40 }}>
-                <div style={{
-                    width: 26, height: 26, borderRadius: '50%', margin: '0 auto',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: index < 2 ? color : '#f1f5f9',
-                    color: index < 2 ? 'white' : '#94a3b8',
-                    fontSize: '0.7rem', fontWeight: 900,
-                }}>
-                    {index + 1}
+            {/* Posición + indicador playoff */}
+            <td style={{ padding: '12px 6px 12px 8px', textAlign: 'center', width: 44 }}>
+                <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{
+                        width: 28, height: 28, borderRadius: '50%',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: eq.playoffZone ? color : '#f1f5f9',
+                        color: eq.playoffZone ? 'white' : '#94a3b8',
+                        fontSize: '0.7rem', fontWeight: 900,
+                        boxShadow: eq.playoffZone ? `0 2px 8px ${color}55` : 'none',
+                    }}>
+                        {index + 1}
+                    </div>
+                    {eq.playoffZone && (
+                        <div style={{
+                            position: 'absolute', bottom: -1, right: -3,
+                            width: 8, height: 8, borderRadius: '50%',
+                            background: '#10b981', border: '1.5px solid white',
+                        }} />
+                    )}
                 </div>
             </td>
 
             {/* Equipo */}
-            <td style={{ padding: '10px 12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <td style={{ padding: '10px 8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{
-                        width: 36, height: 36, borderRadius: '50%',
-                        border: '1.5px solid #e2e8f0', overflow: 'hidden',
-                        background: 'white', display: 'flex',
-                        justifyContent: 'center', alignItems: 'center', flexShrink: 0,
+                        width: 34, height: 34, borderRadius: '50%',
+                        border: eq.playoffZone ? `2px solid ${color}` : '1.5px solid #e2e8f0',
+                        overflow: 'hidden', background: 'white',
+                        display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0,
                     }}>
                         <img
                             src={imgError ? DEFAULT_LOGO : (eq.logoUrl || DEFAULT_LOGO)}
@@ -209,9 +241,16 @@ const TeamRow = memo(({ eq, index, color }: { eq: EquipoConStats; index: number;
                             onError={() => setImgError(true)}
                         />
                     </div>
-                    <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-                        {eq.nombre.toUpperCase()}
-                    </span>
+                    <div style={{ minWidth: 0 }}>
+                        <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.75rem', whiteSpace: 'nowrap', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 110 }}>
+                            {eq.nombre.toUpperCase()}
+                        </span>
+                        {eq.playoffZone && (
+                            <span style={{ fontSize: '0.48rem', fontWeight: 900, color: '#10b981', letterSpacing: '0.5px' }}>
+                                ✓ PLAYOFF
+                            </span>
+                        )}
+                    </div>
                 </div>
             </td>
 
@@ -226,6 +265,26 @@ const TeamRow = memo(({ eq, index, color }: { eq: EquipoConStats; index: number;
                 <span style={statStyle(eq.dif >= 0 ? '#3b82f6' : '#ef4444')}>
                     {eq.dif > 0 ? `+${eq.dif}` : eq.dif}
                 </span>
+            </td>
+            {/* FORMA — últimos 5 resultados */}
+            <td style={{ ...tdStyle, minWidth: 82 }}>
+                <div style={{ display: 'flex', gap: 3, justifyContent: 'center' }}>
+                    {eq.forma.length === 0 ? (
+                        <span style={{ fontSize: '0.6rem', color: '#cbd5e1' }}>—</span>
+                    ) : (
+                        eq.forma.map((r, i) => (
+                            <div key={i} style={{
+                                width: 18, height: 18, borderRadius: 4,
+                                background: r === 'G' ? '#10b981' : '#ef4444',
+                                color: 'white', fontSize: '0.52rem', fontWeight: 900,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                boxShadow: r === 'G' ? '0 1px 4px #10b98155' : '0 1px 4px #ef444455',
+                            }}>
+                                {r}
+                            </div>
+                        ))
+                    )}
+                </div>
             </td>
             {/* PTS */}
             <td style={{ ...tdStyle, background: `${color}0d` }}>
@@ -268,12 +327,13 @@ const GroupTable = memo(({ teams, groupName, color }: { teams: EquipoConStats[];
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', minWidth: 420 }}>
                     <thead>
                         <tr style={{ background: '#f8fafc', color: '#94a3b8', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                            <th style={{ padding: '10px', width: 40 }}>#</th>
+                            <th style={{ padding: '10px', width: 44 }}>#</th>
                             <th style={{ padding: '10px', textAlign: 'left' }}>Equipo</th>
                             <th style={{ padding: '10px' }}>JJ</th>
                             <th style={{ padding: '10px' }}>JG</th>
                             <th style={{ padding: '10px' }}>JP</th>
                             <th style={{ padding: '10px' }}>DIF</th>
+                            <th style={{ padding: '10px', minWidth: 82 }}>FORMA</th>
                             <th style={{ padding: '10px', background: `${color}15`, color, fontWeight: 900, minWidth: 50 }}>PTS</th>
                         </tr>
                     </thead>
@@ -285,13 +345,31 @@ const GroupTable = memo(({ teams, groupName, color }: { teams: EquipoConStats[];
                 </table>
             </div>
 
-            {/* Leyenda desempate */}
+            {/* Leyenda */}
             <div style={{
                 padding: '8px 16px', background: '#f8fafc',
                 borderTop: '1px solid #f1f5f9',
-                fontSize: '0.58rem', color: '#94a3b8', letterSpacing: '0.5px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                gap: 8, flexWrap: 'wrap',
             }}>
-                Desempate: Apéndice D FIBA 2024 • H2H récord → Dif. H2H → PF H2H → Dif. general → PF general
+                <span style={{ fontSize: '0.52rem', color: '#94a3b8' }}>
+                    Desempate: Apéndice D FIBA 2024 • H2H → Dif. H2H → PF H2H → Dif. general
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
+                        <span style={{ fontSize: '0.52rem', color: '#10b981', fontWeight: 700 }}>Clasifica playoff</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <div style={{ width: 14, height: 14, borderRadius: 3, background: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ color: 'white', fontSize: '0.45rem', fontWeight: 900 }}>G</span>
+                        </div>
+                        <div style={{ width: 14, height: 14, borderRadius: 3, background: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ color: 'white', fontSize: '0.45rem', fontWeight: 900 }}>P</span>
+                        </div>
+                        <span style={{ fontSize: '0.52rem', color: '#94a3b8' }}>Últimos 5</span>
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -329,22 +407,29 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
                 }
                 // Empate: no suma puntos (no debería ocurrir en basquetbol, pero lo manejamos)
             }
-            return { ...eq, victorias, derrotas, puntos, puntos_favor: pf, puntos_contra: pc, jj: victorias + derrotas, dif: pf - pc };
+            return {
+                ...eq, victorias, derrotas, puntos, puntos_favor: pf, puntos_contra: pc,
+                jj: victorias + derrotas, dif: pf - pc,
+                forma: calcForma(eq.id, partidos),
+                playoffZone: false, // se asigna después del sort
+            };
         });
     }, [equipos, partidosRegular]);
 
     // Separar grupos y ordenar con reglas FIBA
+    const PLAYOFF_SPOTS = 4; // top 4 clasifican a playoff por grupo
+
     const grupoA = useMemo(() => {
         const equipos = equiposConStats.filter(e => {
             const g = e.grupo?.toUpperCase();
             return g === 'A' || g === 'ÚNICO';
         });
-        return sortFIBA(equipos, partidosRegular);
+        return sortFIBA(equipos, partidosRegular).map((e, i) => ({ ...e, playoffZone: i < PLAYOFF_SPOTS }));
     }, [equiposConStats, partidosRegular]);
 
     const grupoB = useMemo(() => {
         const equipos = equiposConStats.filter(e => e.grupo?.toUpperCase() === 'B');
-        return sortFIBA(equipos, partidosRegular);
+        return sortFIBA(equipos, partidosRegular).map((e, i) => ({ ...e, playoffZone: i < PLAYOFF_SPOTS }));
     }, [equiposConStats, partidosRegular]);
 
     const getGroupLabel = (groupCode: 'A' | 'B') => {
