@@ -9,6 +9,10 @@ import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 // ─────────────────────────────────────────────
 // TIPOS
 // ─────────────────────────────────────────────
+interface CuartosMap {
+    Q1?: number; Q2?: number; Q3?: number; Q4?: number;
+}
+
 interface Match {
     id: string;
     fechaAsignada: string;
@@ -23,6 +27,8 @@ interface Match {
     equipoVisitanteNombre: string;
     marcadorLocal?: number;
     marcadorVisitante?: number;
+    cuartosLocal?: CuartosMap;
+    cuartosVisitante?: CuartosMap;
 }
 
 interface Equipo {
@@ -622,8 +628,8 @@ const BoxScoreModal = memo(({
             ctx.fillText('✓  FINALIZADO', W / 2, 276);
 
             // ── Cuartos ──
-            const qL = (match as any).cuartosLocal;
-            const qV = (match as any).cuartosVisitante;
+            const qL = match.cuartosLocal;
+            const qV = match.cuartosVisitante;
             if (qL || qV) {
                 const qs = ['Q1','Q2','Q3','Q4'];
                 const cw = 80; const sx = W / 2 - (qs.length * cw) / 2; const ry = 310;
@@ -634,7 +640,8 @@ const BoxScoreModal = memo(({
                 qs.forEach((q, i) => { ctx.textAlign = 'center'; ctx.fillText(q, sx + i * cw + cw / 2, ry); });
                 ctx.font = 'bold 16px system-ui';
                 qs.forEach((q, i) => {
-                    const lv = qL?.[q] ?? 0; const vv = qV?.[q] ?? 0;
+                    const lv = qL?.[q as keyof CuartosMap] ?? 0;
+                    const vv = qV?.[q as keyof CuartosMap] ?? 0;
                     ctx.fillStyle = lv > vv ? '#60a5fa' : 'rgba(255,255,255,0.65)';
                     ctx.fillText(String(lv), sx + i * cw + cw / 2, ry + 18);
                     ctx.fillStyle = vv > lv ? '#f87171' : 'rgba(255,255,255,0.65)';
@@ -854,7 +861,7 @@ const BoxScoreModal = memo(({
                                         <td style={{ textAlign: 'left', padding: '8px 14px', fontWeight: 700, fontSize: '0.72rem' }}>{match.equipoLocalNombre}</td>
                                         {['Q1','Q2','Q3','Q4'].map(q => (
                                             <td key={q} style={{ padding: '8px', color: '#3b82f6', fontWeight: 700 }}>
-                                                {match.cuartosLocal?.[q] ?? 0}
+                                                {match.cuartosLocal?.[q as keyof CuartosMap] ?? 0}
                                             </td>
                                         ))}
                                         <td style={{ fontWeight: 900, fontSize: '0.9rem' }}>{match.marcadorLocal ?? 0}</td>
@@ -863,7 +870,7 @@ const BoxScoreModal = memo(({
                                         <td style={{ textAlign: 'left', padding: '8px 14px', fontWeight: 700, fontSize: '0.72rem' }}>{match.equipoVisitanteNombre}</td>
                                         {['Q1','Q2','Q3','Q4'].map(q => (
                                             <td key={q} style={{ padding: '8px', color: '#ef4444', fontWeight: 700 }}>
-                                                {match.cuartosVisitante?.[q] ?? 0}
+                                                {match.cuartosVisitante?.[q as keyof CuartosMap] ?? 0}
                                             </td>
                                         ))}
                                         <td style={{ fontWeight: 900, fontSize: '0.9rem' }}>{match.marcadorVisitante ?? 0}</td>
@@ -908,11 +915,16 @@ const MatchCard = memo(({
     const isPlayoff = esFasePlayoff(m.fase);
     const localGana = isFinished && Number(m.marcadorLocal) > Number(m.marcadorVisitante);
     const visitanteGana = isFinished && Number(m.marcadorVisitante) > Number(m.marcadorLocal);
+    const hasCuartos = isFinished && !!(m.cuartosLocal || m.cuartosVisitante);
 
     const themeColor = isPlayoff ? '#ef4444'
         : m.grupo?.toUpperCase() === 'A' ? '#3b82f6'
         : m.grupo?.toUpperCase() === 'B' ? '#f59e0b'
         : '#10b981';
+
+    const qs: (keyof CuartosMap)[] = ['Q1', 'Q2', 'Q3', 'Q4'];
+    const qL = m.cuartosLocal   ?? {};
+    const qV = m.cuartosVisitante ?? {};
 
     return (
         <div style={{
@@ -940,36 +952,74 @@ const MatchCard = memo(({
                 </span>
             </div>
 
-            <div style={{ flex: 1, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+
+                {/* Cabecera de cuartos — solo si hay datos */}
+                {hasCuartos && (
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <div style={{ flex: 1 }} /> {/* espacio del nombre */}
+                        {qs.map(q => (
+                            <div key={q} style={{ width: 24, textAlign: 'center', fontSize: '0.5rem', fontWeight: 900, color: '#94a3b8' }}>{q}</div>
+                        ))}
+                        <div style={{ width: 28, textAlign: 'center', fontSize: '0.5rem', fontWeight: 900, color: '#94a3b8' }}>TOT</div>
+                    </div>
+                )}
+
+                {/* Fila Local */}
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                    {/* Logo + Nombre */}
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                         <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', border: '1px solid #f1f5f9', flexShrink: 0 }}>
                             <TeamLogo logoUrl={getLogo(m.equipoLocalId, m.equipoLocalNombre)} />
                         </div>
-                        <span style={{ fontSize: '0.82rem', fontWeight: localGana ? 900 : 500, color: localGana ? '#0f172a' : '#475569' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: localGana ? 900 : 500, color: localGana ? '#0f172a' : '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {m.equipoLocalNombre}
                         </span>
                     </div>
+                    {/* Cuartos inline */}
+                    {hasCuartos && qs.map(q => {
+                        const lv = qL[q] ?? 0;
+                        const vv = qV[q] ?? 0;
+                        return (
+                            <div key={q} style={{ width: 24, textAlign: 'center', fontSize: '0.65rem', fontWeight: 700, color: lv > vv ? '#2563eb' : '#94a3b8' }}>
+                                {lv}
+                            </div>
+                        );
+                    })}
+                    {/* Total */}
                     {isFinished && (
-                        <span style={{ fontWeight: 900, fontSize: '0.95rem', color: localGana ? '#0f172a' : '#94a3b8' }}>
+                        <div style={{ width: 28, textAlign: 'center', fontWeight: 900, fontSize: '0.95rem', color: localGana ? '#0f172a' : '#94a3b8' }}>
                             {m.marcadorLocal}
-                        </span>
+                        </div>
                     )}
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Fila Visitante */}
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                    {/* Logo + Nombre */}
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                         <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', border: '1px solid #f1f5f9', flexShrink: 0 }}>
                             <TeamLogo logoUrl={getLogo(m.equipoVisitanteId, m.equipoVisitanteNombre)} />
                         </div>
-                        <span style={{ fontSize: '0.82rem', fontWeight: visitanteGana ? 900 : 500, color: visitanteGana ? '#0f172a' : '#475569' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: visitanteGana ? 900 : 500, color: visitanteGana ? '#0f172a' : '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {m.equipoVisitanteNombre}
                         </span>
                     </div>
+                    {/* Cuartos inline */}
+                    {hasCuartos && qs.map(q => {
+                        const lv = qL[q] ?? 0;
+                        const vv = qV[q] ?? 0;
+                        return (
+                            <div key={q} style={{ width: 24, textAlign: 'center', fontSize: '0.65rem', fontWeight: 700, color: vv > lv ? '#dc2626' : '#94a3b8' }}>
+                                {vv}
+                            </div>
+                        );
+                    })}
+                    {/* Total */}
                     {isFinished && (
-                        <span style={{ fontWeight: 900, fontSize: '0.95rem', color: visitanteGana ? '#0f172a' : '#94a3b8' }}>
+                        <div style={{ width: 28, textAlign: 'center', fontWeight: 900, fontSize: '0.95rem', color: visitanteGana ? '#0f172a' : '#94a3b8' }}>
                             {m.marcadorVisitante}
-                        </span>
+                        </div>
                     )}
                 </div>
             </div>
