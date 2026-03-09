@@ -5,9 +5,6 @@ import {
     doc, updateDoc, getDoc, where, getDocs
 } from 'firebase/firestore';
 
-// ─────────────────────────────────────────────
-// TIPOS
-// ─────────────────────────────────────────────
 interface Partido {
     id: string;
     fase: string;
@@ -28,9 +25,6 @@ interface Partido {
 interface EditScore { l: number; v: number; }
 interface PlayoffViewerProps { categoria: string; onClose: () => void; }
 
-// ─────────────────────────────────────────────
-// CONTEXTO DE EDICIÓN
-// ─────────────────────────────────────────────
 interface EditContextType {
     editMode: boolean;
     editScores: Record<string, EditScore>;
@@ -47,9 +41,6 @@ const useEditContext = () => {
     return ctx;
 };
 
-// ─────────────────────────────────────────────
-// HOOK: Logo de equipo desde Firestore/Storage
-// ─────────────────────────────────────────────
 function useTeamLogo(logoPath: string, teamName: string, categoria: string) {
     const [url, setUrl]     = useState('');
     const [error, setError] = useState(false);
@@ -77,9 +68,6 @@ function useTeamLogo(logoPath: string, teamName: string, categoria: string) {
     return { url, error };
 }
 
-// ─────────────────────────────────────────────
-// COMPONENTE: Logo circular del equipo
-// ─────────────────────────────────────────────
 const TeamLogo: React.FC<{
     logoPath: string; teamName: string; categoria: string; size?: number;
 }> = ({ logoPath, teamName, categoria, size = 28 }) => {
@@ -109,9 +97,6 @@ const TeamLogo: React.FC<{
     );
 };
 
-// ─────────────────────────────────────────────
-// COMPONENTE: Tarjeta compacta de partido para el bracket
-// ─────────────────────────────────────────────
 interface BracketCardProps {
     partido: Partido;
     highlight?: boolean;
@@ -119,9 +104,6 @@ interface BracketCardProps {
     cardW: number; cardH: number;
 }
 
-// ─────────────────────────────────────────────
-// COMPONENTE: Tarjeta compacta para bracket horizontal
-// ─────────────────────────────────────────────
 const BracketCard: React.FC<BracketCardProps> = ({ partido: m, highlight = false, x, y, cardW, cardH }) => {
     const { editMode, editScores, setEditScore, handleSaveScore, categoria } = useEditContext();
 
@@ -130,10 +112,6 @@ const BracketCard: React.FC<BracketCardProps> = ({ partido: m, highlight = false
     const localGana     = finalizado && (m.marcadorLocal  ?? -1) > (m.marcadorVisitante ?? -1);
     const visitanteGana = finalizado && (m.marcadorVisitante ?? -1) > (m.marcadorLocal  ?? -1);
 
-
-    // Teams rendered inline below
-
-    // Puntos por cuarto (si existen)
     const qL = m.cuartosLocal    as Record<string,number> | undefined;
     const qV = m.cuartosVisitante as Record<string,number> | undefined;
     const hasQuarters = finalizado && (qL || qV) && ['Q1','Q2','Q3','Q4'].some(q => (qL?.[q] ?? 0) + (qV?.[q] ?? 0) > 0);
@@ -151,7 +129,6 @@ const BracketCard: React.FC<BracketCardProps> = ({ partido: m, highlight = false
             border: `1.5px solid ${highlight ? 'rgba(251,191,36,0.5)' : finalizado ? 'rgba(16,185,129,0.25)' : 'rgba(255,255,255,0.08)'}`,
             boxShadow: highlight ? '0 0 20px rgba(251,191,36,0.15)' : '0 2px 8px rgba(0,0,0,0.5)',
         }}>
-            {/* Fila local */}
             <div style={{
                 display: 'flex', alignItems: 'center', gap: 5,
                 height: teamRowH, padding: '0 6px',
@@ -168,7 +145,6 @@ const BracketCard: React.FC<BracketCardProps> = ({ partido: m, highlight = false
                 }
             </div>
 
-            {/* Fila visitante */}
             <div style={{
                 display: 'flex', alignItems: 'center', gap: 5,
                 height: teamRowH, padding: '0 6px',
@@ -184,7 +160,6 @@ const BracketCard: React.FC<BracketCardProps> = ({ partido: m, highlight = false
                 }
             </div>
 
-            {/* Puntos por cuarto */}
             {hasQuarters && (
                 <div style={{
                     height: quarterH, background: 'rgba(0,0,0,0.3)',
@@ -217,15 +192,6 @@ const BracketCard: React.FC<BracketCardProps> = ({ partido: m, highlight = false
     );
 };
 
-// ─────────────────────────────────────────────
-// COMPONENTE: Conector SVG vertical
-// Une N tarjetas de arriba con 1 entrada abajo
-// ─────────────────────────────────────────────
-
-
-// ─────────────────────────────────────────────
-// ESTADOS DE CARGA Y ERROR
-// ─────────────────────────────────────────────
 const LoadingState = () => (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16 }}>
         <div style={{
@@ -249,9 +215,6 @@ const ErrorState = ({ message }: { message: string }) => (
     </div>
 );
 
-// ─────────────────────────────────────────────
-// COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────
 const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => {
     const [partidos, setPartidos]     = useState<Partido[]>([]);
     const [loading, setLoading]       = useState(true);
@@ -326,7 +289,6 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
         setTimeout(() => setToast(null), 3000);
     };
 
-    // Fases — cubre todas las variaciones de nombre usadas en la app
     const getByFase = (...nombres: string[]) =>
         partidos.filter(m => nombres.some(n => m.fase?.toUpperCase() === n.toUpperCase()));
 
@@ -342,6 +304,9 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
         editMode, editScores, setEditScore, handleSaveScore, categoria, colName,
     };
 
+    // Trophy URL — replace with Firebase Storage URL if available
+    const TROPHY_URL = 'https://i.postimg.cc/43GDW4jB/image.png';
+
     return (
         <EditContext.Provider value={editCtx}>
             <div style={{
@@ -350,18 +315,18 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                 overflowY: 'auto', overflowX: 'hidden',
                 color: 'white', fontFamily: "'Inter','Segoe UI',sans-serif",
             }}>
-                {/* Fondo decorativo */}
                 <div style={{
                     position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
                     background: 'radial-gradient(circle at 30% 20%,rgba(59,130,246,0.05) 0%,transparent 50%), radial-gradient(circle at 70% 80%,rgba(251,191,36,0.04) 0%,transparent 50%)',
                 }} />
 
                 <style>{`
-                    @keyframes spin   { to { transform: rotate(360deg); } }
-                    @keyframes fadeUp { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+                    @keyframes spin        { to { transform: rotate(360deg); } }
+                    @keyframes fadeUp      { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+                    @keyframes trophyFloat { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-7px); } }
                 `}</style>
 
-                {/* ── Header ── */}
+                {/* Header */}
                 <header style={{
                     padding: '14px 20px',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -411,7 +376,7 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                     </div>
                 </header>
 
-                {/* ── Contenido ── */}
+                {/* Contenido */}
                 {loading    ? <LoadingState /> :
                  error      ? <ErrorState message={error} /> :
                  !hayPartidos ? (
@@ -425,8 +390,6 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                         </p>
                     </div>
                  ) : (
-
-                    // ── BRACKET HORIZONTAL — conectores CSS puro, sin SVG ──
                     <main style={{ padding: '12px 0 80px', position: 'relative', zIndex: 1 }}>
                     {(() => {
                         const hasOct  = octavos.length  > 0;
@@ -442,20 +405,20 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                         if (hasFin)  rounds.push({ matches: finalP,  label: 'FINAL'   });
 
                         const PAD    = 10;
-                        const CH     = 82;   // altura de tarjeta
-                        const PG     = 8;    // gap entre par de tarjetas
-                        const BG     = 28;   // gap entre grupos
+                        const CH     = 82;
+                        const PG     = 8;
+                        const BG     = 28;
                         const nCols  = rounds.length;
                         const scrW   = Math.min(window.innerWidth, 500);
                         const usable = scrW - PAD * 2;
-                        // connector width = 14% of card width
-                        // CW * nCols + CW*0.14*(nCols-1) = usable
                         const CW     = Math.floor(usable / (nCols + 0.14 * Math.max(nCols - 1, 0)));
                         const CONN   = Math.floor(CW * 0.14);
-                        const bc     = 'rgba(100,116,139,0.5)';    // border color normal
-                        const bcG    = 'rgba(251,191,36,0.6)';     // border color final
+                        const bc     = 'rgba(100,116,139,0.5)';
+                        const bcG    = 'rgba(251,191,36,0.6)';
 
-                        // Compute Y positions per round (absolute within column)
+                        // Trophy height reserved above FINAL column header
+                        const TROPHY_H = hasFin ? 110 : 0;
+
                         const getYs = (n: number, roundIdx: number): number[] => {
                             if (roundIdx === 0) {
                                 const ys: number[] = [];
@@ -476,13 +439,13 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                             return ys;
                         };
 
+                        const TROPHY_BOX = 100;
                         const allYs  = rounds.map((r, ri) => getYs(r.matches.length, ri));
                         const firstYs = allYs[0] ?? [];
                         const totalH  = firstYs.length > 0
                             ? firstYs[firstYs.length - 1] + CH + 20
                             : CH + 20;
 
-                        // ── Render connector divs between col ri and ri+1 ──
                         const renderConnectors = (ri: number) => {
                             const fromYs = allYs[ri]     ?? [];
                             const toYs   = allYs[ri + 1] ?? [];
@@ -498,7 +461,6 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                                 const hasPair = fromYs[fi2] !== undefined;
 
                                 if (!hasPair) {
-                                    // Straight horizontal line
                                     return (
                                         <div key={ti} style={{
                                             position: 'absolute',
@@ -508,20 +470,15 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                                     );
                                 }
 
-                                // Bracket shape: top arm + bottom arm + vertical spine + right exit
                                 const top    = Math.min(y1, y2);
                                 const bot    = Math.max(y1, y2);
                                 const half   = CONN / 2;
 
                                 return (
                                     <div key={ti} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
-                                        {/* Horizontal from top card → spine */}
                                         <div style={{ position: 'absolute', top: y1 - 1, left: 0, width: half, height: 2, background: color }} />
-                                        {/* Horizontal from bottom card → spine */}
                                         <div style={{ position: 'absolute', top: y2 - 1, left: 0, width: half, height: 2, background: color }} />
-                                        {/* Vertical spine */}
                                         <div style={{ position: 'absolute', top: top - 1, left: half - 1, width: 2, height: bot - top + 2, background: color }} />
-                                        {/* Horizontal from spine → right (to next card) */}
                                         <div style={{ position: 'absolute', top: yTo - 1, left: half, right: 0, height: 2, background: color }} />
                                     </div>
                                 );
@@ -530,48 +487,82 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
 
                         return (
                             <div style={{ padding: `0 ${PAD}px` }}>
-                                {/* Headers */}
-                                <div style={{ display: 'flex', marginBottom: 8 }}>
-                                    {rounds.map((r, ri) => (
-                                        <React.Fragment key={ri}>
-                                            <div style={{ width: CW, textAlign: 'center', flexShrink: 0 }}>
-                                                <span style={{
-                                                    fontSize: '0.45rem', fontWeight: 900, letterSpacing: '2px',
-                                                    color: r.label === 'FINAL' ? '#fbbf24' : '#475569',
-                                                    textTransform: 'uppercase',
-                                                }}>
-                                                    {r.label === 'SEMIS' ? 'SEMIFINAL' : r.label === 'FINAL' ? '👑 GRAN FINAL' : r.label}
-                                                </span>
-                                            </div>
-                                            {ri < rounds.length - 1 && <div style={{ width: CONN, flexShrink: 0 }} />}
-                                        </React.Fragment>
-                                    ))}
+                                {/* Headers row */}
+                                <div style={{ display: 'flex', marginBottom: 8, alignItems: 'center' }}>
+                                    {rounds.map((r, ri) => {
+                                        const isFinal = r.label === 'FINAL';
+                                        return (
+                                            <React.Fragment key={ri}>
+                                                <div style={{ width: CW, textAlign: 'center', flexShrink: 0 }}>
+                                                    <span style={{
+                                                        fontSize: '0.45rem', fontWeight: 900, letterSpacing: '2px',
+                                                        color: isFinal ? '#fbbf24' : '#475569',
+                                                        textTransform: 'uppercase',
+                                                    }}>
+                                                        {r.label === 'SEMIS' ? 'SEMIFINAL' : isFinal ? '👑 GRAN FINAL' : r.label}
+                                                    </span>
+                                                </div>
+                                                {ri < rounds.length - 1 && <div style={{ width: CONN, flexShrink: 0 }} />}
+                                            </React.Fragment>
+                                        );
+                                    })}
                                 </div>
 
                                 {/* Bracket */}
-                                <div style={{ display: 'flex', position: 'relative', height: totalH }}>
+                                <div style={{ display: 'flex', position: 'relative', height: totalH, marginTop: hasFin ? TROPHY_BOX + 14 : 0 }}>
                                     {rounds.map((r, ri) => (
                                         <React.Fragment key={ri}>
-                                            {/* Cards column — absolute positioned */}
                                             <div style={{ position: 'relative', width: CW, flexShrink: 0, height: totalH }}>
-                                                {r.matches.map((m, mi) => (
-                                                    <div key={m.id} style={{
-                                                        position: 'absolute',
-                                                        top: allYs[ri]?.[mi] ?? 0,
-                                                        left: 0, width: CW,
-                                                    }}>
-                                                        <BracketCard
-                                                            partido={m}
-                                                            highlight={r.label === 'FINAL'}
-                                                            x={0} y={0}
-                                                            cardW={CW}
-                                                            cardH={CH}
-                                                        />
-                                                    </div>
-                                                ))}
+                                                {r.matches.map((m, mi) => {
+                                                    const cardTop = allYs[ri]?.[mi] ?? 0;
+                                                    const isFinalCard = r.label === 'FINAL';
+                                                    return (
+                                                        <React.Fragment key={m.id}>
+                                                            {/* Trophy frame between label and final card */}
+                                                            {isFinalCard && mi === 0 && (
+                                                                <div style={{
+                                                                    position: 'absolute',
+                                                                    top: cardTop - TROPHY_BOX - 10,
+                                                                    left: CW / 2 - TROPHY_BOX / 2,
+                                                                    width: TROPHY_BOX,
+                                                                    height: TROPHY_BOX,
+                                                                    borderRadius: 12,
+                                                                    border: '2px solid rgba(251,191,36,0.6)',
+                                                                    background: 'linear-gradient(135deg, rgba(251,191,36,0.08) 0%, rgba(15,23,42,0.9) 100%)',
+                                                                    boxShadow: '0 0 24px rgba(251,191,36,0.2), inset 0 0 16px rgba(251,191,36,0.05)',
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                    overflow: 'hidden',
+                                                                }}>
+                                                                    <img
+                                                                        src={TROPHY_URL}
+                                                                        alt="Trofeo"
+                                                                        style={{
+                                                                            width: '88%', height: '88%',
+                                                                            objectFit: 'contain',
+                                                                            filter: 'drop-shadow(0 0 12px rgba(251,191,36,0.6))',
+                                                                            animation: 'trophyFloat 3s ease-in-out infinite',
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                            <div style={{
+                                                                position: 'absolute',
+                                                                top: cardTop,
+                                                                left: 0, width: CW,
+                                                            }}>
+                                                                <BracketCard
+                                                                    partido={m}
+                                                                    highlight={isFinalCard}
+                                                                    x={0} y={0}
+                                                                    cardW={CW}
+                                                                    cardH={CH}
+                                                                />
+                                                            </div>
+                                                        </React.Fragment>
+                                                    );
+                                                })}
                                             </div>
 
-                                            {/* Connector column */}
                                             {ri < rounds.length - 1 && (
                                                 <div style={{ position: 'relative', width: CONN, flexShrink: 0, height: totalH }}>
                                                     {renderConnectors(ri)}
