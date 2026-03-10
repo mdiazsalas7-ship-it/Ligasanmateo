@@ -52,27 +52,20 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         let prompt = "";
         if (matchData) {
             const dif = Math.abs(matchData.scoreL - matchData.scoreV);
-            const ganador = matchData.scoreL > matchData.scoreV ? matchData.local : matchData.visitante;
-            const perdedor = matchData.scoreL > matchData.scoreV ? matchData.visitante : matchData.local;
-            const scoreGanador = Math.max(matchData.scoreL, matchData.scoreV);
-            const scorePerdedor = Math.min(matchData.scoreL, matchData.scoreV);
-            const contexto = dif >= 20 ? "victoria amplia" : dif <= 5 ? "partido cerrado" : "victoria cómoda";
+            const contexto = dif >= 15 ? "fue una PELA o PALIZA contundente" : dif <= 5 ? "fue un JUEGO CERRADO de INFARTO" : "fue un duelo muy disputado";
+            
+            prompt = `Actúa como un cronista deportivo estrella de la Liga Metropolitana de Baloncesto (Categoría ${matchData.categoria}). Redacta una noticia explosiva (máx 130 palabras).
+            PARTIDO: ${matchData.local} vs ${matchData.visitante}. 
+            SCORE: ${matchData.scoreL} - ${matchData.scoreV} (${contexto}).
+            MVP: ${matchData.mvp} con ${matchData.puntosMvp} puntos.
 
-            prompt = `Redacta un boletín informativo de baloncesto para la Liga Metropolitana Eje Este (Categoría ${matchData.categoria}).
-
-DATOS DEL PARTIDO:
-- Ganador: ${ganador} ${scoreGanador} - ${scorePerdedor} ${perdedor}
-- Diferencia: ${dif} puntos (${contexto})
-- Jugador destacado: ${matchData.mvp} con ${matchData.puntosMvp} puntos
-
-INSTRUCCIONES:
-1. TÍTULO EN MAYÚSCULAS: Directo al resultado. Solo menciona equipos y marcador. Sin adornos ni metáforas.
-2. CUERPO: Máximo 80 palabras. Solo hechos: resultado, quién ganó, diferencia, jugador destacado. Tono informativo y sobrio, como un reporte de prensa deportiva oficial. Sin frases exageradas ni dramáticas.
-3. NO uses palabras como: épico, dramático, infernal, explosivo, paliza, pela, infarto, histórico, mítico.
-
-IMPORTANTE: Separa el título del cuerpo con la palabra 'CUERPO:'.`;
+            REQUISITOS:
+            1. TÍTULO EN MAYÚSCULAS: Menciona quién ganó. Si la ventaja es >15 usa 'PELA'. Si es <5 usa 'INFARTO'.
+            2. CUERPO: Describe el ambiente. Resalta al MVP.
+            3. ESTILO: Baloncesto criollo venezolano, apasionado y profesional.
+            IMPORTANTE: Separa el título del cuerpo con la palabra 'CUERPO:'.`;
         } else {
-            prompt = `Reescribe este comunicado de la Liga Metropolitana de forma clara y directa: "${titulo}". Tono institucional, sin exageraciones. Máximo 80 palabras.`;
+            prompt = `Mejora este comunicado para la Liga Metropolitana: "${titulo}". Hazlo institucional y profesional. Máximo 100 palabras.`;
         }
 
         try {
@@ -82,7 +75,7 @@ IMPORTANTE: Separa el título del cuerpo con la palabra 'CUERPO:'.`;
                 body: JSON.stringify({
                     "model": "openai/gpt-3.5-turbo",
                     "messages": [
-                        { "role": "system", "content": "Eres el redactor de prensa de la Liga Metropolitana. Escribes boletines informativos deportivos: precisos, breves y sin exageraciones. Solo hechos." },
+                        { "role": "system", "content": "Eres el Jefe de Prensa de la Liga Metropolitana. Tu redacción es técnica, épica y conocedora del basket." },
                         { "role": "user", "content": prompt }
                     ]
                 })
@@ -176,7 +169,7 @@ IMPORTANTE: Separa el título del cuerpo con la palabra 'CUERPO:'.`;
             });
 
             // Notificación Push (FCM)
-            const tokensSnap = await getDocs(collection(db, "tokens_notificaciones"));
+            const tokensSnap = await getDocs(collection(db, "fcm_tokens"));
             const tokens = tokensSnap.docs.map(d => d.data().token).filter(t => t);
             if (tokens.length > 0) {
                 await fetch('https://fcm.googleapis.com/fcm/send', {

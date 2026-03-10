@@ -811,7 +811,7 @@ const BoxScoreModal = memo(({
                     </div>
                 </div>
 
-                <div style={{ padding: '16px 20px', overflowY: 'auto', flex: 1 }}>
+                <div style={{ padding: '16px 20px 80px', overflowY: 'auto', flex: 1 }}>
                     {!loading && mvp && !isEditing && (
                         <div style={{ background: 'linear-gradient(to right, #fff9db, #fffbeb)', padding: '12px 16px', borderRadius: 10, marginBottom: 20, border: '1px solid #fcd34d', display: 'flex', alignItems: 'center', gap: 14 }}>
                             <span style={{ fontSize: '2rem' }}>🏆</span>
