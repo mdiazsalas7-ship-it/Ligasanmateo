@@ -136,9 +136,47 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
         photoInputRef.current?.click();
     };
 
+    // URL del fondo oficial de la liga para las fotos de jugadores
+    const PLAYER_BG_URL = 'https://i.postimg.cc/htwhP5w2/Valor-del-ticket-(1).png';
+
+    // ── Compositar jugador (PNG sin fondo) sobre el fondo de la liga ──
+    const compositarSobreFondo = (playerBlob: Blob): Promise<Blob> =>
+        new Promise((resolve, reject) => {
+            const bgImg  = new Image();
+            const fgImg  = new Image();
+            bgImg.crossOrigin = 'anonymous';
+            fgImg.crossOrigin = 'anonymous';
+            const playerUrl = URL.createObjectURL(playerBlob);
+
+            bgImg.onload = () => {
+                fgImg.onload = () => {
+                    const W = bgImg.naturalWidth;
+                    const H = bgImg.naturalHeight;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = W; canvas.height = H;
+                    const ctx = canvas.getContext('2d')!;
+
+                    // 1. Dibujar fondo completo
+                    ctx.drawImage(bgImg, 0, 0, W, H);
+
+                    // 2. Escalar jugador ~75% ancho, pegado abajo al centro
+                    const scale = Math.min((W * 0.75) / fgImg.naturalWidth, (H * 0.85) / fgImg.naturalHeight);
+                    const fw = fgImg.naturalWidth * scale;
+                    const fh = fgImg.naturalHeight * scale;
+                    ctx.drawImage(fgImg, (W - fw) / 2, H - fh, fw, fh);
+
+                    URL.revokeObjectURL(playerUrl);
+                    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('toBlob falló')), 'image/png');
+                };
+                fgImg.onerror = reject;
+                fgImg.src = playerUrl;
+            };
+            bgImg.onerror = () => { URL.revokeObjectURL(playerUrl); resolve(playerBlob); };
+            bgImg.src = PLAYER_BG_URL;
+        });
+
     const handlePlayerPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        // Resetear input para permitir subir el mismo archivo de nuevo
         e.target.value = '';
         if (!file) return;
         if (!['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(file.type))
@@ -149,28 +187,30 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
 
         setUploadingId(`player_${playerId}`);
         try {
-            // ── Quitar fondo automáticamente en el navegador ──
-            let uploadFile: Blob = file;
+            // 1. Quitar fondo del jugador
+            let noBgBlob: Blob = file;
             try {
-                const blob = await removeBackground(file);
-                uploadFile = blob;
+                noBgBlob = await removeBackground(file);
             } catch (bgErr) {
-                // Si falla el proceso de fondo, subir la foto original
-                console.warn('[BG] removeBackground falló, subiendo original:', bgErr);
+                console.warn('[BG] removeBackground falló, usando original:', bgErr);
             }
 
-            // Siempre guardar como PNG para preservar la transparencia del fondo removido
+            // 2. Compositar jugador sobre el fondo de la liga
+            let finalBlob: Blob = noBgBlob;
+            try {
+                finalBlob = await compositarSobreFondo(noBgBlob);
+            } catch (compErr) {
+                console.warn('[BG] Composición falló:', compErr);
+            }
+
+            // 3. Subir a Firebase Storage
             const storageRef = ref(storage, `jugadores_fotos/${playerId}.png`);
-            await uploadBytes(storageRef, uploadFile, { contentType: 'image/png' });
+            await uploadBytes(storageRef, finalBlob, { contentType: 'image/png' });
             const url = await getDownloadURL(storageRef);
 
-            // Guardar en Firestore
+            // 4. Guardar en Firestore y actualizar estado local
             await updateDoc(doc(db, colJugadores, playerId), { fotoUrl: url });
-
-            // Actualizar estado local sin recargar toda la lista
-            setPlayers(prev =>
-                prev.map(p => p.id === playerId ? { ...p, fotoUrl: url } : p)
-            );
+            setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, fotoUrl: url } : p));
         } catch (err) {
             console.error(err);
             alert('Error al subir la foto del jugador.');
@@ -602,7 +642,7 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
                                                                 <button
                                                                     onClick={() => p.id && triggerPlayerPhoto(p.id)}
                                                                     disabled={isUploading}
-                                                                    title={isUploading ? "Quitando fondo..." : "Subir foto"}
+                                                                    title="Subir foto"
                                                                     style={{
                                                                         position: 'absolute', bottom: -2, right: -2,
                                                                         width: 18, height: 18, borderRadius: '50%',
@@ -613,7 +653,7 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
                                                                         padding: 0, lineHeight: 1,
                                                                     }}
                                                                 >
-                                                                    {isUploading ? '⏳' : '📷'}
+                                                                    {isUploading ? '⟳' : '📷'}
                                                                 </button>
                                                             )}
                                                         </div>
