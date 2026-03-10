@@ -5,6 +5,7 @@ import {
     addDoc, query, where, orderBy, writeBatch
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { removeBackground } from '@imgly/background-removal';
 
 // ─────────────────────────────────────────────
 // TIPOS
@@ -148,10 +149,19 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
 
         setUploadingId(`player_${playerId}`);
         try {
-            // Ruta estándar: jugadores_fotos/{jugadorId}
-            // El nombre del archivo es el propio ID del jugador → sin colisiones
-            const storageRef = ref(storage, `jugadores_fotos/${playerId}`);
-            await uploadBytes(storageRef, file);
+            // ── Quitar fondo automáticamente en el navegador ──
+            let uploadFile: Blob = file;
+            try {
+                const blob = await removeBackground(file);
+                uploadFile = blob;
+            } catch (bgErr) {
+                // Si falla el proceso de fondo, subir la foto original
+                console.warn('[BG] removeBackground falló, subiendo original:', bgErr);
+            }
+
+            // Siempre guardar como PNG para preservar la transparencia del fondo removido
+            const storageRef = ref(storage, `jugadores_fotos/${playerId}.png`);
+            await uploadBytes(storageRef, uploadFile, { contentType: 'image/png' });
             const url = await getDownloadURL(storageRef);
 
             // Guardar en Firestore
@@ -592,7 +602,7 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
                                                                 <button
                                                                     onClick={() => p.id && triggerPlayerPhoto(p.id)}
                                                                     disabled={isUploading}
-                                                                    title="Subir foto"
+                                                                    title={isUploading ? "Quitando fondo..." : "Subir foto"}
                                                                     style={{
                                                                         position: 'absolute', bottom: -2, right: -2,
                                                                         width: 18, height: 18, borderRadius: '50%',
@@ -603,7 +613,7 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
                                                                         padding: 0, lineHeight: 1,
                                                                     }}
                                                                 >
-                                                                    {isUploading ? '⟳' : '📷'}
+                                                                    {isUploading ? '⏳' : '📷'}
                                                                 </button>
                                                             )}
                                                         </div>
