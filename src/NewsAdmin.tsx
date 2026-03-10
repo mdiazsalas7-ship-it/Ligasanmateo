@@ -168,20 +168,6 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 imageUrl: imageUrl || null
             });
 
-            // Notificación Push (FCM)
-            const tokensSnap = await getDocs(collection(db, "fcm_tokens"));
-            const tokens = tokensSnap.docs.map(d => d.data().token).filter(t => t);
-            if (tokens.length > 0) {
-                await fetch('https://fcm.googleapis.com/fcm/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'key=BCIo9OadymsSrPl7ByiJ-MFXyunwbesFbKOw8ZTOaVRQInFVbTzQgfHSZaJx05vfdUZZZsv9XLdCKxtdvg3LNkg' },
-                    body: JSON.stringify({
-                        registration_ids: tokens,
-                        notification: { title: `🏀 ${titulo}`, body: cuerpo.substring(0, 100) + "...", icon: "https://i.postimg.cc/hhF5fTPn/image.png" }
-                    })
-                });
-            }
-
             setTitulo(''); setCuerpo(''); setImageFile(null); 
             fetchNews();
             alert("✅ Publicada y Notificada."); 
