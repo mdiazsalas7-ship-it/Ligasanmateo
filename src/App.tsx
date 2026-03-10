@@ -7,6 +7,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 // Componentes que cargan siempre (críticos)
 import Login    from './Login';
 import NewsFeed from './NewsFeed';
+import { useNotifications } from './useNotifications';
 
 // Componentes lazy — solo cargan cuando el usuario los abre
 const AdminEquipos      = lazy(() => import('./AdminEquipos'));
@@ -210,6 +211,9 @@ function App() {
     const [tablaIndex, setTablaIndex]       = useState(0);
     const [leaderIndex, setLeaderIndex]     = useState(0);
     const [leadersList, setLeadersList]     = useState<any[]>([]);
+
+    // Registrar token FCM para notificaciones push
+    useNotifications(user?.uid);
 
     // Ref para cancelar fetchData si cambia categoría antes de terminar
     const fetchAbort = useRef<{ cancelled: boolean }>({ cancelled: false });

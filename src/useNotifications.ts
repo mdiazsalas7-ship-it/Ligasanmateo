@@ -20,13 +20,22 @@ const LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_
 
 export function useNotifications(userId?: string) {
     useEffect(() => {
-        // Salir si el navegador no soporta SW/Notifications o si messaging no se pudo init
+        // Salir si el navegador no soporta SW/Notifications
         if (!('serviceWorker' in navigator)) return;
         if (!('Notification' in window)) return;
-        if (!messaging) return;
 
         const setup = async () => {
             try {
+                // 0. Esperar a que messaging esté disponible (se inicializa async en firebase.ts)
+                let msg = messaging;
+                if (!msg) {
+                    const { isSupported, getMessaging } = await import('firebase/messaging');
+                    const supported = await isSupported();
+                    if (!supported) return;
+                    const { app } = await import('./firebase');
+                    msg = getMessaging(app);
+                }
+
                 // 1. Registrar / recuperar Service Worker
                 const registration = await navigator.serviceWorker.register(
                     '/firebase-messaging-sw.js',
@@ -41,7 +50,7 @@ export function useNotifications(userId?: string) {
                 if (permission !== 'granted') return;
 
                 // 3. Obtener token FCM
-                const token = await getToken(messaging, {
+                const token = await getToken(msg, {
                     vapidKey: VAPID_KEY,
                     serviceWorkerRegistration: registration,
                 });
@@ -68,7 +77,7 @@ export function useNotifications(userId?: string) {
                 // 5. Notificaciones cuando la app está en FOREGROUND
                 // El SW (firebase-messaging-sw.js) ya muestra la notificación.
                 // Aquí solo logueamos para debug.
-                onMessage(messaging, payload => {
+                onMessage(msg, payload => {
                     console.log('[FCM] Foreground mensaje recibido:', payload.notification?.title);
                 });
 

@@ -29,4 +29,4 @@ isSupported().then((supported) => {
   }
 }).catch(err => console.error("Messaging no soportado:", err));
 
-export { auth, db, storage, messaging };
+export { app, auth, db, storage, messaging };
