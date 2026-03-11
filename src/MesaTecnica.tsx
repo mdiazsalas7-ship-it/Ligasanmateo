@@ -125,15 +125,15 @@ const PlayerRow = memo(({
             <button
                 onClick={() => onStat(player, team, accion, 1)}
                 style={{
-                    padding: '12px 4px',
+                    padding: '8px 2px',
                     background: isFlashing ? '#ffffff' : bg,
-                    border: 'none', borderRadius: 8,
+                    border: 'none', borderRadius: 6,
                     color: isFlashing ? bg : 'white',
-                    fontWeight: 900, fontSize: '0.72rem',
+                    fontWeight: 900, fontSize: '0.65rem',
                     cursor: 'pointer',
                     transform: isFlashing ? 'scale(0.93)' : 'scale(1)',
                     transition: 'transform 0.15s, background 0.15s',
-                    lineHeight: 1.3,
+                    lineHeight: 1.2,
                     boxShadow: isFlashing ? `0 0 0 2px ${bg}` : 'none',
                 }}
             >
@@ -181,14 +181,14 @@ const PlayerRow = memo(({
                 </button>
             </div>
 
-            {/* Botones de stat — más grandes */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-                <StatBtn accion="tirosLibres" label="+1 TL" count={s.tirosLibres ?? 0} bg="#475569" />
-                <StatBtn accion="dobles"      label="+2 PT" count={s.dobles ?? 0}      bg="#1e40af" />
-                <StatBtn accion="triples"     label="+3 PT" count={s.triples ?? 0}     bg="#7c3aed" />
-                <StatBtn accion="rebotes"     label="REB"   count={s.rebotes ?? 0}     bg="#047857" />
-                <StatBtn accion="robos"       label="ROBO"  count={s.robos ?? 0}       bg="#b45309" />
-                <StatBtn accion="bloqueos"    label="BLOQ"  count={s.bloqueos ?? 0}    bg="#991b1b" />
+            {/* Botones de stat — compactos en una fila */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3 }}>
+                <StatBtn accion="tirosLibres" label="+1" count={s.tirosLibres ?? 0} bg="#475569" />
+                <StatBtn accion="dobles"      label="+2" count={s.dobles ?? 0}      bg="#1e40af" />
+                <StatBtn accion="triples"     label="+3" count={s.triples ?? 0}     bg="#7c3aed" />
+                <StatBtn accion="rebotes"     label="REB" count={s.rebotes ?? 0}    bg="#047857" />
+                <StatBtn accion="robos"       label="ROB" count={s.robos ?? 0}      bg="#b45309" />
+                <StatBtn accion="bloqueos"    label="BLQ" count={s.bloqueos ?? 0}   bg="#991b1b" />
             </div>
         </div>
     );
@@ -229,6 +229,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
 
     // Flash por jugador+accion para el feedback visual del botón
     const [flashMap, setFlashMap] = useState<Record<string, string | null>>({});
+    const [cuartoActual, setCuartoActual] = useState<string>('Q1');
+    const [otPeriods, setOtPeriods] = useState<string[]>([]); // ['OT1', 'OT2', ...]
 
     // null = verificando Firestore | false = sin estado guardado | true = estado restaurado
     const [estadoRestaurado, setEstadoRestaurado] = useState<boolean | null>(null);
@@ -423,6 +425,16 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 },
                 { merge: true },
             );
+
+            // 4. Acumular puntos por cuarto en el partido
+            if (pts > 0) {
+                const cuartoField = team === 'local'
+                    ? `cuartosLocal.${cuartoActual}`
+                    : `cuartosVisitante.${cuartoActual}`;
+                await updateDoc(doc(db, colCal, matchData.id), {
+                    [cuartoField]: increment(pts),
+                });
+            }
         } catch (e) {
             showToast('Error al guardar ⚠️', '#ef4444');
             console.error(e);
@@ -518,35 +530,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 await batch.commit();
                 // Limpiar estado guardado de la mesa al finalizar
                 try { await deleteDoc(doc(db, 'mesa_estado', matchData.id)); } catch (_) {}
-
-                // ── Notificación push a todos los dispositivos ──
-                try {
-                    const ganador = matchData.marcadorLocal > matchData.marcadorVisitante
-                        ? matchData.equipoLocalNombre
-                        : matchData.equipoVisitanteNombre;
-                    const tokensSnap = await getDocs(collection(db, 'fcm_tokens'));
-                    const tokens = tokensSnap.docs.map((d: any) => d.data().token).filter(Boolean);
-                    if (tokens.length > 0) {
-                        await fetch('https://fcm.googleapis.com/fcm/send', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': 'key=BCIo9OadymsSrPl7ByiJ-MFXyunwbesFbKOw8ZTOaVRQInFVbTzQgfHSZaJx05vfdUZZZsv9XLdCKxtdvg3LNkg',
-                            },
-                            body: JSON.stringify({
-                                registration_ids: tokens,
-                                notification: {
-                                    title: '🏀 Resultado Final',
-                                    body: `${matchData.equipoLocalNombre} ${matchData.marcadorLocal} - ${matchData.marcadorVisitante} ${matchData.equipoVisitanteNombre} · Ganó ${ganador}`,
-                                    icon: 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg',
-                                },
-                            }),
-                        });
-                    }
-                } catch (notifErr) {
-                    console.warn('[FCM] Error enviando notificación:', notifErr);
-                }
-
                 showToast('✅ Partido finalizado', '#10b981');
                 setTimeout(() => onClose(), 1200);
             } catch (e) {
@@ -626,7 +609,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 <span style={{ opacity: present.includes(p.id) ? 1 : 0.4 }}>
                     {present.includes(p.id) ? '✓' : '○'}
                 </span>
-                {p.numero} — {p.nombre}
+                #{p.numero} — {p.nombre}
             </div>
         );
 
@@ -701,7 +684,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 <span style={{ opacity: onCourt.includes(p.id) ? 1 : 0.3 }}>
                     {onCourt.includes(p.id) ? '✓' : '○'}
                 </span>
-                {p.numero} — {p.nombre}
+                #{p.numero} — {p.nombre}
             </div>
         );
 
@@ -814,10 +797,40 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     <img src={logos.local} alt="L" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #3b82f6', flexShrink: 0 }} />
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#1e293b', padding: '6px 18px', borderRadius: 10, border: '1px solid #334155', flexShrink: 0 }}>
-                    <span style={{ fontSize: '1.6rem', fontWeight: 900 }}>{matchData?.marcadorLocal ?? 0}</span>
-                    <span style={{ fontSize: '0.6rem', color: '#475569' }}>VS</span>
-                    <span style={{ fontSize: '1.6rem', fontWeight: 900 }}>{matchData?.marcadorVisitante ?? 0}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#1e293b', padding: '6px 18px', borderRadius: 10, border: '1px solid #334155' }}>
+                        <span style={{ fontSize: '1.6rem', fontWeight: 900 }}>{matchData?.marcadorLocal ?? 0}</span>
+                        <span style={{ fontSize: '0.6rem', color: '#475569' }}>VS</span>
+                        <span style={{ fontSize: '1.6rem', fontWeight: 900 }}>{matchData?.marcadorVisitante ?? 0}</span>
+                    </div>
+                    {/* Selector de cuarto + tiempo extra */}
+                    <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 220 }}>
+                        {['Q1','Q2','Q3','Q4', ...otPeriods].map(q => (
+                            <button key={q} onClick={() => setCuartoActual(q)} style={{
+                                padding: '3px 7px', borderRadius: 6, border: 'none',
+                                background: cuartoActual === q
+                                    ? (q.startsWith('OT') ? '#dc2626' : '#f97316')
+                                    : '#1e293b',
+                                color: cuartoActual === q ? 'white' : '#475569',
+                                fontWeight: 900, fontSize: '0.58rem', cursor: 'pointer',
+                                transition: 'all 0.15s',
+                            }}>{q}</button>
+                        ))}
+                        {/* Botón agregar tiempo extra */}
+                        <button
+                            onClick={() => {
+                                const nextOT = `OT${otPeriods.length + 1}`;
+                                setOtPeriods(prev => [...prev, nextOT]);
+                                setCuartoActual(nextOT);
+                            }}
+                            title="Agregar tiempo extra"
+                            style={{
+                                padding: '3px 7px', borderRadius: 6, border: '1px dashed #ef4444',
+                                background: 'transparent', color: '#ef4444',
+                                fontWeight: 900, fontSize: '0.58rem', cursor: 'pointer',
+                            }}
+                        >+OT</button>
+                    </div>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-start', overflow: 'hidden' }}>
