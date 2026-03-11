@@ -217,7 +217,7 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
 
                 // Total
                 ctx.font = 'bold 38px Arial';
-                ctx.fillStyle = statColors[i];
+                ctx.fillStyle = 'white';
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillText(String(statTotals[i]), cx2, panelY + 78);
 
@@ -228,18 +228,38 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
 
                 // Label
                 ctx.font = 'bold 13px Arial';
-                ctx.fillStyle = 'rgba(255,255,255,0.35)';
-                ctx.letterSpacing = '2px';
+                ctx.fillStyle = 'rgba(255,255,255,0.6)';
                 ctx.fillText(statLabels[i], cx2, panelY + 120);
             });
 
-            // ── Logo liga ──
+            // ── Logo liga dentro de círculo ──
             try {
                 const logo = await loadImage(LEAGUE_LOGO);
-                const lh = 48, lw = (logo.naturalWidth / logo.naturalHeight) * lh;
-                ctx.globalAlpha = 0.55;
-                ctx.drawImage(logo, (W - lw) / 2, H - 64, lw, lh);
-                ctx.globalAlpha = 1;
+                const cr = 36; // radio del círculo
+                const cx3 = W / 2, cy3 = H - 58;
+
+                // Sombra del círculo
+                ctx.save();
+                ctx.shadowColor = 'rgba(0,0,0,0.4)';
+                ctx.shadowBlur = 12;
+
+                // Relleno blanco del círculo
+                ctx.beginPath(); ctx.arc(cx3, cy3, cr, 0, Math.PI * 2);
+                ctx.fillStyle = 'white'; ctx.fill();
+                ctx.restore();
+
+                // Borde naranja
+                ctx.beginPath(); ctx.arc(cx3, cy3, cr, 0, Math.PI * 2);
+                ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2.5; ctx.stroke();
+
+                // Clip logo dentro del círculo
+                ctx.save();
+                ctx.beginPath(); ctx.arc(cx3, cy3, cr - 2, 0, Math.PI * 2);
+                ctx.clip();
+                const lh = (cr - 2) * 2;
+                const lw = (logo.naturalWidth / logo.naturalHeight) * lh;
+                ctx.drawImage(logo, cx3 - lw / 2, cy3 - lh / 2, lw, lh);
+                ctx.restore();
             } catch (_) {}
 
             // ── Watermark ──
