@@ -205,31 +205,38 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
 
             stats.forEach((s, i) => {
                 const cx2 = 40 + colW * i + colW / 2;
-                // Card background
+                const cardX = 40 + colW * i + 4;
+                const cardH = 130;
+
+                // Card fondo oscuro sólido
                 ctx.beginPath();
-                ctx.roundRect(40 + colW * i + 4, panelY, colW - 8, 130, 12);
-                ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fill();
-                ctx.strokeStyle = statColors[i] + '44'; ctx.lineWidth = 1.5; ctx.stroke();
+                ctx.roundRect(cardX, panelY, colW - 8, cardH, 12);
+                ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill();
+
+                // Borde superior de color (acento)
+                ctx.beginPath();
+                ctx.roundRect(cardX, panelY, colW - 8, 4, [12, 12, 0, 0]);
+                ctx.fillStyle = statColors[i]; ctx.fill();
 
                 // Emoji
-                ctx.font = '26px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.fillText(statEmojis[i], cx2, panelY + 24);
+                ctx.font = '22px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(statEmojis[i], cx2, panelY + 26);
 
-                // Total
-                ctx.font = 'bold 38px Arial';
+                // Total — blanco grande
+                ctx.font = 'bold 40px Arial';
                 ctx.fillStyle = 'white';
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillText(String(statTotals[i]), cx2, panelY + 78);
 
-                // Promedio
-                ctx.font = '600 16px Arial';
-                ctx.fillStyle = 'rgba(255,255,255,0.55)';
-                ctx.fillText(statAvgs[i] + ' x PJ', cx2, panelY + 100);
+                // Promedio — gris claro
+                ctx.font = '500 13px Arial';
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.fillText(statAvgs[i] + ' x PJ', cx2, panelY + 98);
 
-                // Label
-                ctx.font = 'bold 13px Arial';
-                ctx.fillStyle = 'rgba(255,255,255,0.6)';
-                ctx.fillText(statLabels[i], cx2, panelY + 120);
+                // Label — color del stat
+                ctx.font = 'bold 14px Arial';
+                ctx.fillStyle = statColors[i];
+                ctx.fillText(statLabels[i], cx2, panelY + 118);
             });
 
             // ── Logo liga dentro de círculo ──
