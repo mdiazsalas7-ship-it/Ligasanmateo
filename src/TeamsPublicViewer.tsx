@@ -79,6 +79,7 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
 }) => {
     const pj    = player.partidosJugados || 1;
     const noPJ  = !player.partidosJugados;
+    const [sharing, setSharing] = useState(false);
 
     const stats = [
         { label: 'PTS', icon: '🔥', color: '#ef4444', total: player.puntos  || 0 },
@@ -89,6 +90,189 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
         ...s,
         avg: noPJ ? '—' : (s.total / pj).toFixed(1),
     }));
+
+    // ── Cargar imagen con CORS ──
+    const loadImage = (src: string): Promise<HTMLImageElement> =>
+        new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = src + (src.includes('?') ? '&' : '?') + 't=' + Date.now();
+        });
+
+    const compartirBarajita = async () => {
+        setSharing(true);
+        try {
+            const W = 600, H = 800;
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d')!;
+
+            // ── Fondo degradado azul ──
+            const grad = ctx.createLinearGradient(0, 0, W * 0.6, H * 0.7);
+            grad.addColorStop(0, '#0f172a');
+            grad.addColorStop(0.5, '#1e3a8a');
+            grad.addColorStop(1, '#2563eb');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, H);
+
+            // ── Patrón de puntos decorativos ──
+            ctx.fillStyle = 'rgba(255,255,255,0.04)';
+            for (let x = 0; x < W; x += 30)
+                for (let y = 0; y < H; y += 30)
+                    { ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill(); }
+
+            // ── Número decorativo gigante ──
+            if (player.numero != null) {
+                ctx.font = 'bold 320px Arial';
+                ctx.fillStyle = 'rgba(255,255,255,0.04)';
+                ctx.textAlign = 'right';
+                ctx.fillText(String(player.numero), W - 10, H * 0.62);
+            }
+
+            // ── Foto del jugador ──
+            if (player.fotoUrl) {
+                try {
+                    const foto = await loadImage(player.fotoUrl);
+                    // Foto centrada, ocupa ~55% del alto
+                    const fh = H * 0.55;
+                    const fw = (foto.naturalWidth / foto.naturalHeight) * fh;
+                    const fx = (W - fw) / 2;
+                    const fy = 40;
+                    // Sombra bajo el jugador
+                    ctx.save();
+                    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                    ctx.shadowBlur = 40;
+                    ctx.shadowOffsetY = 20;
+                    ctx.drawImage(foto, fx, fy, fw, fh);
+                    ctx.restore();
+                } catch (_) {}
+            } else {
+                // Círculo con inicial
+                const cx = W / 2, cy = 220, r = 110;
+                const accentColor = playerColor(player.nombre);
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fillStyle = accentColor; ctx.fill();
+                ctx.font = 'bold 100px Arial';
+                ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText((player.nombre || '?').charAt(0).toUpperCase(), cx, cy);
+            }
+
+            // ── Línea separadora ──
+            const sepY = H * 0.62;
+            const sepGrad = ctx.createLinearGradient(40, 0, W - 40, 0);
+            sepGrad.addColorStop(0, 'transparent');
+            sepGrad.addColorStop(0.3, 'rgba(255,165,0,0.8)');
+            sepGrad.addColorStop(0.7, 'rgba(255,165,0,0.8)');
+            sepGrad.addColorStop(1, 'transparent');
+            ctx.strokeStyle = sepGrad;
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(40, sepY); ctx.lineTo(W - 40, sepY); ctx.stroke();
+
+            // ── Número de dorsal badge ──
+            if (player.numero != null) {
+                const badgeX = W / 2, badgeY = sepY - 16;
+                ctx.beginPath();
+                ctx.roundRect(badgeX - 35, badgeY - 14, 70, 28, 14);
+                ctx.fillStyle = '#f97316'; ctx.fill();
+                ctx.font = 'bold 14px Arial';
+                ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText('#' + player.numero, badgeX, badgeY);
+            }
+
+            // ── Nombre ──
+            ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+            ctx.font = 'bold 42px Arial';
+            ctx.fillStyle = 'white';
+            ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10;
+            ctx.fillText(player.nombre.toUpperCase(), W / 2, sepY + 52);
+            ctx.shadowBlur = 0;
+
+            // ── Equipo ──
+            ctx.font = '600 18px Arial';
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fillText(team.nombre.toUpperCase(), W / 2, sepY + 80);
+
+            // ── Panel stats ──
+            const panelY = sepY + 100;
+            const statColors = ['#ef4444','#10b981','#6366f1','#8b5cf6'];
+            const statLabels = ['PTS','REB','ROB','3PT'];
+            const statEmojis = ['🔥','🖐','🛡','🏹'];
+            const statTotals = [player.puntos||0, player.rebotes||0, player.robos||0, player.triples||0];
+            const statAvgs   = stats.map(s => s.avg);
+            const colW = (W - 80) / 4;
+
+            stats.forEach((s, i) => {
+                const cx2 = 40 + colW * i + colW / 2;
+                // Card background
+                ctx.beginPath();
+                ctx.roundRect(40 + colW * i + 4, panelY, colW - 8, 130, 12);
+                ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fill();
+                ctx.strokeStyle = statColors[i] + '44'; ctx.lineWidth = 1.5; ctx.stroke();
+
+                // Emoji
+                ctx.font = '26px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(statEmojis[i], cx2, panelY + 24);
+
+                // Total
+                ctx.font = 'bold 38px Arial';
+                ctx.fillStyle = statColors[i];
+                ctx.textBaseline = 'alphabetic';
+                ctx.fillText(String(statTotals[i]), cx2, panelY + 78);
+
+                // Promedio
+                ctx.font = '600 16px Arial';
+                ctx.fillStyle = 'rgba(255,255,255,0.55)';
+                ctx.fillText(statAvgs[i] + ' x PJ', cx2, panelY + 100);
+
+                // Label
+                ctx.font = 'bold 13px Arial';
+                ctx.fillStyle = 'rgba(255,255,255,0.35)';
+                ctx.letterSpacing = '2px';
+                ctx.fillText(statLabels[i], cx2, panelY + 120);
+            });
+
+            // ── Logo liga ──
+            try {
+                const logo = await loadImage(LEAGUE_LOGO);
+                const lh = 48, lw = (logo.naturalWidth / logo.naturalHeight) * lh;
+                ctx.globalAlpha = 0.55;
+                ctx.drawImage(logo, (W - lw) / 2, H - 64, lw, lh);
+                ctx.globalAlpha = 1;
+            } catch (_) {}
+
+            // ── Watermark ──
+            ctx.font = '500 13px Arial';
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.textAlign = 'center';
+            ctx.fillText('LIGA METROPOLITANA EJE ESTE', W / 2, H - 12);
+
+            // ── Compartir ──
+            canvas.toBlob(async (blob) => {
+                if (!blob) return;
+                const file = new File([blob], `${player.nombre.replace(/ /g,'_')}.png`, { type: 'image/png' });
+                if (navigator.share && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: player.nombre,
+                        text: `🏀 ${player.nombre} | ${team.nombre} | Liga Metropolitana Eje Este`,
+                    });
+                } else {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = `${player.nombre.replace(/ /g,'_')}.png`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }
+            }, 'image/png');
+        } catch (e) {
+            console.error(e);
+            alert('Error al generar la imagen.');
+        } finally {
+            setSharing(false);
+        }
+    };
 
     return (
         <div
@@ -219,6 +403,27 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
                     <div style={{ textAlign: 'center', marginTop: 12 }}>
                         <img src={LEAGUE_LOGO} alt="Liga" style={{ height: 20, opacity: 0.3 }} />
                     </div>
+
+                    {/* ── Botón compartir ── */}
+                    <button
+                        onClick={compartirBarajita}
+                        disabled={sharing}
+                        style={{
+                            width: '100%', marginTop: 14,
+                            padding: '13px 0',
+                            background: sharing
+                                ? '#94a3b8'
+                                : 'linear-gradient(90deg, #1e3a8a, #2563eb)',
+                            color: 'white', border: 'none', borderRadius: 12,
+                            fontWeight: 900, fontSize: '0.8rem',
+                            cursor: sharing ? 'default' : 'pointer',
+                            letterSpacing: '1px',
+                            boxShadow: sharing ? 'none' : '0 4px 12px rgba(37,99,235,0.4)',
+                            transition: 'all 0.2s',
+                        }}
+                    >
+                        {sharing ? '⏳ GENERANDO...' : '📤 COMPARTIR BARAJITA'}
+                    </button>
                 </div>
             </div>
         </div>
