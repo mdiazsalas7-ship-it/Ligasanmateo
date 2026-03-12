@@ -1,21 +1,34 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
-    
-    <link rel="icon" href="https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg" />
-    
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
-    <link rel="manifest" href="/manifest.json" />
+
+    <!-- PWA + iOS -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="LIMEBAL" />
     <meta name="theme-color" content="#1e3a8a" />
+    <meta name="description" content="App oficial de la Liga Metropolitana de Baloncesto Eje Este" />
+
+    <!-- Iconos -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon/apple-touch-icon.png" />
+
+    <!-- Manifest PWA -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Liga Metropolitana Eje Este" />
+    <meta property="og:description" content="Resultados, tabla de posiciones, estadísticas y más" />
+    <meta property="og:image" content="https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg" />
+    <meta property="og:type" content="website" />
 
     <title>Liga Metropolitana Eje Este</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-
-    <!-- SW registrado por useNotifications.ts para evitar duplicados -->
   </body>
 </html>
