@@ -538,7 +538,7 @@ function App() {
                                 <img
                                     src="/icon/arbitro-icon.png"
                                     alt="Árbitro"
-                                    style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', border: '1.5px solid rgba(255,255,255,0.3)' }}
+                                    style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', border: '1.5px solid rgba(255,255,255,0.3)' }}
                                     onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
                                 />
                                 <span style={{ fontSize: '0.32rem', fontWeight: 900, color: 'rgba(255,255,255,0.85)', letterSpacing: 0.8, whiteSpace: 'nowrap' }}>ÁRBITRO</span>
