@@ -519,22 +519,47 @@ function App() {
                         </div>
                     </div>
 
-                    {/* Botón reglamento */}
-                    <div style={{ flex: 1, textAlign: 'right' }}>
-                        <button
-                            onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=ee680a1c-b93d-4159-ae99-0aef67cb4703', '_blank')}
-                            style={{
-                                background: 'rgba(255,255,255,0.12)',
-                                border: '1px solid rgba(255,255,255,0.25)',
-                                padding: '6px 8px', borderRadius: 10,
-                                display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
-                                cursor: 'pointer', backdropFilter: 'blur(4px)',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                            }}
-                        >
-                            <span style={{ fontSize: '1.2rem' }}>📜</span>
-                            <span style={{ fontSize: '0.35rem', fontWeight: 900, color: 'rgba(255,255,255,0.85)', letterSpacing: 1 }}>REGLAMENTO</span>
-                        </button>
+                    {/* Botones reglamento + árbitro virtual */}
+                    <div style={{ flex: 1, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+                        <div style={{ display: 'flex', gap: 5 }}>
+                            {/* Árbitro Virtual */}
+                            <button
+                                onClick={() => window.open('https://zona-fiba-app-2026.vercel.app/', '_blank')}
+                                style={{
+                                    background: 'rgba(255,255,255,0.12)',
+                                    border: '1px solid rgba(255,255,255,0.25)',
+                                    padding: '4px 6px', borderRadius: 10,
+                                    display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
+                                    cursor: 'pointer', backdropFilter: 'blur(4px)',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                                    gap: 2,
+                                }}
+                            >
+                                <img
+                                    src="/icon/arbitro-icon.png"
+                                    alt="Árbitro"
+                                    style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', border: '1.5px solid rgba(255,255,255,0.3)' }}
+                                    onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
+                                />
+                                <span style={{ fontSize: '0.32rem', fontWeight: 900, color: 'rgba(255,255,255,0.85)', letterSpacing: 0.8, whiteSpace: 'nowrap' }}>ÁRBITRO</span>
+                            </button>
+                            {/* Reglamento */}
+                            <button
+                                onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=ee680a1c-b93d-4159-ae99-0aef67cb4703', '_blank')}
+                                style={{
+                                    background: 'rgba(255,255,255,0.12)',
+                                    border: '1px solid rgba(255,255,255,0.25)',
+                                    padding: '4px 6px', borderRadius: 10,
+                                    display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
+                                    cursor: 'pointer', backdropFilter: 'blur(4px)',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                                    gap: 2,
+                                }}
+                            >
+                                <span style={{ fontSize: '1.1rem' }}>📜</span>
+                                <span style={{ fontSize: '0.32rem', fontWeight: 900, color: 'rgba(255,255,255,0.85)', letterSpacing: 0.8 }}>REGLAMENTO</span>
+                            </button>
+                        </div>
                         <div
                             onClick={() => setActiveView('login')}
                             style={{ fontSize: '0.7rem', opacity: 0.08, marginTop: 2, cursor: 'pointer', textAlign: 'right' }}
