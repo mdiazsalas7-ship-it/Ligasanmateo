@@ -117,9 +117,10 @@ const MatchForm: React.FC<{
     matchToEdit: Match | null;
     categoriaActiva: string;
     equipos: Equipo[];
+    partidos: Match[];
     onSuccess: () => void;
     onClose: () => void;
-}> = ({ matchToEdit, categoriaActiva, equipos, onSuccess, onClose }) => {
+}> = ({ matchToEdit, categoriaActiva, equipos, partidos, onSuccess, onClose }) => {
     const [fecha, setFecha]             = useState(matchToEdit?.fechaAsignada ?? '');
     const [hora, setHora]               = useState(matchToEdit?.hora ?? '');
     const [localId, setLocalId]         = useState(matchToEdit?.equipoLocalId ?? '');
@@ -132,6 +133,56 @@ const MatchForm: React.FC<{
     const [saving, setSaving]           = useState(false);
 
     const colCal = getColName('calendario', categoriaActiva);
+
+    // ── Rivales disponibles: mismo grupo y que no se hayan enfrentado aún ──
+    const rivalesdisponibles = useMemo(() => {
+        // En playoffs no filtramos — cualquier rival puede jugar
+        if (!localId || fase !== 'REGULAR') return equipos.filter(e => e.id !== localId);
+
+        // Construir set de equipos ya enfrentados por localId en fase regular
+        const yaEnfrentados = new Set<string>();
+        partidos
+            .filter(p =>
+                p.fase?.toUpperCase() === 'REGULAR' &&
+                p.id !== matchToEdit?.id
+            )
+            .forEach(p => {
+                if (p.equipoLocalId === localId && p.equipoVisitanteId)
+                    yaEnfrentados.add(p.equipoVisitanteId);
+                if (p.equipoVisitanteId === localId && p.equipoLocalId)
+                    yaEnfrentados.add(p.equipoLocalId);
+            });
+
+        // Obtener el grupo del equipo local buscando en los partidos existentes
+        // (el equipo local tiene el mismo grupo que sus partidos anteriores)
+        let grupoLocal = grupo; // usa el grupo seleccionado en el form si existe
+        if (!grupoLocal) {
+            // Intentar inferir el grupo del equipo local desde partidos anteriores
+            const partidoDelLocal = partidos.find(p =>
+                p.fase?.toUpperCase() === 'REGULAR' && p.grupo &&
+                (p.equipoLocalId === localId || p.equipoVisitanteId === localId)
+            );
+            grupoLocal = partidoDelLocal?.grupo ?? '';
+        }
+
+        return equipos.filter(e => {
+            if (e.id === localId) return false;           // no contra sí mismo
+            if (yaEnfrentados.has(e.id)) return false;   // ya se enfrentaron
+
+            // Si sabemos el grupo, filtrar por mismo grupo
+            if (grupoLocal) {
+                // Buscar en qué grupo juega este equipo rival
+                const partidoDelRival = partidos.find(p =>
+                    p.fase?.toUpperCase() === 'REGULAR' && p.grupo &&
+                    (p.equipoLocalId === e.id || p.equipoVisitanteId === e.id)
+                );
+                const grupoRival = partidoDelRival?.grupo ?? '';
+                if (grupoRival && grupoRival !== grupoLocal) return false;
+            }
+
+            return true;
+        });
+    }, [localId, fase, grupo, partidos, equipos, matchToEdit]);
 
     const getEquipoNombre = (id: string) =>
         equipos.find(e => e.id === id)?.nombre ?? '';
@@ -218,11 +269,24 @@ const MatchForm: React.FC<{
                     </select>
                 </div>
                 <div>
-                    <label style={labelStyle}>Equipo Visitante</label>
+                    <label style={labelStyle}>
+                        Equipo Visitante
+                        {fase === 'REGULAR' && localId && rivalesdisponibles.length < equipos.length - 1 && (
+                            <span style={{ marginLeft: 6, fontSize: '0.55rem', background: '#dbeafe', color: '#1e40af', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                                {rivalesdisponibles.length} disponibles
+                            </span>
+                        )}
+                    </label>
                     <select style={inputStyle} value={visitanteId} onChange={e => setVisitanteId(e.target.value)}>
                         <option value="">Seleccionar...</option>
-                        {equipos.map(eq => <option key={eq.id} value={eq.id}>{eq.nombre}</option>)}
+                        {(fase === 'REGULAR' && localId ? rivalesdisponibles : equipos.filter(e => e.id !== localId))
+                            .map(eq => <option key={eq.id} value={eq.id}>{eq.nombre}</option>)}
                     </select>
+                    {fase === 'REGULAR' && localId && rivalesdisponibles.length === 0 && (
+                        <p style={{ margin: '4px 0 0', fontSize: '0.62rem', color: '#ef4444', fontWeight: 700 }}>
+                            ⚠️ Este equipo ya se enfrentó a todos en fase regular
+                        </p>
+                    )}
                 </div>
 
                 {/* Fase y Grupo */}
@@ -1225,6 +1289,7 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
                             matchToEdit={matchToEdit}
                             categoriaActiva={categoria}
                             equipos={equipos}
+                            partidos={matches}
                             onSuccess={() => setShowMatchForm(false)}
                             onClose={() => setShowMatchForm(false)}
                         />
