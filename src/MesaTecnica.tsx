@@ -38,6 +38,7 @@ interface Jugada {
     accion: string;
     puntos: number;
     timestamp: number;
+    cuarto?: string;
 }
 
 // ─────────────────────────────────────────────
@@ -112,7 +113,7 @@ const PlayerRow = memo(({
     stats: StatMap;
     onStat: (player: Player, team: Team, accion: string, val: number) => void;
     onSub: (id: string) => void;
-    flashing: string | null; // accion que acaba de registrarse
+    flashing: string | null; 
 }) => {
     const s = stats ?? {};
     const teamColor = team === 'local' ? '#3b82f6' : '#ef4444';
@@ -150,7 +151,6 @@ const PlayerRow = memo(({
             border: `1px solid #2d2d2d`,
             boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
         }}>
-            {/* Nombre y número */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                     <span style={{
@@ -181,7 +181,6 @@ const PlayerRow = memo(({
                 </button>
             </div>
 
-            {/* Botones de stat — compactos en una fila */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3 }}>
                 <StatBtn accion="tirosLibres" label="+1"  count={s.tirosLibres ?? 0} bg="#475569" />
                 <StatBtn accion="dobles"      label="+2"  count={s.dobles ?? 0}      bg="#1e40af" />
@@ -213,6 +212,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
 
     const [onCourtLocal, setOnCourtLocal] = useState<string[]>([]);
     const [onCourtVisitante, setOnCourtVisitante] = useState<string[]>([]);
+    const [cuartoActual, setCuartoActual] = useState<string>('Q1');
 
     const [subModal, setSubModal] = useState<{ team: Team; replacingId: string | null; isOpen: boolean }>({
         team: 'local', replacingId: null, isOpen: false,
@@ -223,23 +223,16 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     const [statsCache, setStatsCache] = useState<Record<string, StatMap>>({});
     const [recentPlays, setRecentPlays] = useState<Jugada[]>([]);
 
-    // Toast
     const [toast, setToast] = useState<{ msg: string; color: string } | null>(null);
     const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    // Flash por jugador+accion para el feedback visual del botón
     const [flashMap, setFlashMap] = useState<Record<string, string | null>>({});
-
-    // null = verificando Firestore | false = sin estado guardado | true = estado restaurado
     const [estadoRestaurado, setEstadoRestaurado] = useState<boolean | null>(null);
 
     const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/166/166344.png';
-
     const colCal = getColName('calendario', categoria);
     const colPlayers = getColName('jugadores', categoria);
     const colTeams = getColName('equipos', categoria);
 
-    // Persiste el estado de la mesa en mesa_estado/{matchId}
     const saveEstado = useCallback(async (payload: Partial<{
         presentLocal: string[];
         presentVisitante: string[];
@@ -247,6 +240,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         onCourtVisitante: string[];
         checkInDone: boolean;
         startersDone: boolean;
+        cuartoActual: string;
     }>) => {
         if (!selectedMatchId) return;
         try {
@@ -270,7 +264,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         setConfirmModal({ msg, onConfirm });
     };
 
-    // ── Carga de partidos del día ──
     useEffect(() => {
         const now = new Date();
         const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
@@ -283,18 +276,17 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         return onSnapshot(q, snap =>
             setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() })))
         );
-    }, [categoria]);
+    }, [categoria, colCal]);
 
-    // ── Restaurar estado guardado al seleccionar un partido ──
     useEffect(() => {
         if (!selectedMatchId) return;
-        setEstadoRestaurado(null); // volvemos a "verificando"
+        setEstadoRestaurado(null);
         const fetchEstado = async () => {
             try {
                 const snap = await getDoc(doc(db, 'mesa_estado', selectedMatchId));
                 if (snap.exists()) {
                     const d = snap.data();
-                    // Solo restauramos si el partido no terminó
+                    if (d.cuartoActual) setCuartoActual(d.cuartoActual);
                     if (d.startersDone) {
                         if (d.presentLocal)     setPresentLocal(d.presentLocal);
                         if (d.presentVisitante) setPresentVisitante(d.presentVisitante);
@@ -322,7 +314,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         fetchEstado();
     }, [selectedMatchId]);
 
-    // ── Carga de datos del partido seleccionado ──
     useEffect(() => {
         if (!selectedMatchId) return;
         const unsubMatch = onSnapshot(doc(db, colCal, selectedMatchId), async snap => {
@@ -354,9 +345,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         );
 
         return () => { unsubMatch(); unsubPlays(); unsubStats(); };
-    }, [selectedMatchId, categoria]);
+    }, [selectedMatchId, categoria, colCal, colTeams]);
 
-    // ── Carga de rosters ──
     useEffect(() => {
         if (!matchData?.equipoLocalId || !matchData?.equipoVisitanteId) return;
         const fetchRosters = async () => {
@@ -370,18 +360,15 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             setPlayersVisitante(sort(snapV.docs));
         };
         fetchRosters();
-    }, [matchData?.id, categoria]);
+    }, [matchData?.equipoLocalId, matchData?.equipoVisitanteId, categoria, colPlayers]);
 
-    // ── Registrar stat ──
     const handleStat = useCallback(async (player: Player, team: Team, accion: string, val: number) => {
         if (!matchData) return;
         const pts = puntosDeAccion(accion);
 
-        // Flash visual en el botón
         setFlashMap(prev => ({ ...prev, [`${player.id}_${accion}`]: accion }));
         setTimeout(() => setFlashMap(prev => ({ ...prev, [`${player.id}_${accion}`]: null })), 300);
 
-        // Toast de confirmación
         const labels: Record<string, string> = {
             tirosLibres: '🎯 +1 TL', dobles: '🏀 +2 PTS', triples: '🔥 +3 PTS',
             rebotes: '🖐 REBOTE', robos: '🛡 ROBO', bloqueos: '🚫 BLOQUEO',
@@ -390,7 +377,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             pts > 0 ? '#3b82f6' : '#10b981');
 
         try {
-            // 1. Jugada en historial
             await addDoc(collection(db, 'jugadas_partido'), {
                 partidoId: matchData.id,
                 jugadorId: player.id,
@@ -400,16 +386,16 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 accion,
                 puntos: pts,
                 timestamp: Date.now(),
+                cuarto: cuartoActual
             });
 
-            // 2. Marcador
             if (pts > 0) {
                 await updateDoc(doc(db, colCal, matchData.id), {
                     [team === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(pts),
+                    [`cuartos.${cuartoActual}.${team}`]: increment(pts)
                 });
             }
 
-            // 3. Stats acumuladas del jugador en este partido
             await setDoc(
                 doc(db, 'stats_partido', `${matchData.id}_${player.id}`),
                 {
@@ -427,9 +413,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             showToast('Error al guardar ⚠️', '#ef4444');
             console.error(e);
         }
-    }, [matchData, colCal, showToast]);
+    }, [matchData, colCal, showToast, cuartoActual]);
 
-    // ── DESHACER jugada (cualquiera del historial) ──
     const handleDeleteJugada = useCallback(async (jugada: Jugada) => {
         if (!matchData) return;
 
@@ -438,18 +423,18 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             async () => {
                 try {
                     const pts = jugada.puntos ?? 0;
-
-                    // 1. Borrar del historial
                     await deleteDoc(doc(db, 'jugadas_partido', jugada.id));
 
-                    // 2. Restar del marcador si tenía puntos
                     if (pts > 0) {
-                        await updateDoc(doc(db, colCal, matchData.id), {
+                        const updates: Record<string, any> = {
                             [jugada.equipo === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(-pts),
-                        });
+                        };
+                        if (jugada.cuarto) {
+                            updates[`cuartos.${jugada.cuarto}.${jugada.equipo}`] = increment(-pts);
+                        }
+                        await updateDoc(doc(db, colCal, matchData.id), updates);
                     }
 
-                    // 3. Restar de stats_partido
                     const statRef = doc(db, 'stats_partido', `${matchData.id}_${jugada.jugadorId}`);
                     const statSnap = await getDoc(statRef);
                     if (statSnap.exists()) {
@@ -467,21 +452,19 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         );
     }, [matchData, colCal, showToast]);
 
-    // Atajo para el botón ↩️ DESHACER (borra la última)
     const handleUndo = useCallback(() => {
         const ultima = recentPlays[0];
         if (!ultima) { showToast('No hay jugadas para deshacer', '#f59e0b'); return; }
         handleDeleteJugada(ultima);
     }, [recentPlays, handleDeleteJugada, showToast]);
 
-    // ── Finalizar partido ──
     const handleFinalize = useCallback(() => {
         if (!matchData) return;
         showConfirm('¿FINALIZAR PARTIDO Y ACTUALIZAR TABLAS?', async () => {
             try {
                 const batch = writeBatch(db);
-                const localGana = matchData.marcadorLocal > matchData.marcadorVisitante;
-                const visitanteGana = matchData.marcadorVisitante > matchData.marcadorLocal;
+                const localGana = (matchData.marcadorLocal || 0) > (matchData.marcadorVisitante || 0);
+                const visitanteGana = (matchData.marcadorVisitante || 0) > (matchData.marcadorLocal || 0);
 
                 const lRef = doc(db, colTeams, matchData.equipoLocalId);
                 const vRef = doc(db, colTeams, matchData.equipoVisitanteId);
@@ -493,12 +476,10 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     batch.update(vRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
                     batch.update(lRef, { derrotas: increment(1), puntos: increment(1), puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
                 } else {
-                    // Empate (no debería pasar en basquetbol pero lo manejamos)
                     batch.update(lRef, { puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
                     batch.update(vRef, { puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
                 }
 
-                // Stats por jugador
                 const statsSnap = await getDocs(
                     query(collection(db, 'stats_partido'), where('partidoId', '==', matchData.id))
                 );
@@ -516,7 +497,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
 
                 batch.update(doc(db, colCal, matchData.id), { estatus: 'finalizado' });
                 await batch.commit();
-                // Limpiar estado guardado de la mesa al finalizar
                 try { await deleteDoc(doc(db, 'mesa_estado', matchData.id)); } catch (_) {}
                 showToast('✅ Partido finalizado', '#10b981');
                 setTimeout(() => onClose(), 1200);
@@ -527,7 +507,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         });
     }, [matchData, colCal, colTeams, colPlayers, onClose, showToast]);
 
-    // ── Sustitución ──
     const executeSwap = useCallback((newPlayerId: string) => {
         const { team, replacingId } = subModal;
         if (!replacingId) return;
@@ -549,9 +528,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         showToast('🔄 Cambio realizado', '#8b5cf6');
     }, [subModal, showToast, saveEstado]);
 
-    // ─────────────────────────────────────────────
-    // PANTALLA 1: Selección de partido
-    // ─────────────────────────────────────────────
     if (!selectedMatchId) return (
         <div style={{ padding: 20, color: 'white', background: '#000', minHeight: '100vh' }}>
             <h2 style={{ color: '#60a5fa', marginBottom: 20, fontSize: '1.1rem', fontWeight: 900 }}>
@@ -577,9 +553,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         </div>
     );
 
-    // ─────────────────────────────────────────────
-    // PANTALLA 2: Check-in de asistencia
-    // ─────────────────────────────────────────────
     if (!checkInDone) {
         const PlayerCheckItem = ({ p, present, setPresent, color }: any) => (
             <div
@@ -607,7 +580,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     REGISTRO DE ASISTENCIA
                 </h3>
                 <div style={{ flex: 1, display: 'flex', gap: 10, overflow: 'hidden' }}>
-                    {/* Local */}
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                         <div style={{ background: '#1e3a8a', padding: '6px 10px', fontSize: '0.65rem', fontWeight: 900, textAlign: 'center', borderRadius: 6, marginBottom: 8 }}>
                             LOCAL ({presentLocal.length})
@@ -618,7 +590,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                             ))}
                         </div>
                     </div>
-                    {/* Visitante */}
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                         <div style={{ background: '#854d0e', padding: '6px 10px', fontSize: '0.65rem', fontWeight: 900, textAlign: 'center', borderRadius: 6, marginBottom: 8 }}>
                             VISITANTE ({presentVisitante.length})
@@ -650,9 +621,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         );
     }
 
-    // ─────────────────────────────────────────────
-    // PANTALLA 3: Selección de 5 abridores
-    // ─────────────────────────────────────────────
     if (!startersDone) {
         const StarterItem = ({ p, onCourt, setOnCourt, color }: any) => (
             <div
@@ -710,6 +678,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                             presentLocal, presentVisitante,
                             onCourtLocal, onCourtVisitante,
                             checkInDone: true, startersDone: true,
+                            cuartoActual
                         });
                     }}
                     disabled={onCourtLocal.length !== 5 || onCourtVisitante.length !== 5}
@@ -725,9 +694,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         );
     }
 
-    // ─────────────────────────────────────────────
-    // Esperando verificación de estado en Firestore
-    // ─────────────────────────────────────────────
     if (startersDone && estadoRestaurado === null) return (
         <div style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', gap: 16 }}>
             <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #334155', borderTop: '3px solid #60a5fa', animation: 'spin 0.8s linear infinite' }} />
@@ -736,9 +702,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         </div>
     );
 
-    // ─────────────────────────────────────────────
-    // PANTALLA 4: Mesa técnica activa
-    // ─────────────────────────────────────────────
     return (
         <div style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', color: 'white', overflow: 'hidden' }}>
             <style>{`
@@ -748,7 +711,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 }
             `}</style>
 
-            {/* Banner de estado restaurado */}
             {estadoRestaurado === true && (
                 <div style={{
                     background: '#065f46', color: '#6ee7b7',
@@ -760,10 +722,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 </div>
             )}
 
-            {/* Toast de feedback */}
             {toast && <Toast msg={toast.msg} color={toast.color} />}
 
-            {/* Modales */}
             {confirmModal && (
                 <ConfirmModal
                     mensaje={confirmModal.msg}
@@ -772,7 +732,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 />
             )}
 
-            {/* ── Scoreboard ── */}
             <div style={{
                 minHeight: 68, background: '#111', borderBottom: '2px solid #222',
                 display: 'flex', alignItems: 'center', padding: '5px 12px',
@@ -799,9 +758,25 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 </div>
             </div>
 
-            {/* ── Jugadores en cancha ── */}
+            {/* ── SELECTOR DE CUARTOS ── */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, background: '#0f172a', padding: '8px 0', borderBottom: '1px solid #1e293b' }}>
+                {['Q1', 'Q2', 'Q3', 'Q4', 'TE'].map(q => (
+                    <button
+                        key={q}
+                        onClick={() => { setCuartoActual(q); saveEstado({ cuartoActual: q }); }}
+                        style={{
+                            padding: '6px 14px', borderRadius: 8, border: 'none',
+                            background: cuartoActual === q ? '#3b82f6' : '#1e293b',
+                            color: cuartoActual === q ? 'white' : '#64748b',
+                            fontWeight: 900, cursor: 'pointer', fontSize: '0.75rem'
+                        }}
+                    >
+                        {q}
+                    </button>
+                ))}
+            </div>
+
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-                {/* LOCAL */}
                 <div style={{ flex: 1, padding: '6px 5px', borderRight: '1px solid #1e293b', overflowY: 'auto' }}>
                     <div style={{ textAlign: 'center', marginBottom: 6, background: '#1e3a8a', padding: '4px 0', borderRadius: 6, fontSize: '0.62rem', fontWeight: 900 }}>
                         LOCAL
@@ -819,7 +794,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     ))}
                 </div>
 
-                {/* VISITANTE */}
                 <div style={{ flex: 1, padding: '6px 5px', overflowY: 'auto' }}>
                     <div style={{ textAlign: 'center', marginBottom: 6, background: '#7f1d1d', padding: '4px 0', borderRadius: 6, fontSize: '0.62rem', fontWeight: 900 }}>
                         VISITANTE
@@ -838,7 +812,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 </div>
             </div>
 
-            {/* ── Barra de acciones ── */}
             <div style={{ padding: '10px 10px', background: '#0f172a', display: 'flex', gap: 6, borderTop: '2px solid #1e293b' }}>
                 <button onClick={() => setSelectedMatchId(null)} style={actionBtnStyle('#1e293b')}>SALIR</button>
                 <button onClick={handleUndo} style={actionBtnStyle('#92400e')}>↩️ DESHACER</button>
@@ -846,7 +819,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 <button onClick={handleFinalize} style={{ ...actionBtnStyle('#065f46'), flex: 2, fontWeight: 900 }}>✅ FINALIZAR</button>
             </div>
 
-            {/* ── Modal de sustitución ── */}
             {subModal.isOpen && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.93)', zIndex: 4000, padding: 20, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <div style={{ background: '#1e293b', width: '100%', maxWidth: 380, borderRadius: 16, overflow: 'hidden', border: '1px solid #334155' }}>
@@ -879,7 +851,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 </div>
             )}
 
-            {/* ── Modal historial ── */}
             {isHistoryOpen && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.93)', zIndex: 4000, padding: 20, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <div style={{ background: '#1e293b', width: '100%', maxWidth: 400, borderRadius: 16, overflow: 'hidden', maxHeight: '80vh', display: 'flex', flexDirection: 'column', border: '1px solid #334155' }}>
@@ -899,7 +870,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                     gap: 8,
                                 }}>
-                                    {/* Info de la jugada */}
                                     <div style={{ display: 'flex', gap: 10, alignItems: 'center', flex: 1, minWidth: 0 }}>
                                         <span style={{
                                             background: play.equipo === 'local' ? '#1e3a8a' : '#7f1d1d',
@@ -913,12 +883,10 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                                                 {play.jugadorNombre}
                                             </div>
                                             <div style={{ fontSize: '0.55rem', color: i === 0 ? '#10b981' : '#475569' }}>
-                                                {i === 0 ? '← última' : `#${i + 1}`}
+                                                {i === 0 ? '← última' : `#${i + 1}`} | {play.cuarto}
                                             </div>
                                         </div>
                                     </div>
-
-                                    {/* Acción */}
                                     <span style={{
                                         fontWeight: 900, flexShrink: 0,
                                         color: play.puntos > 0 ? '#10b981' : '#f59e0b',
@@ -927,8 +895,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                                         {play.accion.toUpperCase()}
                                         {play.puntos > 0 && ` +${play.puntos}`}
                                     </span>
-
-                                    {/* Botón borrar esta jugada */}
                                     <button
                                         onClick={() => handleDeleteJugada(play)}
                                         style={{
@@ -939,7 +905,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                                             cursor: 'pointer', fontSize: '0.75rem',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         }}
-                                        title="Borrar esta jugada"
                                     >
                                         🗑️
                                     </button>
