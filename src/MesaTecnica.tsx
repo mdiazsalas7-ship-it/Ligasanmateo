@@ -125,15 +125,15 @@ const PlayerRow = memo(({
             <button
                 onClick={() => onStat(player, team, accion, 1)}
                 style={{
-                    padding: '12px 4px',
+                    padding: '7px 2px',
                     background: isFlashing ? '#ffffff' : bg,
-                    border: 'none', borderRadius: 8,
+                    border: 'none', borderRadius: 6,
                     color: isFlashing ? bg : 'white',
-                    fontWeight: 900, fontSize: '0.72rem',
+                    fontWeight: 900, fontSize: '0.62rem',
                     cursor: 'pointer',
                     transform: isFlashing ? 'scale(0.93)' : 'scale(1)',
                     transition: 'transform 0.15s, background 0.15s',
-                    lineHeight: 1.3,
+                    lineHeight: 1.2,
                     boxShadow: isFlashing ? `0 0 0 2px ${bg}` : 'none',
                 }}
             >
@@ -181,14 +181,14 @@ const PlayerRow = memo(({
                 </button>
             </div>
 
-            {/* Botones de stat — más grandes */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-                <StatBtn accion="tirosLibres" label="+1 TL" count={s.tirosLibres ?? 0} bg="#475569" />
-                <StatBtn accion="dobles"      label="+2 PT" count={s.dobles ?? 0}      bg="#1e40af" />
-                <StatBtn accion="triples"     label="+3 PT" count={s.triples ?? 0}     bg="#7c3aed" />
-                <StatBtn accion="rebotes"     label="REB"   count={s.rebotes ?? 0}     bg="#047857" />
-                <StatBtn accion="robos"       label="ROBO"  count={s.robos ?? 0}       bg="#b45309" />
-                <StatBtn accion="bloqueos"    label="BLOQ"  count={s.bloqueos ?? 0}    bg="#991b1b" />
+            {/* Botones de stat — compactos en una fila */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3 }}>
+                <StatBtn accion="tirosLibres" label="+1"  count={s.tirosLibres ?? 0} bg="#475569" />
+                <StatBtn accion="dobles"      label="+2"  count={s.dobles ?? 0}      bg="#1e40af" />
+                <StatBtn accion="triples"     label="+3"  count={s.triples ?? 0}     bg="#7c3aed" />
+                <StatBtn accion="rebotes"     label="REB" count={s.rebotes ?? 0}     bg="#047857" />
+                <StatBtn accion="robos"       label="ROB" count={s.robos ?? 0}       bg="#b45309" />
+                <StatBtn accion="bloqueos"    label="BLQ" count={s.bloqueos ?? 0}    bg="#991b1b" />
             </div>
         </div>
     );
@@ -597,7 +597,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 <span style={{ opacity: present.includes(p.id) ? 1 : 0.4 }}>
                     {present.includes(p.id) ? '✓' : '○'}
                 </span>
-                {p.numero} — {p.nombre}
+                #{p.numero} — {p.nombre}
             </div>
         );
 
@@ -672,7 +672,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 <span style={{ opacity: onCourt.includes(p.id) ? 1 : 0.3 }}>
                     {onCourt.includes(p.id) ? '✓' : '○'}
                 </span>
-                {p.numero} — {p.nombre}
+                #{p.numero} — {p.nombre}
             </div>
         );
 
