@@ -141,6 +141,48 @@ const CALENDARIO_COLS = [
     'calendario_U16M',
 ];
 
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 4: Nuevo partido programado en cualquier calendario
+// ─────────────────────────────────────────────────────────────
+CALENDARIO_COLS.forEach(colName => {
+    const fnName = 'onPartidoCreado_' + colName.replace('calendario', 'cal');
+
+    exports[fnName] = functions
+        .region('us-central1')
+        .firestore
+        .document(`${colName}/{partidoId}`)
+        .onCreate(async (snap) => {
+            const data = snap.data();
+
+            // Solo notificar partidos programados (no importados como finalizados)
+            if (data.estatus === 'finalizado') return;
+
+            const local     = data.equipoLocalNombre     || 'Local';
+            const visitante = data.equipoVisitanteNombre || 'Visitante';
+            const fecha     = data.fechaAsignada         || '';
+            const hora      = data.hora                  ? ` · ${data.hora}` : '';
+
+            const categoria = colName === 'calendario'
+                ? 'MASTER40'
+                : colName.split('_').slice(1).join('_') || '';
+
+            // Formatear fecha legible
+            let fechaFmt = fecha;
+            try {
+                const [y, m, d] = fecha.split('-').map(Number);
+                fechaFmt = new Date(y, m - 1, d).toLocaleDateString('es-ES', {
+                    weekday: 'long', day: 'numeric', month: 'long'
+                });
+            } catch {}
+
+            await sendPush(
+                `📅 Nuevo partido · ${categoria}`,
+                `${local} vs ${visitante} — ${fechaFmt}${hora}`,
+                { type: 'partido_nuevo', id: snap.id, categoria }
+            );
+        });
+});
+
 CALENDARIO_COLS.forEach(colName => {
     const fnName = 'onPartidoFinalizado_' + colName.replace('calendario', 'cal');
 

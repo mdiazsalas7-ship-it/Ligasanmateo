@@ -968,7 +968,188 @@ const MatchCard = memo(({
     onEdit: (m: Match) => void;
     onDelete: (id: string) => void;
 }) => {
+    const [sharing, setSharing] = useState(false);
     const isFinished = m.estatus === 'finalizado';
+
+    const compartirPartido = async () => {
+        setSharing(true);
+        try {
+            const W = 600, H = 340;
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d')!;
+
+            const loadImg = (url: string): Promise<HTMLImageElement | null> =>
+                new Promise(async resolve => {
+                    try {
+                        const res = await fetch(url);
+                        if (!res.ok) { resolve(null); return; }
+                        const blob = await res.blob();
+                        const b64 = await new Promise<string>(r => {
+                            const fr = new FileReader();
+                            fr.onloadend = () => r(fr.result as string);
+                            fr.onerror = () => r('');
+                            fr.readAsDataURL(blob);
+                        });
+                        if (!b64) { resolve(null); return; }
+                        const img = new Image();
+                        img.onload = () => resolve(img);
+                        img.onerror = () => resolve(null);
+                        img.src = b64;
+                    } catch { resolve(null); }
+                });
+
+            // ── Fondo ──
+            const bg = ctx.createLinearGradient(0, 0, W, H);
+            bg.addColorStop(0, '#020c1b');
+            bg.addColorStop(0.5, '#0d1f4a');
+            bg.addColorStop(1, '#020c1b');
+            ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+            // Puntos decorativos
+            ctx.fillStyle = 'rgba(255,255,255,0.025)';
+            for (let x = 0; x < W; x += 22) for (let y = 0; y < H; y += 22) ctx.fillRect(x, y, 2, 2);
+
+            // Línea superior naranja
+            const lineGrad = ctx.createLinearGradient(0, 0, W, 0);
+            lineGrad.addColorStop(0, 'transparent');
+            lineGrad.addColorStop(0.3, '#f97316');
+            lineGrad.addColorStop(0.7, '#f97316');
+            lineGrad.addColorStop(1, 'transparent');
+            ctx.strokeStyle = lineGrad; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(0, 3); ctx.lineTo(W, 3); ctx.stroke();
+
+            // ── Logo liga ──
+            const LIGA_LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+            const ligaImg = await loadImg(LIGA_LOGO);
+            const lr = 26;
+            if (ligaImg) {
+                ctx.save();
+                ctx.beginPath(); ctx.arc(W/2, 38, lr, 0, Math.PI*2);
+                ctx.fillStyle = '#fff'; ctx.fill(); ctx.clip();
+                ctx.drawImage(ligaImg, W/2-lr, 38-lr, lr*2, lr*2);
+                ctx.restore();
+                ctx.beginPath(); ctx.arc(W/2, 38, lr, 0, Math.PI*2);
+                ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2; ctx.stroke();
+            }
+
+            // ── Encabezado ──
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 11px system-ui'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText('LIGA METROPOLITANA EJE ESTE', W/2, 80);
+
+            // Categoría y fecha
+            const fechaFmt = (() => {
+                try {
+                    const [y, mo, d] = (m.fechaAsignada || '').split('-').map(Number);
+                    return new Date(y, mo-1, d).toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' });
+                } catch { return m.fechaAsignada || ''; }
+            })();
+            ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#f97316';
+            ctx.fillText((m.categoria || '').toUpperCase() + (m.fase && m.fase !== 'REGULAR' ? ' · ' + m.fase.toUpperCase() : ''), W/2, 100);
+            ctx.font = '12px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.55)';
+            ctx.fillText(fechaFmt.toUpperCase() + (m.hora ? ' · ' + m.hora : ''), W/2, 118);
+
+            // Línea divisoria
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(60, 130); ctx.lineTo(W-60, 130); ctx.stroke();
+
+            // ── Logos y nombres de equipos ──
+            const drawTeam = async (name: string, id: string|undefined, cx: number, isWinner: boolean) => {
+                const logoUrl = getLogo(id, name);
+                const R = 48;
+                const img = logoUrl ? await loadImg(logoUrl) : null;
+
+                ctx.save();
+                ctx.beginPath(); ctx.arc(cx, 190, R, 0, Math.PI*2);
+                if (img) {
+                    ctx.fillStyle = '#fff'; ctx.fill(); ctx.clip();
+                    ctx.drawImage(img, cx-R, 190-R, R*2, R*2);
+                } else {
+                    ctx.fillStyle = '#1e3a8a'; ctx.fill(); ctx.clip();
+                    ctx.font = `bold ${R*0.7}px system-ui`;
+                    ctx.fillStyle = 'white'; ctx.textAlign = 'center';
+                    ctx.fillText(name.charAt(0).toUpperCase(), cx, 190 + R*0.25);
+                }
+                ctx.restore();
+
+                // Borde
+                ctx.beginPath(); ctx.arc(cx, 190, R, 0, Math.PI*2);
+                ctx.strokeStyle = isWinner ? '#fbbf24' : 'rgba(255,255,255,0.15)';
+                ctx.lineWidth = isWinner ? 3 : 1.5; ctx.stroke();
+
+                // Nombre del equipo
+                ctx.textAlign = 'center';
+                ctx.font = `${isWinner ? 'bold' : ''} 13px system-ui`;
+                ctx.fillStyle = isWinner ? '#fbbf24' : 'rgba(255,255,255,0.85)';
+                const maxW = 200;
+                const upper = name.toUpperCase();
+                if (ctx.measureText(upper).width <= maxW) {
+                    ctx.fillText(upper, cx, 254);
+                } else {
+                    const words = upper.split(' ');
+                    let l1 = '', l2 = '';
+                    for (const w of words) ctx.measureText(l1+' '+w).width <= maxW ? l1=(l1+' '+w).trim() : l2=(l2+' '+w).trim();
+                    ctx.fillText(l1, cx, 250); if (l2) ctx.fillText(l2, cx, 266);
+                }
+            };
+
+            const localGana = isFinished && (m.marcadorLocal??0) > (m.marcadorVisitante??0);
+            const visitGana = isFinished && (m.marcadorVisitante??0) > (m.marcadorLocal??0);
+
+            await drawTeam(m.equipoLocalNombre, m.equipoLocalId, 130, localGana);
+            await drawTeam(m.equipoVisitanteNombre, m.equipoVisitanteId, W-130, visitGana);
+
+            // ── Centro: marcador o VS ──
+            if (isFinished) {
+                ctx.textAlign = 'center';
+                ctx.font = 'bold 62px system-ui';
+                ctx.fillStyle = localGana ? '#fbbf24' : 'white';
+                ctx.fillText(String(m.marcadorLocal ?? 0), W/2 - 44, 202);
+                ctx.font = 'bold 28px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.fillText('-', W/2, 196);
+                ctx.font = 'bold 62px system-ui';
+                ctx.fillStyle = visitGana ? '#fbbf24' : 'white';
+                ctx.fillText(String(m.marcadorVisitante ?? 0), W/2 + 44, 202);
+                ctx.font = 'bold 11px system-ui'; ctx.fillStyle = '#10b981';
+                ctx.fillText('✓  RESULTADO FINAL', W/2, 222);
+            } else {
+                // VS animado
+                const vsGrad = ctx.createRadialGradient(W/2, 185, 0, W/2, 185, 38);
+                vsGrad.addColorStop(0, 'rgba(249,115,22,0.25)');
+                vsGrad.addColorStop(1, 'rgba(249,115,22,0)');
+                ctx.fillStyle = vsGrad;
+                ctx.beginPath(); ctx.arc(W/2, 185, 38, 0, Math.PI*2); ctx.fill();
+                ctx.font = 'bold 36px system-ui'; ctx.fillStyle = '#f97316'; ctx.textAlign = 'center';
+                ctx.fillText('VS', W/2, 197);
+                ctx.font = 'bold 15px system-ui'; ctx.fillStyle = '#fbbf24';
+                ctx.fillText(m.hora ? '🕐 ' + m.hora : 'PRÓXIMO', W/2, 230);
+            }
+
+            // ── Footer ──
+            ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('Liga Metropolitana Eje Este  ·  San Mateo, Aragua', W/2, H - 14);
+
+            // ── Compartir ──
+            canvas.toBlob(async blob => {
+                if (!blob) return;
+                const file = new File([blob], 'partido.png', { type: 'image/png' });
+                const title = isFinished
+                    ? `${m.equipoLocalNombre} ${m.marcadorLocal} - ${m.marcadorVisitante} ${m.equipoVisitanteNombre}`
+                    : `${m.equipoLocalNombre} vs ${m.equipoVisitanteNombre} · ${m.fechaAsignada}`;
+                try {
+                    if (navigator.canShare?.({ files: [file] })) {
+                        await navigator.share({ files: [file], title, text: '🏀 Liga Metropolitana Eje Este' });
+                    } else {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a'); a.href = url; a.download = 'partido.png'; a.click();
+                        setTimeout(() => URL.revokeObjectURL(url), 2000);
+                    }
+                } catch {}
+                setSharing(false);
+            }, 'image/png');
+        } catch (e) { console.error(e); setSharing(false); }
+    };
     const isPlayoff = esFasePlayoff(m.fase);
     const localGana = isFinished && Number(m.marcadorLocal) > Number(m.marcadorVisitante);
     const visitanteGana = isFinished && Number(m.marcadorVisitante) > Number(m.marcadorLocal);
@@ -1046,6 +1227,13 @@ const MatchCard = memo(({
                 ) : (
                     <span style={{ fontSize: '0.6rem', color: '#cbd5e1', textAlign: 'center' }}>PRÓXIMO</span>
                 )}
+                <button
+                    onClick={compartirPartido}
+                    disabled={sharing}
+                    style={{ background: 'none', border: 'none', color: sharing ? '#cbd5e1' : '#f97316', fontSize: '0.65rem', fontWeight: 800, cursor: sharing ? 'not-allowed' : 'pointer' }}
+                >
+                    {sharing ? '⏳' : '📤'}
+                </button>
                 {rol === 'admin' && (
                     <div style={{ display: 'flex', gap: 4 }}>
                         <button onClick={() => onEdit(m)} style={{ background: 'none', border: 'none', fontSize: '0.9rem', cursor: 'pointer', padding: '2px 4px' }}>✏️</button>
