@@ -21,6 +21,63 @@ const PlayoffViewer     = lazy(() => import('./PlayoffViewer'));
 const AdminVideos       = lazy(() => import('./AdminVideos'));
 const ResetTemporada    = lazy(() => import('./ResetTemporada'));
 
+// ─────────────────────────────────────────────
+// COMPONENTE: TICKER TIPO ESPN
+// ─────────────────────────────────────────────
+const TickerESPN = memo(({ resultados, lideres }: { resultados: any[], lideres: any[] }) => {
+    const items: string[] = [];
+
+    // Formatear resultados
+    resultados.forEach(r => {
+        items.push(`🏀 ${r.equipoLocalNombre} ${r.marcadorLocal} - ${r.marcadorVisitante} ${r.equipoVisitanteNombre}`);
+    });
+
+    // Formatear MVPs/Líderes
+    lideres.forEach(l => {
+        items.push(`${l.icon} LÍDER ${l.label}: ${l.p?.nombre} (${l.val} ${l.unit})`);
+    });
+
+    if (items.length === 0) return null;
+
+    // Duplicamos los items para un scroll infinito fluido
+    const text = items.join('   •   ');
+    const scrollingText = `${text}   •   ${text}   •   ${text}`;
+
+    return (
+        <div style={{
+            position: 'fixed', bottom: 95, left: 0, width: '100%',
+            background: '#0a0a0a', color: 'white', height: '28px',
+            display: 'flex', alignItems: 'center', overflow: 'hidden',
+            zIndex: 900, borderTop: '2px solid #cc0000', borderBottom: '1px solid #222',
+            fontFamily: 'monospace', fontWeight: 900, fontSize: '0.7rem'
+        }}>
+            <div style={{
+                background: '#cc0000', padding: '0 10px', height: '100%',
+                display: 'flex', alignItems: 'center', zIndex: 901,
+                boxShadow: '4px 0 10px rgba(0,0,0,0.8)', flexShrink: 0, color: 'white'
+            }}>
+                LIGA METRO
+            </div>
+            <div className="ticker-container" style={{ whiteSpace: 'nowrap', display: 'flex' }}>
+                <div style={{
+                    display: 'inline-block', paddingLeft: '100%',
+                    animation: 'tickerMove 130s linear infinite'
+                }}>
+                    <span style={{ color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        {scrollingText}
+                    </span>
+                </div>
+            </div>
+            <style>{`
+                @keyframes tickerMove {
+                    0% { transform: translateX(0); }
+                    100% { transform: translateX(-100%); }
+                }
+            `}</style>
+        </div>
+    );
+});
+
 // Spinner de carga mientras se descarga el componente
 const PageLoader = () => (
     <div style={{
@@ -56,9 +113,6 @@ const getColName = (base: string, cat: string) =>
 
 // ─────────────────────────────────────────────
 // HELPER: ORDENAMIENTO FIBA CORRECTO
-// Bug original: tiedIds se recalculaba dentro del comparador de .sort()
-// causando que el grupo de empatados cambiara a mitad de la ordenación.
-// Fix: resolver empates ANTES de ordenar, una vez por grupo.
 // ─────────────────────────────────────────────
 const resolverEmpate = (teams: any[], matchesRegulares: any[]): any[] => {
     if (teams.length <= 1) return teams;
@@ -204,7 +258,7 @@ function App() {
     const [allMatchesGlobal, setAllMatchesGlobal]   = useState<any[]>([]);
     const [loading, setLoading]                     = useState(true);
     const [activeView, setActiveView]               = useState('dashboard');
-    const [showReset, setShowReset]                   = useState(false);
+    const [showReset, setShowReset]                 = useState(false);
 
     const [noticiaIndex, setNoticiaIndex]   = useState(0);
     const [juegoIndex, setJuegoIndex]       = useState(0);
@@ -228,7 +282,7 @@ function App() {
         return `GRUPO ${g}`;
     };
 
-    // ── Auth — sin activeView en las dependencias ──
+    // ── Auth ──
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, (u) => {
             if (u) {
@@ -247,11 +301,10 @@ function App() {
             setLoading(false);
         });
         return () => unsub();
-    }, []); // ← sin activeView: no re-suscribir al auth en cada cambio de pantalla
+    }, []);
 
     // ── Carga de datos principal ──
     useEffect(() => {
-        // Cancelar fetch anterior si cambia la categoría antes de terminar
         const abortToken = { cancelled: false };
         fetchAbort.current = abortToken;
 
@@ -326,7 +379,7 @@ function App() {
                     return { ...eq, victorias, derrotas, puntos, puntos_favor: pf, puntos_contra: pc };
                 });
 
-                // 4. Ordenamiento FIBA correcto (función separada, sin bug)
+                // 4. Ordenamiento FIBA correcto
                 const grupoA = equiposConStats.filter(e =>
                     e.grupo?.toUpperCase() === 'A' || e.grupo?.toUpperCase() === 'ÚNICO'
                 );
@@ -392,7 +445,6 @@ function App() {
                     };
                 });
 
-                // Construir un líder por cada categoría estadística
                 if (playerList.length > 0) {
                     const top = (key: string) => [...playerList].sort((a: any, b: any) => b[key] - a[key])[0];
                     const cats = [
@@ -425,7 +477,6 @@ function App() {
 
                 setNoticias(newsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
                 const todasEntrevistas = interviewsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                // Ordenar: los que tienen createdAt primero, luego por fecha string, tomar 5 más recientes
                 todasEntrevistas.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
                 setEntrevistas(todasEntrevistas.slice(0, 5));
                 setEntrevistasCargadas(true);
@@ -441,7 +492,7 @@ function App() {
 
         fetchData();
         return () => { abortToken.cancelled = true; };
-    }, [categoriaActiva]); // ← solo categoría, no activeView
+    }, [categoriaActiva]);
 
     // ── Carrusel automático ──
     useEffect(() => {
@@ -457,7 +508,7 @@ function App() {
     const isAdmin = user?.rol === 'admin';
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#ffffff', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: 110 }}>
+        <div style={{ minHeight: '100vh', backgroundColor: '#ffffff', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: 135 }}>
 
             {/* ── Header ── */}
             <header style={{
@@ -466,7 +517,6 @@ function App() {
                 position: 'sticky', top: 0, zIndex: 1000,
                 boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
             }}>
-                {/* Fondo con textura sutil de puntos */}
                 <div style={{
                     position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none',
                     backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
@@ -474,34 +524,28 @@ function App() {
                 }} />
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, position: 'relative', zIndex: 1 }}>
-
-                    {/* Logo en circunferencia */}
                     <div
                         onClick={() => setActiveView('dashboard')}
-                        style={{
-                            flex: 1,
-                            display: 'flex', alignItems: 'center',
-                        }}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center' }}
                     >
-                    <div style={{
-                            width: 54, height: 54, borderRadius: '50%', flexShrink: 0,
-                            background: 'rgba(255,255,255,0.12)',
-                            border: '2px solid rgba(255,255,255,0.35)',
-                            boxShadow: '0 4px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            overflow: 'hidden', cursor: 'pointer',
-                            backdropFilter: 'blur(4px)',
-                        }}
-                    >
-                        <img
-                            src="https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg"
-                            alt="Logo"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                    </div>
+                        <div style={{
+                                width: 54, height: 54, borderRadius: '50%', flexShrink: 0,
+                                background: 'rgba(255,255,255,0.12)',
+                                border: '2px solid rgba(255,255,255,0.35)',
+                                boxShadow: '0 4px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                overflow: 'hidden', cursor: 'pointer',
+                                backdropFilter: 'blur(4px)',
+                            }}
+                        >
+                            <img
+                                src="https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg"
+                                alt="Logo"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                        </div>
                     </div>
 
-                    {/* Nombre central */}
                     <div style={{ textAlign: 'center', flex: 2 }}>
                         <h1 style={{
                             fontSize: '0.9rem', fontWeight: 900, color: 'white',
@@ -519,10 +563,8 @@ function App() {
                         </div>
                     </div>
 
-                    {/* Botones reglamento + árbitro virtual */}
                     <div style={{ flex: 1, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
                         <div style={{ display: 'flex', gap: 5 }}>
-                            {/* Árbitro Virtual */}
                             <button
                                 onClick={() => window.open('https://zona-fiba-app-2026.vercel.app/', '_blank')}
                                 style={{
@@ -543,7 +585,6 @@ function App() {
                                 />
                                 <span style={{ fontSize: '0.32rem', fontWeight: 900, color: 'rgba(255,255,255,0.85)', letterSpacing: 0.8, whiteSpace: 'nowrap' }}>ÁRBITRO</span>
                             </button>
-                            {/* Reglamento */}
                             <button
                                 onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=ee680a1c-b93d-4159-ae99-0aef67cb4703', '_blank')}
                                 style={{
@@ -567,7 +608,6 @@ function App() {
                     </div>
                 </div>
 
-                {/* Selector de categorías */}
                 <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 10, position: 'relative', zIndex: 1 }} className="no-scrollbar">
                     {CATEGORIAS_DISPONIBLES.map(cat => (
                         <button
@@ -615,18 +655,15 @@ function App() {
                                 {resultadosRecientes.length > 0 ? (
                                     <div key={juegoIndex} className="fade-in" style={{ height: '100%', background: 'linear-gradient(135deg, #1e3a8a, #1e40af)', color: 'white', padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-                                            {/* Local */}
                                             <div style={{ textAlign: 'center', flex: 1 }}>
                                                 <img src={teamLogos[resultadosRecientes[juegoIndex].equipoLocalNombre?.trim().toUpperCase()] || DEFAULT_LOGO} onError={(e) => { e.currentTarget.src = DEFAULT_LOGO; }} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: '50%', background: 'white' }} alt="" />
                                                 <p style={{ fontSize: '0.55rem', fontWeight: 900, marginTop: 5 }}>{resultadosRecientes[juegoIndex].equipoLocalNombre}</p>
                                             </div>
-                                            {/* Marcador */}
                                             <div style={{ textAlign: 'center', flex: 1 }}>
                                                 <p style={{ fontSize: '1.8rem', fontWeight: 900, margin: 0 }}>
                                                     {resultadosRecientes[juegoIndex].marcadorLocal} - {resultadosRecientes[juegoIndex].marcadorVisitante}
                                                 </p>
                                             </div>
-                                            {/* Visitante */}
                                             <div style={{ textAlign: 'center', flex: 1 }}>
                                                 <img src={teamLogos[resultadosRecientes[juegoIndex].equipoVisitanteNombre?.trim().toUpperCase()] || DEFAULT_LOGO} onError={(e) => { e.currentTarget.src = DEFAULT_LOGO; }} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: '50%', background: 'white' }} alt="" />
                                                 <p style={{ fontSize: '0.55rem', fontWeight: 900, marginTop: 5 }}>{resultadosRecientes[juegoIndex].equipoVisitanteNombre}</p>
@@ -659,7 +696,6 @@ function App() {
 
                         {/* Noticias + Líder */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15 }}>
-                            {/* Noticias */}
                             <div onClick={() => setActiveView('noticias')} style={{ height: 220, background: 'white', borderRadius: 24, border: '2.5px solid #1e3a8a', cursor: 'pointer', overflow: 'hidden', boxShadow: '0 8px 25px rgba(30,58,138,0.1)' }}>
                                 <div style={{ background: '#1e3a8a', padding: '6px 12px' }}>
                                     <p style={{ fontSize: '0.6rem', fontWeight: 900, color: 'white', margin: 0, textAlign: 'center' }}>📢 PRENSA LIGA</p>
@@ -674,7 +710,6 @@ function App() {
                                 </p>
                             </div>
 
-                            {/* Líder */}
                             <div onClick={() => setActiveView('stats')} style={{ height: 220, background: '#ffffff', borderRadius: 24, border: `2.5px solid ${leadersList[leaderIndex]?.color || '#eee'}`, cursor: 'pointer', textAlign: 'center', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden', boxShadow: `0 8px 25px ${leadersList[leaderIndex]?.color || '#eee'}20` }}>
                                 {leadersList.length > 0 ? (() => {
                                     const ldr = leadersList[leaderIndex];
@@ -683,14 +718,10 @@ function App() {
                                     const inicial = (ldr.p?.nombre || '?').charAt(0).toUpperCase();
                                     return (
                                         <div key={leaderIndex} className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                                            {/* Header coloreado */}
                                             <div style={{ background: ldr.color, padding: '6px 10px', color: 'white', fontSize: '0.58rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                                                 {ldr.icon} LÍDER {ldr.label}
                                             </div>
-
-                                            {/* Cuerpo */}
                                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '8px 10px', gap: 5 }}>
-                                                {/* Foto del jugador */}
                                                 <div style={{ width: 58, height: 58, borderRadius: '50%', overflow: 'hidden', border: `2.5px solid ${ldr.color}`, background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                                     {fotoUrl ? (
                                                         <img src={fotoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt=""
@@ -701,21 +732,15 @@ function App() {
                                                         {inicial}
                                                     </div>
                                                 </div>
-
-                                                {/* Nombre del jugador */}
                                                 <div style={{ fontSize: '0.72rem', fontWeight: 900, color: '#1e293b', lineHeight: 1.1, textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
                                                     {ldr.p?.nombre}
                                                 </div>
-
-                                                {/* Logo + nombre del equipo */}
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                                     <img src={logoUrl} style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: '50%', background: '#f1f5f9', border: '1px solid #e2e8f0' }} alt="" onError={e => { e.currentTarget.src = DEFAULT_LOGO; }} />
                                                     <span style={{ fontSize: '0.5rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
                                                         {ldr.p?.equipo}
                                                     </span>
                                                 </div>
-
-                                                {/* Estadística */}
                                                 <div style={{ fontSize: '1.9rem', fontWeight: 900, color: ldr.color, lineHeight: 1 }}>
                                                     {ldr.val}
                                                     <span style={{ fontSize: '0.6rem', color: '#94a3b8', marginLeft: 2 }}>{ldr.unit}</span>
@@ -807,7 +832,6 @@ function App() {
                                             overflow: 'hidden', border: '2px solid #1e3a8a',
                                             position: 'relative', background: '#000',
                                         }}>
-                                            {/* Thumbnail guardado (preferido) o frame del video */}
                                             {video.thumbnailUrl ? (
                                                 <img src={video.thumbnailUrl} alt={video.titulo}
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -821,14 +845,12 @@ function App() {
                                                         v.currentTime = Math.min(v.duration * 0.15, 3);
                                                     }}
                                                     onSeeked={e => {
-                                                        // forzar repaint para que el frame aparezca
                                                         const v = e.target as HTMLVideoElement;
                                                         v.style.opacity = '0.99';
                                                         setTimeout(() => { v.style.opacity = '1'; }, 50);
                                                     }}
                                                 />
                                             )}
-                                            {/* Overlay semitransparente con play */}
                                             <div style={{
                                                 position: 'absolute', inset: 0,
                                                 background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)',
@@ -843,7 +865,6 @@ function App() {
                                                     <span style={{ fontSize: '0.9rem', marginLeft: 3 }}>▶</span>
                                                 </div>
                                             </div>
-                                            {/* Fecha en la parte de abajo */}
                                             {video.fecha && (
                                                 <div style={{
                                                     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -891,18 +912,18 @@ function App() {
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10, marginTop: 10 }}>
                                     <button onClick={() => setActiveView('adminVideos')} style={adminBtnStyle}>🎥 VIDEOS</button>
-                                <button onClick={() => setShowReset(true)} style={{ ...adminBtnStyle, background: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444', color: '#fca5a5' }}>☢️ RESET TEMPORADA</button>
+                                    <button onClick={() => setShowReset(true)} style={{ ...adminBtnStyle, background: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444', color: '#fca5a5' }}>☢️ RESET TEMPORADA</button>
                                 </div>
                                 <button onClick={() => signOut(auth)} style={{ marginTop: 10, background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: '0.5rem', fontWeight: 'bold', cursor: 'pointer' }}>
                                     SALIR ADMIN
                                 </button>
 
-                        {showReset && (
-                            <ResetTemporada
-                                categoria={categoriaActiva}
-                                onClose={() => setShowReset(false)}
-                            />
-                        )}
+                                {showReset && (
+                                    <ResetTemporada
+                                        categoria={categoriaActiva}
+                                        onClose={() => setShowReset(false)}
+                                    />
+                                )}
                             </div>
                         )}
                     </div>
@@ -921,6 +942,9 @@ function App() {
                 )}
                 </Suspense>
             </main>
+
+            {/* ── BARRA TIPO ESPN ── */}
+            <TickerESPN resultados={resultadosRecientes} lideres={leadersList} />
 
             {/* ── Barra de navegación ── */}
             <nav style={{
