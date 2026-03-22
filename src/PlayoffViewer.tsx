@@ -344,7 +344,7 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose, onCat
     return (
         <EditContext.Provider value={editCtx}>
             <div style={{
-                position: 'fixed', inset: 0, zIndex: 2000,
+                position: 'relative', minHeight: '100vh',
                 background: 'radial-gradient(ellipse at 50% 0%, #0f1f3d 0%, #020617 70%)',
                 overflowY: 'auto', overflowX: 'hidden',
                 color: 'white', fontFamily: "'Inter','Segoe UI',sans-serif",

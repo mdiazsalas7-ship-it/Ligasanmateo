@@ -620,7 +620,7 @@ const TeamsPublicViewer: React.FC<{
     // ─────────────────────────────────────────────
     return (
         <div style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
+            position: 'relative', minHeight: '100vh',
             background: '#f0f4f8',
             display: 'flex', flexDirection: 'column',
             fontFamily: "'Inter','Segoe UI',sans-serif",

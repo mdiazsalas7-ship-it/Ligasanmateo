@@ -1399,7 +1399,7 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
     ];
 
     return (
-        <div style={{ position: 'fixed', inset: 0, background: '#f3f4f6', zIndex: 1000, display: 'flex', flexDirection: 'column', fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
+        <div style={{ position: 'relative', background: '#f3f4f6', minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
 
             {selectedBoxScore && (
                 <BoxScoreModal
