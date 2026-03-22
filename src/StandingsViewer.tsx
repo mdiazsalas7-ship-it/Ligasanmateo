@@ -446,36 +446,16 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
         <div style={{ minHeight: '100vh', background: '#f8fafc', paddingBottom: 100, fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
 
             {/* Header */}
-            <div style={{
-                background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)',
-                color: 'white', padding: '28px 20px 36px',
-                borderRadius: '0 0 36px 36px', marginBottom: 28,
-                boxShadow: '0 8px 30px rgba(30,58,138,0.3)',
-            }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: 860, margin: '0 auto' }}>
-                    <div>
-                        <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, letterSpacing: '1px' }}>
-                            TABLAS {categoria.toUpperCase()}
-                        </h2>
-                        <p style={{ margin: '4px 0 0', fontSize: '0.6rem', fontWeight: 700, color: '#fbbf24', letterSpacing: '1px', textTransform: 'uppercase' }}>
-                            Solo fase regular • Desempate Apéndice D FIBA 2024
-                        </p>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            background: 'rgba(255,255,255,0.15)', color: 'white',
-                            border: '1px solid rgba(255,255,255,0.3)',
-                            padding: '9px 18px', borderRadius: 12,
-                            fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem',
-                            backdropFilter: 'blur(8px)', transition: 'background 0.2s',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.25)')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
-                    >
-                        ✕ CERRAR
-                    </button>
+            <div style={{ background: '#fff', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+                <div>
+                    <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
+                        🏆 Tablas {categoria}
+                    </h2>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.6rem', color: '#94a3b8' }}>Solo fase regular · Desempate FIBA 2024</p>
                 </div>
+                <button onClick={onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>
+                    ← VOLVER
+                </button>
             </div>
             {/* Tablas */}
             <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 16px' }}>

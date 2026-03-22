@@ -601,91 +601,25 @@ const TeamsPublicViewer: React.FC<{
             )}
 
             {/* ── Header ── */}
-            <div style={{
-                background: 'white', flexShrink: 0,
-                borderBottom: '1px solid #e2e8f0',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-            }}>
-                {/* Fila superior: botón atrás + logo liga */}
-                <div style={{
-                    padding: '10px 16px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                }}>
-                    {/* Botón de regreso */}
-                    <button
-                        onClick={view === 'roster' ? () => setView('list') : onClose}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            background: '#f1f5f9', border: 'none', cursor: 'pointer',
-                            borderRadius: 12, padding: '8px 14px',
-                            color: '#1e3a8a', fontWeight: 800, fontSize: '0.72rem',
-                            transition: 'background 0.15s',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; }}
-                    >
-                        <span style={{ fontSize: '1rem', lineHeight: 1 }}>
-                            {view === 'roster' ? '←' : '✕'}
-                        </span>
-                        <span>{view === 'roster' ? 'Equipos' : 'Cerrar'}</span>
-                    </button>
-
-                    {/* Logo liga en círculo */}
-                    <div style={{
-                        width: 44, height: 44, borderRadius: '50%',
-                        border: '2px solid #e2e8f0',
-                        background: 'white',
-                        overflow: 'hidden',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                        flexShrink: 0,
-                    }}>
-                        <img src={LEAGUE_LOGO} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Liga" />
-                    </div>
-                </div>
-
-                {/* Fila inferior: título de la vista */}
-                <div style={{
-                    padding: '0 16px 10px',
-                    display: 'flex', alignItems: 'center', gap: 10,
-                }}>
+            <div style={{ background: '#fff', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {view === 'roster' && selectedTeam && (
-                        /* Logo del equipo en círculo + nombre */
-                        <>
-                            <div style={{
-                                width: 36, height: 36, borderRadius: '50%',
-                                background: '#f8fafc', border: '2px solid #e2e8f0',
-                                overflow: 'hidden', flexShrink: 0,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                                <img
-                                    src={selectedTeam.logoUrl || DEFAULT_LOGO}
-                                    alt={selectedTeam.nombre}
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                    onError={e => { e.currentTarget.src = DEFAULT_LOGO; }}
-                                />
-                            </div>
-                            <div>
-                                <div style={{ fontWeight: 900, fontSize: '0.95rem', color: '#1e293b', textTransform: 'uppercase' }}>
-                                    {selectedTeam.nombre}
-                                </div>
-                                <div style={{ fontSize: '0.58rem', color: '#94a3b8', fontWeight: 700 }}>
-                                    Toca un jugador para ver su barajita
-                                </div>
-                            </div>
-                        </>
-                    )}
-                    {view === 'list' && (
-                        <div>
-                            <div style={{ fontWeight: 900, fontSize: '0.95rem', color: '#1e293b', textTransform: 'uppercase' }}>
-                                Equipos
-                            </div>
-                            <div style={{ fontSize: '0.58rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>
-                                {categoria}
-                            </div>
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', overflow: 'hidden', border: '2px solid #e2e8f0', flexShrink: 0 }}>
+                            <img src={selectedTeam.logoUrl || DEFAULT_LOGO} alt={selectedTeam.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.src = DEFAULT_LOGO; }} />
                         </div>
                     )}
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
+                            🛡️ {view === 'roster' && selectedTeam ? selectedTeam.nombre : `Equipos ${categoria}`}
+                        </h2>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.6rem', color: '#94a3b8' }}>
+                            {view === 'roster' ? 'Toca un jugador para ver su barajita' : 'Liga Metropolitana Eje Este'}
+                        </p>
+                    </div>
                 </div>
+                <button onClick={view === 'roster' ? () => setView('list') : onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>
+                    {view === 'roster' ? '← Equipos' : '← VOLVER'}
+                </button>
             </div>
 
 

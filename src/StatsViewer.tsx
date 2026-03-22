@@ -525,36 +525,18 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
         <div style={{ minHeight: '100vh', background: '#f8fafc', paddingBottom: 120 }}>
 
             {/* Header */}
-            <div style={{
-                background: '#1e3a8a', padding: '20px 18px 16px', color: 'white',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-                borderRadius: '0 0 28px 28px',
-            }}>
-                <div style={{
-                    maxWidth: 800, margin: '0 auto',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-                }}>
-                    <div>
-                        <h2 style={{ margin: 0, fontWeight: 900, fontSize: '1.5rem', letterSpacing: '-0.5px' }}>
-                            📊 LÍDERES
-                        </h2>
-                        <p style={{ margin: '2px 0 0', opacity: 0.8, fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: '#fbbf24' }}>
-                            Fase Regular · {categoria}
-                        </p>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                        <button
-                            onClick={onClose}
-                            style={{
-                                background: 'white', color: '#1e3a8a', border: 'none',
-                                padding: '8px 18px', borderRadius: 12,
-                                fontWeight: 900, fontSize: '0.72rem', cursor: 'pointer',
-                            }}
-                        >
-                            CERRAR
-                        </button>
-                        <ViewToggle mode={viewMode} onChange={setViewMode} />
-                    </div>
+            <div style={{ background: '#fff', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+                <div>
+                    <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
+                        📊 Líderes {categoria}
+                    </h2>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.6rem', color: '#94a3b8' }}>Fase Regular · por partido</p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ViewToggle mode={viewMode} onChange={setViewMode} />
+                    <button onClick={onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>
+                        ← VOLVER
+                    </button>
                 </div>
             </div>
             {/* Tabs de categoría */}

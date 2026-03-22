@@ -328,54 +328,24 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                 `}</style>
 
                 {/* Header */}
-                <header style={{
-                    padding: '14px 20px',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    background: 'rgba(2,6,23,0.88)', backdropFilter: 'blur(16px)',
-                    position: 'sticky', top: 0, zIndex: 20,
-                    borderBottom: '1px solid rgba(255,255,255,0.07)',
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span style={{ fontSize: '1.4rem' }}>🏆</span>
-                        <div>
-                            <h2 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 900, color: '#fbbf24', letterSpacing: '2px', textTransform: 'uppercase' }}>
-                                Road to the Finals
-                            </h2>
-                            <p style={{ margin: 0, fontSize: '0.6rem', color: '#475569', letterSpacing: '1.5px', textTransform: 'uppercase' }}>
-                                {categoria}
-                            </p>
-                        </div>
+                <div style={{ background: '#fff', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
+                            🏆 Playoff {categoria}
+                        </h2>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.6rem', color: '#94a3b8' }}>Road to the Finals</p>
                     </div>
-
-                    <div style={{ display: 'flex', gap: 10 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         {isAdmin && (
-                            <button
-                                onClick={() => setEditMode(v => !v)}
-                                style={{
-                                    background: editMode ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.06)',
-                                    color: editMode ? '#fbbf24' : '#94a3b8',
-                                    border: `1px solid ${editMode ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                                    padding: '7px 14px', borderRadius: 8,
-                                    fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                }}
-                            >
+                            <button onClick={() => setEditMode(v => !v)} style={{ background: editMode ? '#fef3c7' : '#f1f5f9', color: editMode ? '#d97706' : '#64748b', border: 'none', padding: '6px 12px', borderRadius: 8, fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer' }}>
                                 {editMode ? '👁 VER' : '⚙️ EDITAR'}
                             </button>
                         )}
-                        <button
-                            onClick={onClose}
-                            style={{
-                                background: 'rgba(239,68,68,0.15)', color: '#f87171',
-                                border: '1px solid rgba(239,68,68,0.3)',
-                                padding: '7px 14px', borderRadius: 8,
-                                fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer',
-                            }}
-                        >
-                            ✕ CERRAR
+                        <button onClick={onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>
+                            ← VOLVER
                         </button>
                     </div>
-                </header>
+                </div>
                 {/* Contenido */}
                 {loading    ? <LoadingState /> :
                  error      ? <ErrorState message={error} /> :
