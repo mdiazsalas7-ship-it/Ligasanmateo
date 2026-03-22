@@ -433,78 +433,122 @@ function App() {
 
             {/* ── Header ── */}
             <header style={{
-                background: '#ffffff', padding: '15px 15px 10px',
-                borderBottom: '1px solid #f1f5f9',
+                background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 60%, #1d4ed8 100%)',
+                padding: '14px 15px 0',
                 position: 'sticky', top: 0, zIndex: 1000,
+                boxShadow: '0 4px 20px rgba(30,58,138,0.4)',
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
+                {/* Fila superior: logo + título + botones */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+
+                    {/* Logo */}
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <img
-                            src="https://i.postimg.cc/hhF5fTPn/image.png"
-                            alt="Logo"
-                            style={{ height: 45, cursor: 'pointer' }}
-                            onClick={() => setActiveView('dashboard')}
-                        />
+                        <div style={{
+                            width: 48, height: 48, borderRadius: '50%',
+                            border: '2px solid rgba(255,255,255,0.3)',
+                            overflow: 'hidden', background: 'white',
+                            boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+                            cursor: 'pointer',
+                        }} onClick={() => setActiveView('dashboard')}>
+                            <img
+                                src="https://i.postimg.cc/hhF5fTPn/image.png"
+                                alt="Logo"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                        </div>
                         <div
                             onClick={() => setActiveView('login')}
-                            style={{ fontSize: '0.7rem', opacity: 0.1, marginTop: 2, cursor: 'pointer' }}
+                            style={{ fontSize: '0.7rem', opacity: 0.08, marginTop: 2, cursor: 'pointer', color: 'white' }}
                         >🔑</div>
                     </div>
-                    <div style={{ textAlign: 'center', flex: 2 }}>
-                        <h1 style={{ fontSize: '0.85rem', fontWeight: 900, color: '#1e3a8a', margin: 0, textTransform: 'uppercase' }}>
+
+                    {/* Título */}
+                    <div style={{ textAlign: 'center', flex: 1, padding: '0 8px' }}>
+                        <h1 style={{ fontSize: '0.9rem', fontWeight: 900, color: 'white', margin: 0, textTransform: 'uppercase', letterSpacing: '1px', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
                             Liga Metropolitana
                         </h1>
-                        <p style={{ fontSize: '0.5rem', color: '#94a3b8', margin: 0, fontWeight: 'bold' }}>EJE ESTE • 2026</p>
+                        <p style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.65)', margin: '2px 0 0', fontWeight: 700, letterSpacing: '2px' }}>
+                            EJE ESTE • 2026
+                        </p>
                     </div>
-                    <div style={{ flex: 1, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                        <div style={{ display: 'flex', gap: 5 }}>
-                            {/* Árbitro Virtual */}
-                            <button
-                                onClick={() => window.open('https://zona-fiba-app-2026.vercel.app/', '_blank')}
-                                style={{
-                                    background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)',
-                                    padding: '4px 6px', borderRadius: 10,
-                                    display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
-                                    cursor: 'pointer', gap: 2,
-                                }}
-                            >
+
+                    {/* Botones árbitro + reglamento */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                        {/* Árbitro Virtual */}
+                        <button
+                            onClick={() => window.open('https://zona-fiba-app-2026.vercel.app/', '_blank')}
+                            style={{
+                                background: 'rgba(255,255,255,0.12)',
+                                border: '1px solid rgba(255,255,255,0.25)',
+                                borderRadius: 12, padding: '6px 8px',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                                cursor: 'pointer', transition: 'background 0.2s',
+                                minWidth: 52,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.22)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+                        >
+                            <div style={{
+                                width: 32, height: 32, borderRadius: '50%',
+                                overflow: 'hidden', border: '2px solid rgba(255,255,255,0.4)',
+                                background: 'rgba(255,255,255,0.1)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
                                 <img
                                     src="/icon/arbitro-icon.png"
                                     alt="Árbitro"
-                                    style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', border: '1.5px solid rgba(255,255,255,0.3)' }}
-                                    onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    onError={e => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        (e.target as HTMLImageElement).parentElement!.innerHTML = '<span style="font-size:1.1rem">👕</span>';
+                                    }}
                                 />
-                                <span style={{ fontSize: '0.32rem', fontWeight: 900, color: 'rgba(255,255,255,0.85)', letterSpacing: 0.8, whiteSpace: 'nowrap' }}>ÁRBITRO</span>
-                            </button>
-                            {/* Reglamento */}
-                            <button
-                                onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=ee680a1c-b93d-4159-ae99-0aef67cb4703', '_blank')}
-                                style={{
-                                    background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)',
-                                    padding: '4px 6px', borderRadius: 10,
-                                    display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
-                                    cursor: 'pointer', gap: 2,
-                                }}
-                            >
-                                <span style={{ fontSize: '1.1rem' }}>📜</span>
-                                <span style={{ fontSize: '0.32rem', fontWeight: 900, color: 'rgba(255,255,255,0.85)', letterSpacing: 0.8 }}>REGLAMENTO</span>
-                            </button>
-                        </div>
+                            </div>
+                            <span style={{ fontSize: '0.38rem', fontWeight: 900, color: 'white', letterSpacing: '0.8px', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>ÁRBITRO</span>
+                        </button>
+
+                        {/* Reglamento */}
+                        <button
+                            onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=ee680a1c-b93d-4159-ae99-0aef67cb4703', '_blank')}
+                            style={{
+                                background: 'rgba(255,255,255,0.12)',
+                                border: '1px solid rgba(255,255,255,0.25)',
+                                borderRadius: 12, padding: '6px 8px',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                                cursor: 'pointer', transition: 'background 0.2s',
+                                minWidth: 52,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.22)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+                        >
+                            <div style={{
+                                width: 32, height: 32, borderRadius: '50%',
+                                background: 'rgba(255,255,255,0.15)',
+                                border: '2px solid rgba(255,255,255,0.4)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '1.1rem',
+                            }}>📜</div>
+                            <span style={{ fontSize: '0.38rem', fontWeight: 900, color: 'white', letterSpacing: '0.8px', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>REGLAMENTO</span>
+                        </button>
                     </div>
                 </div>
 
                 {/* Selector de categorías */}
-                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 10 }} className="no-scrollbar">
+                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 12 }} className="no-scrollbar">
                     {CATEGORIAS_DISPONIBLES.map(cat => (
                         <button
                             key={cat.id}
                             onClick={() => setCategoriaActiva(cat.id)}
                             style={{
-                                padding: '8px 16px', borderRadius: 20, border: 'none',
-                                whiteSpace: 'nowrap',
-                                background: categoriaActiva === cat.id ? '#1e3a8a' : '#f1f5f9',
-                                color: categoriaActiva === cat.id ? 'white' : '#64748b',
-                                fontSize: '0.65rem', fontWeight: 900, transition: '0.3s',
+                                padding: '6px 14px', borderRadius: 20, border: 'none',
+                                whiteSpace: 'nowrap', flexShrink: 0,
+                                background: categoriaActiva === cat.id
+                                    ? 'white'
+                                    : 'rgba(255,255,255,0.12)',
+                                color: categoriaActiva === cat.id ? '#1e3a8a' : 'rgba(255,255,255,0.8)',
+                                fontSize: '0.62rem', fontWeight: 900, cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: categoriaActiva === cat.id ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
                             }}
                         >
                             {cat.label}
@@ -771,12 +815,12 @@ function App() {
                 ) : (
                     <>
                         {activeView === 'noticias'    && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
-                        {activeView === 'stats'       && <StatsViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
-                        {activeView === 'playoff'     && <PlayoffViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
-                        {activeView === 'tabla'       && <StandingsViewer equipos={[...equiposA, ...equiposB]} partidos={allMatchesGlobal} categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
-                        {activeView === 'calendario'  && <CalendarViewer categoria={categoriaActiva} rol={user?.rol} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'stats'       && <StatsViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'playoff'     && <PlayoffViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'tabla'       && <StandingsViewer equipos={[...equiposA, ...equiposB]} partidos={allMatchesGlobal} categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'calendario'  && <CalendarViewer categoria={categoriaActiva} rol={user?.rol} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'mesa'        && isAdmin && <MesaTecnica categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
-                        {activeView === 'equipos_pub'  && <TeamsPublicViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'equipos_pub'  && <TeamsPublicViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'equipos'     && isAdmin && <AdminEquipos categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'adminVideos' && isAdmin && <AdminVideos onClose={() => setActiveView('dashboard')} />}
                     </>
