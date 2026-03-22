@@ -388,7 +388,41 @@ const LeaderSection = ({
 // ─────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────
-const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onClose, categoria }) => {
+
+// ── Selector de categoría portátil ──
+const CategoriaBar: React.FC<{
+    categoriaActiva: string;
+    onCategoriaChange: (cat: string) => void;
+}> = ({ categoriaActiva, onCategoriaChange }) => {
+    const CATS = [
+        { id: 'MASTER40',        label: '🍷 MASTER 40'      },
+        { id: 'LIBRE',           label: '🏀 LIBRE'           },
+        { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL' },
+        { id: 'U16_FEMENINO',    label: '👧 U16 FEM'         },
+        { id: 'U16M',            label: '👦 U16 MASC'        },
+    ];
+    return (
+        <div className="no-scrollbar" style={{
+            display: 'flex', gap: 6, overflowX: 'auto',
+            padding: '8px 14px', background: '#f8fafc',
+            borderBottom: '1px solid #e5e7eb', flexShrink: 0,
+        }}>
+            {CATS.map(cat => (
+                <button key={cat.id} onClick={() => onCategoriaChange(cat.id)} style={{
+                    padding: '5px 12px', borderRadius: 20, border: 'none',
+                    whiteSpace: 'nowrap', flexShrink: 0,
+                    background: categoriaActiva === cat.id ? '#1e3a8a' : '#f1f5f9',
+                    color: categoriaActiva === cat.id ? 'white' : '#64748b',
+                    fontSize: '0.6rem', fontWeight: 900, cursor: 'pointer', transition: 'all 0.2s',
+                }}>
+                    {cat.label}
+                </button>
+            ))}
+        </div>
+    );
+};
+
+const StatsViewer: React.FC<{ onClose: () => void; categoria: string; onCategoriaChange?: (cat: string) => void }> = ({ onClose, categoria, onCategoriaChange }) => {
     const [allPlayers, setAllPlayers] = useState<PlayerStat[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('mvp');
@@ -556,6 +590,8 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                     </div>
                 </div>
             </div>
+
+            {onCategoriaChange && <CategoriaBar categoriaActiva={categoria} onCategoriaChange={onCategoriaChange} />}
 
             {/* Tabs de categoría */}
             <div style={{ background: 'white', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>

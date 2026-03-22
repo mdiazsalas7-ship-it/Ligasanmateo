@@ -460,10 +460,45 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
 // ─────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────
+
+// ── Selector de categoría portátil ──
+const CategoriaBar: React.FC<{
+    categoriaActiva: string;
+    onCategoriaChange: (cat: string) => void;
+}> = ({ categoriaActiva, onCategoriaChange }) => {
+    const CATS = [
+        { id: 'MASTER40',        label: '🍷 MASTER 40'      },
+        { id: 'LIBRE',           label: '🏀 LIBRE'           },
+        { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL' },
+        { id: 'U16_FEMENINO',    label: '👧 U16 FEM'         },
+        { id: 'U16M',            label: '👦 U16 MASC'        },
+    ];
+    return (
+        <div className="no-scrollbar" style={{
+            display: 'flex', gap: 6, overflowX: 'auto',
+            padding: '8px 14px', background: '#f8fafc',
+            borderBottom: '1px solid #e5e7eb', flexShrink: 0,
+        }}>
+            {CATS.map(cat => (
+                <button key={cat.id} onClick={() => onCategoriaChange(cat.id)} style={{
+                    padding: '5px 12px', borderRadius: 20, border: 'none',
+                    whiteSpace: 'nowrap', flexShrink: 0,
+                    background: categoriaActiva === cat.id ? '#1e3a8a' : '#f1f5f9',
+                    color: categoriaActiva === cat.id ? 'white' : '#64748b',
+                    fontSize: '0.6rem', fontWeight: 900, cursor: 'pointer', transition: 'all 0.2s',
+                }}>
+                    {cat.label}
+                </button>
+            ))}
+        </div>
+    );
+};
+
 const TeamsPublicViewer: React.FC<{
     onClose: () => void;
-    categoria: string;          // ← recibe la categoría activa del dashboard
-}> = ({ onClose, categoria }) => {
+    categoria: string;
+    onCategoriaChange?: (cat: string) => void;
+}> = ({ onClose, categoria, onCategoriaChange }) => {
 
     const [view, setView]               = useState<'list' | 'roster'>('list');
     const [teams, setTeams]             = useState<Team[]>([]);
@@ -686,6 +721,8 @@ const TeamsPublicViewer: React.FC<{
                     )}
                 </div>
             </div>
+
+            {onCategoriaChange && view === 'list' && <CategoriaBar categoriaActiva={categoria} onCategoriaChange={onCategoriaChange} />}
 
             {/* ── Contenido ── */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px 100px' }}>

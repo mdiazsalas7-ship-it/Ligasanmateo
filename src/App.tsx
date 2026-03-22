@@ -1,52 +1,33 @@
-import { useEffect, useState, useRef, memo, lazy, Suspense } from 'react';
+import { useEffect, useState, useRef, memo } from 'react';
 import './App.css';
 import { db, auth } from './firebase';
 import { doc, onSnapshot, collection, query, orderBy, getDocs, limit } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
-// Componentes que cargan siempre (críticos)
-import Login    from './Login';
+// Componentes
+import Login from './Login';
+import AdminEquipos from './AdminEquipos';
+import TeamsPublicViewer from './TeamsPublicViewer';
+import CalendarViewer from './CalendarViewer';
+import MesaTecnica from './MesaTecnica';
+import StatsViewer from './StatsViewer';
+import StandingsViewer from './StandingsViewer';
+import NewsAdmin from './NewsAdmin';
 import NewsFeed from './NewsFeed';
-import { useNotifications } from './useNotifications';
-
-// Componentes lazy — solo cargan cuando el usuario los abre
-const AdminEquipos      = lazy(() => import('./AdminEquipos'));
-const TeamsPublicViewer = lazy(() => import('./TeamsPublicViewer'));
-const CalendarViewer    = lazy(() => import('./CalendarViewer'));
-const MesaTecnica       = lazy(() => import('./MesaTecnica'));
-const StatsViewer       = lazy(() => import('./StatsViewer'));
-const StandingsViewer   = lazy(() => import('./StandingsViewer'));
-const NewsAdmin         = lazy(() => import('./NewsAdmin'));
-const PlayoffViewer     = lazy(() => import('./PlayoffViewer'));
-const AdminVideos       = lazy(() => import('./AdminVideos'));
-const ResetTemporada    = lazy(() => import('./ResetTemporada'));
-
-// Spinner de carga mientras se descarga el componente
-const PageLoader = () => (
-    <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        minHeight: 200, flexDirection: 'column', gap: 12,
-    }}>
-        <div style={{
-            width: 36, height: 36, borderRadius: '50%',
-            border: '4px solid #e2e8f0', borderTop: '4px solid #1e3a8a',
-            animation: 'spin 0.7s linear infinite',
-        }} />
-        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700 }}>Cargando...</span>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-);
+import PlayoffViewer from './PlayoffViewer';
+import AdminVideos from './AdminVideos';
+import MetroTicker from './MetroTicker';
 
 // ─────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────
 
 const CATEGORIAS_DISPONIBLES = [
-    { id: 'MASTER40',        label: '🍷 MASTER 40'       },
+    { id: 'MASTER40',        label: '🍷 MASTER 40'      },
     { id: 'LIBRE',           label: '🏀 LIBRE'           },
-    { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL'  },
-    { id: 'U16_FEMENINO',    label: '🏀 U16 FEMENINO'    },
-    { id: 'U16M',            label: '🏀 U16M'            },
+    { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL' },
+    { id: 'U16_FEMENINO',    label: '👧 U16 FEMENINO'    },
+    { id: 'U16M',            label: '👦 U16 MASCULINO'   },
 ];
 
 const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/15568/15568903.png';
@@ -196,7 +177,6 @@ function App() {
     const [equiposB, setEquiposB]                   = useState<any[]>([]);
     const [noticias, setNoticias]                   = useState<any[]>([]);
     const [entrevistas, setEntrevistas]             = useState<any[]>([]);
-    const [entrevistasCargadas, setEntrevistasCargadas] = useState(false);
     const [videoSeleccionado, setVideoSeleccionado] = useState<any>(null);
     const [proximosJuegos, setProximosJuegos]       = useState<any[]>([]);
     const [resultadosRecientes, setResultadosRecientes] = useState<any[]>([]);
@@ -204,16 +184,12 @@ function App() {
     const [allMatchesGlobal, setAllMatchesGlobal]   = useState<any[]>([]);
     const [loading, setLoading]                     = useState(true);
     const [activeView, setActiveView]               = useState('dashboard');
-    const [showReset, setShowReset]                   = useState(false);
 
     const [noticiaIndex, setNoticiaIndex]   = useState(0);
     const [juegoIndex, setJuegoIndex]       = useState(0);
     const [tablaIndex, setTablaIndex]       = useState(0);
     const [leaderIndex, setLeaderIndex]     = useState(0);
     const [leadersList, setLeadersList]     = useState<any[]>([]);
-
-    // Registrar token FCM para notificaciones push
-    useNotifications(user?.uid);
 
     // Ref para cancelar fetchData si cambia categoría antes de terminar
     const fetchAbort = useRef<{ cancelled: boolean }>({ cancelled: false });
@@ -419,16 +395,12 @@ function App() {
                 // 6. Noticias y entrevistas
                 const [newsSnap, interviewsSnap] = await Promise.all([
                     getDocs(query(collection(db, 'noticias'),    orderBy('fecha', 'desc'), limit(5))),
-                    getDocs(query(collection(db, 'entrevistas'), limit(20))),
+                    getDocs(query(collection(db, 'entrevistas'), orderBy('fecha', 'desc'), limit(5))),
                 ]);
                 if (abortToken.cancelled) return;
 
                 setNoticias(newsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-                const todasEntrevistas = interviewsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                // Ordenar: los que tienen createdAt primero, luego por fecha string, tomar 5 más recientes
-                todasEntrevistas.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-                setEntrevistas(todasEntrevistas.slice(0, 5));
-                setEntrevistasCargadas(true);
+                setEntrevistas(interviewsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
                 setLoading(false);
             } catch (e) {
@@ -461,78 +433,39 @@ function App() {
 
             {/* ── Header ── */}
             <header style={{
-                background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #1d4ed8 100%)',
-                padding: '12px 15px 0',
+                background: '#ffffff', padding: '15px 15px 10px',
+                borderBottom: '1px solid #f1f5f9',
                 position: 'sticky', top: 0, zIndex: 1000,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
             }}>
-                {/* Fondo con textura sutil de puntos */}
-                <div style={{
-                    position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none',
-                    backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
-                    backgroundSize: '18px 18px',
-                }} />
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, position: 'relative', zIndex: 1 }}>
-
-                    {/* Logo en circunferencia */}
-                    <div
-                        onClick={() => setActiveView('dashboard')}
-                        style={{
-                            flex: 1,
-                            display: 'flex', alignItems: 'center',
-                        }}
-                    >
-                    <div style={{
-                            width: 54, height: 54, borderRadius: '50%', flexShrink: 0,
-                            background: 'rgba(255,255,255,0.12)',
-                            border: '2px solid rgba(255,255,255,0.35)',
-                            boxShadow: '0 4px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            overflow: 'hidden', cursor: 'pointer',
-                            backdropFilter: 'blur(4px)',
-                        }}
-                    >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <img
-                            src="https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg"
+                            src="https://i.postimg.cc/hhF5fTPn/image.png"
                             alt="Logo"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            style={{ height: 45, cursor: 'pointer' }}
+                            onClick={() => setActiveView('dashboard')}
                         />
+                        <div
+                            onClick={() => setActiveView('login')}
+                            style={{ fontSize: '0.7rem', opacity: 0.1, marginTop: 2, cursor: 'pointer' }}
+                        >🔑</div>
                     </div>
-                    </div>
-
-                    {/* Nombre central */}
                     <div style={{ textAlign: 'center', flex: 2 }}>
-                        <h1 style={{
-                            fontSize: '0.9rem', fontWeight: 900, color: 'white',
-                            margin: 0, textTransform: 'uppercase', letterSpacing: '1.5px',
-                            textShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                        }}>
+                        <h1 style={{ fontSize: '0.85rem', fontWeight: 900, color: '#1e3a8a', margin: 0, textTransform: 'uppercase' }}>
                             Liga Metropolitana
                         </h1>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 3 }}>
-                            <div style={{ height: 1, width: 20, background: 'rgba(255,255,255,0.3)' }} />
-                            <p style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.65)', margin: 0, fontWeight: 800, letterSpacing: 2 }}>
-                                EJE ESTE • 2026
-                            </p>
-                            <div style={{ height: 1, width: 20, background: 'rgba(255,255,255,0.3)' }} />
-                        </div>
+                        <p style={{ fontSize: '0.5rem', color: '#94a3b8', margin: 0, fontWeight: 'bold' }}>EJE ESTE • 2026</p>
                     </div>
-
-                    {/* Botones reglamento + árbitro virtual */}
-                    <div style={{ flex: 1, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+                    <div style={{ flex: 1, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                         <div style={{ display: 'flex', gap: 5 }}>
                             {/* Árbitro Virtual */}
                             <button
                                 onClick={() => window.open('https://zona-fiba-app-2026.vercel.app/', '_blank')}
                                 style={{
-                                    background: 'rgba(255,255,255,0.12)',
-                                    border: '1px solid rgba(255,255,255,0.25)',
+                                    background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)',
                                     padding: '4px 6px', borderRadius: 10,
                                     display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
-                                    cursor: 'pointer', backdropFilter: 'blur(4px)',
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                                    gap: 2,
+                                    cursor: 'pointer', gap: 2,
                                 }}
                             >
                                 <img
@@ -547,41 +480,31 @@ function App() {
                             <button
                                 onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=ee680a1c-b93d-4159-ae99-0aef67cb4703', '_blank')}
                                 style={{
-                                    background: 'rgba(255,255,255,0.12)',
-                                    border: '1px solid rgba(255,255,255,0.25)',
+                                    background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)',
                                     padding: '4px 6px', borderRadius: 10,
                                     display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
-                                    cursor: 'pointer', backdropFilter: 'blur(4px)',
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                                    gap: 2,
+                                    cursor: 'pointer', gap: 2,
                                 }}
                             >
                                 <span style={{ fontSize: '1.1rem' }}>📜</span>
                                 <span style={{ fontSize: '0.32rem', fontWeight: 900, color: 'rgba(255,255,255,0.85)', letterSpacing: 0.8 }}>REGLAMENTO</span>
                             </button>
                         </div>
-                        <div
-                            onClick={() => setActiveView('login')}
-                            style={{ fontSize: '0.7rem', opacity: 0.08, marginTop: 2, cursor: 'pointer', textAlign: 'right' }}
-                        >🔑</div>
                     </div>
                 </div>
 
                 {/* Selector de categorías */}
-                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 10, position: 'relative', zIndex: 1 }} className="no-scrollbar">
+                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 10 }} className="no-scrollbar">
                     {CATEGORIAS_DISPONIBLES.map(cat => (
                         <button
                             key={cat.id}
                             onClick={() => setCategoriaActiva(cat.id)}
                             style={{
-                                padding: '7px 14px', borderRadius: 20, border: 'none',
+                                padding: '8px 16px', borderRadius: 20, border: 'none',
                                 whiteSpace: 'nowrap',
-                                background: categoriaActiva === cat.id
-                                    ? 'rgba(255,255,255,1)'
-                                    : 'rgba(255,255,255,0.12)',
-                                color: categoriaActiva === cat.id ? '#1e3a8a' : 'rgba(255,255,255,0.75)',
-                                fontSize: '0.65rem', fontWeight: 900, transition: '0.2s',
-                                boxShadow: categoriaActiva === cat.id ? '0 3px 10px rgba(0,0,0,0.25)' : 'none',
+                                background: categoriaActiva === cat.id ? '#1e3a8a' : '#f1f5f9',
+                                color: categoriaActiva === cat.id ? 'white' : '#64748b',
+                                fontSize: '0.65rem', fontWeight: 900, transition: '0.3s',
                             }}
                         >
                             {cat.label}
@@ -590,9 +513,11 @@ function App() {
                 </div>
             </header>
 
+            {/* ── METRO NEWS TICKER ── */}
+            <MetroTicker />
+
             {/* ── Contenido principal ── */}
             <main style={{ padding: 15, maxWidth: 500, margin: '0 auto' }}>
-                <Suspense fallback={<PageLoader />}>
                 {activeView === 'login' ? (
                     <div className="fade-in">
                         <Login />
@@ -795,76 +720,21 @@ function App() {
                                 🎙️ Zona de Entrevistas
                             </h2>
                             <div style={{ display: 'flex', overflowX: 'auto', gap: 12, paddingBottom: 10, scrollSnapType: 'x mandatory' }} className="no-scrollbar">
-                                {!entrevistasCargadas ? (
-                                    <p style={{ textAlign: 'center', fontSize: '0.6rem', color: '#94a3b8', width: '100%' }}>Cargando...</p>
-                                ) : entrevistas.length === 0 ? (
-                                    <p style={{ textAlign: 'center', fontSize: '0.6rem', color: '#94a3b8', width: '100%' }}>No hay videos disponibles</p>
-                                ) : entrevistas.map(video => (
-                                    <div key={video.id} onClick={() => setVideoSeleccionado(video)}
-                                        style={{ minWidth: 110, cursor: 'pointer', scrollSnapAlign: 'start', textAlign: 'center', flexShrink: 0 }}>
-                                        <div style={{
-                                            width: 110, height: 150, borderRadius: 12,
-                                            overflow: 'hidden', border: '2px solid #1e3a8a',
-                                            position: 'relative', background: '#000',
-                                        }}>
-                                            {/* Thumbnail guardado (preferido) o frame del video */}
-                                            {video.thumbnailUrl ? (
-                                                <img src={video.thumbnailUrl} alt={video.titulo}
-                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            ) : (
-                                                <video
-                                                    src={video.videoUrl}
-                                                    muted playsInline preload="metadata"
-                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
-                                                    onLoadedMetadata={e => {
-                                                        const v = e.target as HTMLVideoElement;
-                                                        v.currentTime = Math.min(v.duration * 0.15, 3);
-                                                    }}
-                                                    onSeeked={e => {
-                                                        // forzar repaint para que el frame aparezca
-                                                        const v = e.target as HTMLVideoElement;
-                                                        v.style.opacity = '0.99';
-                                                        setTimeout(() => { v.style.opacity = '1'; }, 50);
-                                                    }}
-                                                />
-                                            )}
-                                            {/* Overlay semitransparente con play */}
-                                            <div style={{
-                                                position: 'absolute', inset: 0,
-                                                background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            }}>
-                                                <div style={{
-                                                    width: 36, height: 36, borderRadius: '50%',
-                                                    background: 'rgba(255,255,255,0.88)',
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
-                                                }}>
-                                                    <span style={{ fontSize: '0.9rem', marginLeft: 3 }}>▶</span>
-                                                </div>
+                                {entrevistas.length > 0 ? entrevistas.map(video => (
+                                    <div key={video.id} onClick={() => setVideoSeleccionado(video)} style={{ minWidth: 100, cursor: 'pointer', scrollSnapAlign: 'start', textAlign: 'center', flexShrink: 0 }}>
+                                        <div style={{ width: 100, height: 140, borderRadius: 15, overflow: 'hidden', border: '2px solid #1e3a8a', position: 'relative', background: '#000' }}>
+                                            <video src={`${video.videoUrl}#t=0.1`} muted preload="metadata" playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <span style={{ fontSize: '1.5rem', color: 'white', background: 'rgba(255,255,255,0.2)', borderRadius: '50%', width: 35, height: 35, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid white' }}>▶</span>
                                             </div>
-                                            {/* Fecha en la parte de abajo */}
-                                            {video.fecha && (
-                                                <div style={{
-                                                    position: 'absolute', bottom: 0, left: 0, right: 0,
-                                                    padding: '4px 6px', textAlign: 'center',
-                                                    fontSize: '0.4rem', color: 'rgba(255,255,255,0.85)', fontWeight: 600,
-                                                }}>
-                                                    {video.fecha}
-                                                </div>
-                                            )}
                                         </div>
-                                        <p style={{
-                                            fontSize: '0.52rem', fontWeight: 700, color: '#1e293b',
-                                            marginTop: 6, lineHeight: 1.2, textTransform: 'uppercase',
-                                            overflow: 'hidden', textOverflow: 'ellipsis',
-                                            display: '-webkit-box', WebkitLineClamp: 2,
-                                            WebkitBoxOrient: 'vertical', maxWidth: 110,
-                                        }}>
+                                        <p style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#1e293b', marginTop: 6, lineHeight: 1.1, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 100 }}>
                                             {video.titulo}
                                         </p>
                                     </div>
-                                ))}
+                                )) : (
+                                    <p style={{ textAlign: 'center', fontSize: '0.6rem', color: '#94a3b8', width: '100%' }}>Cargando entrevistas...</p>
+                                )}
                             </div>
                         </section>
 
@@ -891,35 +761,26 @@ function App() {
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10, marginTop: 10 }}>
                                     <button onClick={() => setActiveView('adminVideos')} style={adminBtnStyle}>🎥 VIDEOS</button>
-                                <button onClick={() => setShowReset(true)} style={{ ...adminBtnStyle, background: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444', color: '#fca5a5' }}>☢️ RESET TEMPORADA</button>
                                 </div>
                                 <button onClick={() => signOut(auth)} style={{ marginTop: 10, background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: '0.5rem', fontWeight: 'bold', cursor: 'pointer' }}>
                                     SALIR ADMIN
                                 </button>
-
-                        {showReset && (
-                            <ResetTemporada
-                                categoria={categoriaActiva}
-                                onClose={() => setShowReset(false)}
-                            />
-                        )}
                             </div>
                         )}
                     </div>
                 ) : (
                     <>
                         {activeView === 'noticias'    && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
-                        {activeView === 'stats'       && <StatsViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
-                        {activeView === 'playoff'     && <PlayoffViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
-                        {activeView === 'tabla'       && <StandingsViewer equipos={[...equiposA, ...equiposB]} partidos={allMatchesGlobal} categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
-                        {activeView === 'calendario'  && <CalendarViewer categoria={categoriaActiva} rol={user?.rol} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'stats'       && <StatsViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'playoff'     && <PlayoffViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'tabla'       && <StandingsViewer equipos={[...equiposA, ...equiposB]} partidos={allMatchesGlobal} categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'calendario'  && <CalendarViewer categoria={categoriaActiva} rol={user?.rol} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'mesa'        && isAdmin && <MesaTecnica categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
-                        {activeView === 'equipos_pub'  && <TeamsPublicViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'equipos_pub'  && <TeamsPublicViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'equipos'     && isAdmin && <AdminEquipos categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'adminVideos' && isAdmin && <AdminVideos onClose={() => setActiveView('dashboard')} />}
                     </>
                 )}
-                </Suspense>
             </main>
 
             {/* ── Barra de navegación ── */}

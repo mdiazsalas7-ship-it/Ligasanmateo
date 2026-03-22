@@ -37,6 +37,7 @@ interface Props {
     partidos?: Partido[];
     onClose: () => void;
     categoria: string;
+    onCategoriaChange?: (cat: string) => void;
 }
 
 const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/166/166344.png';
@@ -378,7 +379,41 @@ const GroupTable = memo(({ teams, groupName, color }: { teams: EquipoConStats[];
 // ─────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────
-const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose, categoria }) => {
+
+// ── Selector de categoría portátil ──
+const CategoriaBar: React.FC<{
+    categoriaActiva: string;
+    onCategoriaChange: (cat: string) => void;
+}> = ({ categoriaActiva, onCategoriaChange }) => {
+    const CATS = [
+        { id: 'MASTER40',        label: '🍷 MASTER 40'      },
+        { id: 'LIBRE',           label: '🏀 LIBRE'           },
+        { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL' },
+        { id: 'U16_FEMENINO',    label: '👧 U16 FEM'         },
+        { id: 'U16M',            label: '👦 U16 MASC'        },
+    ];
+    return (
+        <div className="no-scrollbar" style={{
+            display: 'flex', gap: 6, overflowX: 'auto',
+            padding: '8px 14px', background: 'rgba(255,255,255,0.08)',
+            borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0,
+        }}>
+            {CATS.map(cat => (
+                <button key={cat.id} onClick={() => onCategoriaChange(cat.id)} style={{
+                    padding: '5px 12px', borderRadius: 20, border: 'none',
+                    whiteSpace: 'nowrap', flexShrink: 0,
+                    background: categoriaActiva === cat.id ? 'white' : 'rgba(255,255,255,0.1)',
+                    color: categoriaActiva === cat.id ? '#1e3a8a' : 'rgba(255,255,255,0.7)',
+                    fontSize: '0.6rem', fontWeight: 900, cursor: 'pointer', transition: 'all 0.2s',
+                }}>
+                    {cat.label}
+                </button>
+            ))}
+        </div>
+    );
+};
+
+const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose, categoria, onCategoriaChange }) => {
 
     // Partidos regulares finalizados (única fuente de verdad)
     const partidosRegular = useMemo(
@@ -476,6 +511,8 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
                     </button>
                 </div>
             </div>
+
+            {onCategoriaChange && <CategoriaBar categoriaActiva={categoria} onCategoriaChange={onCategoriaChange} />}
 
             {/* Tablas */}
             <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 16px' }}>
