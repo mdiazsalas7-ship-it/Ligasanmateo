@@ -23,7 +23,7 @@ interface Partido {
 }
 
 interface EditScore { l: number; v: number; }
-interface PlayoffViewerProps { categoria: string; onClose: () => void; onCategoriaChange?: (cat: string) => void; }
+interface PlayoffViewerProps { categoria: string; onClose: () => void }
 
 interface EditContextType {
     editMode: boolean;
@@ -216,40 +216,7 @@ const ErrorState = ({ message }: { message: string }) => (
 );
 
 
-// ── Selector de categoría portátil ──
-const CategoriaBar: React.FC<{
-    categoriaActiva: string;
-    onCategoriaChange: (cat: string) => void;
-}> = ({ categoriaActiva, onCategoriaChange }) => {
-    const CATS = [
-        { id: 'MASTER40',        label: '🍷 MASTER 40'      },
-        { id: 'LIBRE',           label: '🏀 LIBRE'           },
-        { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL' },
-        { id: 'U16_FEMENINO',    label: '👧 U16 FEM'         },
-        { id: 'U16M',            label: '👦 U16 MASC'        },
-    ];
-    return (
-        <div className="no-scrollbar" style={{
-            display: 'flex', gap: 6, overflowX: 'auto',
-            padding: '8px 14px', background: 'rgba(255,255,255,0.08)',
-            borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0,
-        }}>
-            {CATS.map(cat => (
-                <button key={cat.id} onClick={() => onCategoriaChange(cat.id)} style={{
-                    padding: '5px 12px', borderRadius: 20, border: 'none',
-                    whiteSpace: 'nowrap', flexShrink: 0,
-                    background: categoriaActiva === cat.id ? 'white' : 'rgba(255,255,255,0.1)',
-                    color: categoriaActiva === cat.id ? '#1e3a8a' : 'rgba(255,255,255,0.7)',
-                    fontSize: '0.6rem', fontWeight: 900, cursor: 'pointer', transition: 'all 0.2s',
-                }}>
-                    {cat.label}
-                </button>
-            ))}
-        </div>
-    );
-};
-
-const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose, onCategoriaChange }) => {
+const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => {
     const [partidos, setPartidos]     = useState<Partido[]>([]);
     const [loading, setLoading]       = useState(true);
     const [error, setError]           = useState<string | null>(null);
@@ -409,9 +376,6 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose, onCat
                         </button>
                     </div>
                 </header>
-
-                {onCategoriaChange && <CategoriaBar categoriaActiva={categoria} onCategoriaChange={onCategoriaChange} />}
-
                 {/* Contenido */}
                 {loading    ? <LoadingState /> :
                  error      ? <ErrorState message={error} /> :

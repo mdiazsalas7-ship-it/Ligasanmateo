@@ -17,6 +17,7 @@ import NewsFeed from './NewsFeed';
 import PlayoffViewer from './PlayoffViewer';
 import AdminVideos from './AdminVideos';
 import MetroTicker from './MetroTicker';
+import ResetTemporada from './ResetTemporada';
 
 // ─────────────────────────────────────────────
 // CONSTANTES
@@ -184,6 +185,7 @@ function App() {
     const [allMatchesGlobal, setAllMatchesGlobal]   = useState<any[]>([]);
     const [loading, setLoading]                     = useState(true);
     const [activeView, setActiveView]               = useState('dashboard');
+    const [showReset, setShowReset]                 = useState(false);
 
     const [noticiaIndex, setNoticiaIndex]   = useState(0);
     const [juegoIndex, setJuegoIndex]       = useState(0);
@@ -803,8 +805,9 @@ function App() {
                                     <button onClick={() => setActiveView('mesa')}   style={adminBtnStyle}>⏱ MESA</button>
                                     <button onClick={() => setActiveView('equipos')} style={adminBtnStyle}>🛡 EQUIPOS</button>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10, marginTop: 10 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
                                     <button onClick={() => setActiveView('adminVideos')} style={adminBtnStyle}>🎥 VIDEOS</button>
+                                    <button onClick={() => setShowReset(true)} style={{ ...adminBtnStyle, background: 'rgba(239,68,68,0.25)', border: '1px solid #ef4444', color: '#fca5a5' }}>☢️ RESET</button>
                                 </div>
                                 <button onClick={() => signOut(auth)} style={{ marginTop: 10, background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: '0.5rem', fontWeight: 'bold', cursor: 'pointer' }}>
                                     SALIR ADMIN
@@ -865,6 +868,8 @@ function App() {
                     </button>
                 ))}
             </nav>
+
+            {showReset && <ResetTemporada categoria={categoriaActiva} onClose={() => setShowReset(false)} />}
 
             <style>{`
                 .no-scrollbar::-webkit-scrollbar { display: none; }

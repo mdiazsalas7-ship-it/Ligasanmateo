@@ -1273,41 +1273,8 @@ const DateDivider = ({ fecha, isToday, isFuture }: { fecha: string; isToday: boo
 type FilterType = 'TODOS' | 'A' | 'B' | 'PLAYOFFS' | 'PENDIENTES' | 'FINALIZADOS';
 
 
-// ── Selector de categoría portátil ──
-const CategoriaBar: React.FC<{
-    categoriaActiva: string;
-    onCategoriaChange: (cat: string) => void;
-}> = ({ categoriaActiva, onCategoriaChange }) => {
-    const CATS = [
-        { id: 'MASTER40',        label: '🍷 MASTER 40'      },
-        { id: 'LIBRE',           label: '🏀 LIBRE'           },
-        { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL' },
-        { id: 'U16_FEMENINO',    label: '👧 U16 FEM'         },
-        { id: 'U16M',            label: '👦 U16 MASC'        },
-    ];
-    return (
-        <div className="no-scrollbar" style={{
-            display: 'flex', gap: 6, overflowX: 'auto',
-            padding: '8px 14px', background: '#f8fafc',
-            borderBottom: '1px solid #e5e7eb', flexShrink: 0,
-        }}>
-            {CATS.map(cat => (
-                <button key={cat.id} onClick={() => onCategoriaChange(cat.id)} style={{
-                    padding: '5px 12px', borderRadius: 20, border: 'none',
-                    whiteSpace: 'nowrap', flexShrink: 0,
-                    background: categoriaActiva === cat.id ? '#1e3a8a' : '#f1f5f9',
-                    color: categoriaActiva === cat.id ? 'white' : '#64748b',
-                    fontSize: '0.6rem', fontWeight: 900, cursor: 'pointer', transition: 'all 0.2s',
-                }}>
-                    {cat.label}
-                </button>
-            ))}
-        </div>
-    );
-};
-
-const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: string; onCategoriaChange?: (cat: string) => void }> = ({
-    rol, onClose, categoria, onCategoriaChange,
+const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: string }> = ({
+    rol, onClose, categoria,
 }) => {
     const [matches, setMatches]               = useState<Match[]>([]);
     const [equipos, setEquipos]               = useState<Equipo[]>([]);
@@ -1422,9 +1389,6 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
                     ← VOLVER
                 </button>
             </div>
-
-            {onCategoriaChange && <CategoriaBar categoriaActiva={categoria} onCategoriaChange={onCategoriaChange} />}
-
             {/* Filtros */}
             <div className="no-scrollbar" style={{ background: '#fff', padding: '10px 16px', display: 'flex', gap: 8, overflowX: 'auto', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
                 {filters.map(f => (
