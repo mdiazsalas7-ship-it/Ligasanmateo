@@ -244,7 +244,6 @@ const GroupTable = memo(({ teams, groupName, color }: { teams: EquipoConStats[];
                     <tr style={{ background: '#f8fafc', color: '#94a3b8', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
                         <th style={{ padding: '10px', width: 44 }}>#</th>
                         <th style={{ padding: '10px', textAlign: 'left' }}>Equipo</th>
-                        <th style={{ padding: '10px' }}>JJ</th>
                         <th style={{ padding: '10px' }}>JG</th>
                         <th style={{ padding: '10px' }}>JP</th>
                         <th style={{ padding: '10px' }}>DIF</th>
