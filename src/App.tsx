@@ -17,6 +17,7 @@ import NewsFeed from './NewsFeed';
 import PlayoffViewer from './PlayoffViewer';
 import AdminVideos from './AdminVideos';
 import MetroTicker from './MetroTicker';
+import { useNotifications } from './useNotifications';
 import ResetTemporada from './ResetTemporada';
 
 // ─────────────────────────────────────────────
@@ -195,6 +196,9 @@ function App() {
 
     // Ref para cancelar fetchData si cambia categoría antes de terminar
     const fetchAbort = useRef<{ cancelled: boolean }>({ cancelled: false });
+
+    // ── Registrar token FCM para notificaciones push ──
+    useNotifications(user?.uid);
 
     const getGroupLabel = (grupo: string, cat: string) => {
         const g = (grupo || '').toUpperCase();
