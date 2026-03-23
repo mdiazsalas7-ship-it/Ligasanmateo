@@ -239,11 +239,13 @@ const GroupTable = memo(({ teams, groupName, color }: { teams: EquipoConStats[];
                 <span>{groupName}</span>
             </div>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', minWidth: 420 }}>
                 <thead>
                     <tr style={{ background: '#f8fafc', color: '#94a3b8', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
                         <th style={{ padding: '10px', width: 44 }}>#</th>
                         <th style={{ padding: '10px', textAlign: 'left' }}>Equipo</th>
+                        <th style={{ padding: '10px' }}>JJ</th>
                         <th style={{ padding: '10px' }}>JG</th>
                         <th style={{ padding: '10px' }}>JP</th>
                         <th style={{ padding: '10px' }}>DIF</th>
@@ -257,6 +259,7 @@ const GroupTable = memo(({ teams, groupName, color }: { teams: EquipoConStats[];
                     ))}
                 </tbody>
             </table>
+            </div>
 
             <div style={{
                 padding: '8px 16px', background: '#f8fafc',
