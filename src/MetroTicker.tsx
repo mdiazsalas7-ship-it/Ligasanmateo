@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
-import { collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 
 const getColName = (base: string, cat: string) =>
     cat === 'MASTER40' ? base : `${base}_${cat}`;
@@ -25,7 +25,17 @@ const itemColor = (type: TickerItem['type']) => {
     }
 };
 
-const MetroTicker: React.FC = () => {
+interface LiderTicker {
+    label: string;
+    icon: string;
+    color: string;
+    val: number;
+    unit: string;
+    p: { nombre: string; equipo: string };
+    categoria: string;
+}
+
+const MetroTicker: React.FC<{ lideres?: LiderTicker[] }> = ({ lideres = [] }) => {
     const [items, setItems]   = useState<TickerItem[]>([]);
     const [loaded, setLoaded] = useState(false);
 
@@ -140,47 +150,7 @@ const MetroTicker: React.FC = () => {
                             }
                         }
 
-                        // ── Líderes en 4 estadísticas ──
-                        if (finalizados.length > 0) {
-                            const validIds = new Set(finalizados.map((p: any) => p.id));
-                            const statsSnap = await getDocs(
-                                query(collection(db, 'stats_partido'), limit(500))
-                            );
-                            const agg: Record<string, any> = {};
-                            statsSnap.docs.forEach(d => {
-                                const s = d.data();
-                                if (!validIds.has(s.partidoId) || !s.jugadorId) return;
-                                const id = s.jugadorId;
-                                if (!agg[id]) agg[id] = { nombre: s.nombre, pj: 0, pts: 0, reb: 0, rob: 0, tri: 0 };
-                                agg[id].pj++;
-                                agg[id].pts += (Number(s.tirosLibres) || 0) + (Number(s.dobles) || 0) * 2 + (Number(s.triples) || 0) * 3;
-                                agg[id].reb += (Number(s.rebotes)  || 0);
-                                agg[id].rob += (Number(s.robos)    || 0);
-                                agg[id].tri += (Number(s.triples)  || 0);
-                            });
 
-                            const players = Object.values(agg).filter((p: any) => p.pj > 0);
-                            if (players.length > 0) {
-                                const top = (key: string) =>
-                                    [...players].sort((a: any, b: any) => (b[key] / b.pj) - (a[key] / a.pj))[0] as any;
-
-                                const lideres = [
-                                    { key: 'pts', label: 'PTS', icon: '🔥' },
-                                    { key: 'reb', label: 'REB', icon: '🖐' },
-                                    { key: 'rob', label: 'ROB', icon: '🛡' },
-                                    { key: 'tri', label: '3PT', icon: '🏹' },
-                                ];
-                                lideres.forEach(({ key, label, icon }) => {
-                                    const lider = top(key);
-                                    if (lider?.nombre && lider[key] > 0) {
-                                        result.push({
-                                            type: 'lider', icon,
-                                            text: `[${catLabel}] LÍDER ${label}: ${lider.nombre} · ${(lider[key] / lider.pj).toFixed(1)} ${label}/PJ`,
-                                        });
-                                    }
-                                });
-                            }
-                        }
 
                     } catch { /* error en esta categoría, continuar */ }
                 }
@@ -227,7 +197,15 @@ const MetroTicker: React.FC = () => {
 
     if (!loaded) return null;
 
-    const allItems = [...items, ...items];
+    // Líderes recibidos desde App.tsx (misma fórmula que StatsViewer)
+    const liderItems: TickerItem[] = lideres.map(l => ({
+        type: 'lider' as const,
+        icon: l.icon,
+        text: `[${l.categoria}] LÍDER ${l.label}: ${l.p.nombre} · ${l.val} ${l.unit}`,
+    }));
+
+    const combined = [...items, ...liderItems];
+    const allItems = [...combined, ...combined];
 
     return (
         <div style={{

@@ -392,6 +392,7 @@ function App() {
                                 label: cat.label, unit: cat.unit,
                                 icon: cat.icon, color: cat.color,
                                 p: lider, val: lider[cat.key],
+                                categoria: categoriaActiva,
                             });
                         }
                     });
@@ -565,7 +566,7 @@ function App() {
             </header>
 
             {/* ── METRO NEWS TICKER ── */}
-            <MetroTicker />
+            <MetroTicker lideres={leadersList} />
             </div>{/* end sticky wrapper */}
 
             {/* ── Contenido principal ── */}
