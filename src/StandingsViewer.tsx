@@ -357,24 +357,16 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
             ctx.fillStyle = '#f8fafc';
             ctx.fillRect(0, 0, W, H);
 
-            // Helper cargar imagen
+            // Helper cargar imagen — con timeout de 3s para no bloquearse
             const loadImg = (url: string): Promise<HTMLImageElement | null> =>
-                new Promise(async resolve => {
-                    try {
-                        const res = await fetch(url);
-                        if (!res.ok) { resolve(null); return; }
-                        const blob = await res.blob();
-                        const b64 = await new Promise<string>(r => {
-                            const fr = new FileReader();
-                            fr.onloadend = () => r(fr.result as string);
-                            fr.onerror = () => r('');
-                            fr.readAsDataURL(blob);
-                        });
-                        const img = new Image();
-                        img.onload = () => resolve(img);
-                        img.onerror = () => resolve(null);
-                        img.src = b64;
-                    } catch { resolve(null); }
+                new Promise(resolve => {
+                    if (!url) { resolve(null); return; }
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    const timer = setTimeout(() => resolve(null), 3000);
+                    img.onload  = () => { clearTimeout(timer); resolve(img); };
+                    img.onerror = () => { clearTimeout(timer); resolve(null); };
+                    img.src = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
                 });
 
             // Header
@@ -402,6 +394,15 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
             ctx.fillText(`TABLAS ${categoria.toUpperCase()}`, W / 2, 92);
             ctx.font = '12px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.6)';
             ctx.fillText('Liga Metropolitana Eje Este · Fase Regular', W / 2, 108);
+
+            // Precargar todos los logos en paralelo (mucho más rápido)
+            const allLogoUrls = [...new Set(
+                grupos.flatMap(g => g.teams.map(t => t.logoUrl).filter(Boolean) as string[])
+            )];
+            const logoCache: Record<string, HTMLImageElement | null> = {};
+            await Promise.all(allLogoUrls.map(async url => {
+                logoCache[url] = await loadImg(url);
+            }));
 
             let y = HEADER_H + 10;
 
@@ -462,7 +463,7 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
                     ctx.fillText(String(i + 1), 40, cy + 4);
 
                     // Logo equipo
-                    const logoImg = eq.logoUrl ? await loadImg(eq.logoUrl) : null;
+                    const logoImg = eq.logoUrl ? (logoCache[eq.logoUrl] ?? null) : null;
                     ctx.save();
                     ctx.beginPath(); ctx.arc(85, cy, 16, 0, Math.PI * 2);
                     if (logoImg) {
