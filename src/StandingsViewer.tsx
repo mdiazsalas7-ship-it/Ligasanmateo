@@ -1,4 +1,4 @@
-import React, { useMemo, memo } from 'react';
+import React, { useMemo, memo, useState, useCallback } from 'react';
 
 interface Equipo {
     id: string;
@@ -239,8 +239,7 @@ const GroupTable = memo(({ teams, groupName, color }: { teams: EquipoConStats[];
                 <span>{groupName}</span>
             </div>
 
-            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', minWidth: 420 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
                 <thead>
                     <tr style={{ background: '#f8fafc', color: '#94a3b8', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
                         <th style={{ padding: '10px', width: 44 }}>#</th>
@@ -259,7 +258,6 @@ const GroupTable = memo(({ teams, groupName, color }: { teams: EquipoConStats[];
                     ))}
                 </tbody>
             </table>
-            </div>
 
             <div style={{
                 padding: '8px 16px', background: '#f8fafc',
@@ -331,6 +329,223 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
         return `GRUPO ${groupCode}`;
     };
 
+    const [sharing, setSharing] = useState(false);
+
+    const compartirTabla = useCallback(async () => {
+        setSharing(true);
+        try {
+            const LIGA_LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+            const allTeams = [...grupoA, ...grupoB];
+            const W = 700;
+            const ROW_H = 52;
+            const HEADER_H = 110;
+            const GROUP_LABEL_H = 36;
+            const FOOTER_H = 36;
+            const grupos = [
+                grupoA.length > 0 ? { teams: grupoA, label: getGroupLabel('A'), color: '#1e3a8a' } : null,
+                grupoB.length > 0 ? { teams: grupoB, label: getGroupLabel('B'), color: '#d97706' } : null,
+            ].filter(Boolean) as { teams: EquipoConStats[]; label: string; color: string }[];
+
+            const totalRows = allTeams.length;
+            const H = HEADER_H + grupos.length * GROUP_LABEL_H + totalRows * ROW_H + FOOTER_H + 20;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d')!;
+
+            // Fondo
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, W, H);
+
+            // Helper cargar imagen
+            const loadImg = (url: string): Promise<HTMLImageElement | null> =>
+                new Promise(async resolve => {
+                    try {
+                        const res = await fetch(url);
+                        if (!res.ok) { resolve(null); return; }
+                        const blob = await res.blob();
+                        const b64 = await new Promise<string>(r => {
+                            const fr = new FileReader();
+                            fr.onloadend = () => r(fr.result as string);
+                            fr.onerror = () => r('');
+                            fr.readAsDataURL(blob);
+                        });
+                        const img = new Image();
+                        img.onload = () => resolve(img);
+                        img.onerror = () => resolve(null);
+                        img.src = b64;
+                    } catch { resolve(null); }
+                });
+
+            // Header
+            const grad = ctx.createLinearGradient(0, 0, W, 0);
+            grad.addColorStop(0, '#1e3a8a');
+            grad.addColorStop(1, '#1d4ed8');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, HEADER_H);
+
+            // Logo liga
+            const ligaImg = await loadImg(LIGA_LOGO);
+            if (ligaImg) {
+                const r = 32;
+                ctx.save();
+                ctx.beginPath(); ctx.arc(W / 2, 40, r, 0, Math.PI * 2);
+                ctx.fillStyle = 'white'; ctx.fill(); ctx.clip();
+                ctx.drawImage(ligaImg, W / 2 - r, 40 - r, r * 2, r * 2);
+                ctx.restore();
+                ctx.beginPath(); ctx.arc(W / 2, 40, r, 0, Math.PI * 2);
+                ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.stroke();
+            }
+
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 18px system-ui'; ctx.fillStyle = 'white';
+            ctx.fillText(`TABLAS ${categoria.toUpperCase()}`, W / 2, 92);
+            ctx.font = '12px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fillText('Liga Metropolitana Eje Este · Fase Regular', W / 2, 108);
+
+            let y = HEADER_H + 10;
+
+            for (const grupo of grupos) {
+                // Header del grupo
+                ctx.fillStyle = grupo.color;
+                ctx.fillRect(16, y, W - 32, GROUP_LABEL_H);
+                ctx.font = 'bold 13px system-ui'; ctx.fillStyle = 'white'; ctx.textAlign = 'left';
+                ctx.fillText(`🏀  ${grupo.label}`, 28, y + 23);
+                y += GROUP_LABEL_H;
+
+                // Cabecera columnas
+                ctx.fillStyle = '#f1f5f9';
+                ctx.fillRect(16, y, W - 32, 28);
+                ctx.font = 'bold 10px system-ui'; ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'center';
+                const cols = [
+                    { label: '#',     x: 40  },
+                    { label: 'EQUIPO', x: 160, align: 'left' as const },
+                    { label: 'JJ',    x: 330 },
+                    { label: 'JG',    x: 390 },
+                    { label: 'JP',    x: 445 },
+                    { label: 'DIF',   x: 510 },
+                    { label: 'PTS',   x: 580 },
+                ];
+                cols.forEach(col => {
+                    ctx.textAlign = col.align || 'center';
+                    ctx.fillText(col.label, col.x, y + 19);
+                });
+                y += 28;
+
+                // Filas de equipos
+                for (let i = 0; i < grupo.teams.length; i++) {
+                    const eq = grupo.teams[i];
+                    const rowY = y;
+                    const isEven = i % 2 === 0;
+
+                    // Fondo fila
+                    ctx.fillStyle = eq.playoffZone
+                        ? `${grupo.color}10`
+                        : isEven ? '#ffffff' : '#f8fafc';
+                    ctx.fillRect(16, rowY, W - 32, ROW_H);
+
+                    // Borde izquierdo playoff
+                    if (eq.playoffZone) {
+                        ctx.fillStyle = grupo.color;
+                        ctx.fillRect(16, rowY, 3, ROW_H);
+                    }
+
+                    const cy = rowY + ROW_H / 2;
+
+                    // Posición
+                    ctx.beginPath(); ctx.arc(40, cy, 13, 0, Math.PI * 2);
+                    ctx.fillStyle = eq.playoffZone ? grupo.color : '#f1f5f9';
+                    ctx.fill();
+                    ctx.font = 'bold 11px system-ui';
+                    ctx.fillStyle = eq.playoffZone ? 'white' : '#94a3b8';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(String(i + 1), 40, cy + 4);
+
+                    // Logo equipo
+                    const logoImg = eq.logoUrl ? await loadImg(eq.logoUrl) : null;
+                    ctx.save();
+                    ctx.beginPath(); ctx.arc(85, cy, 16, 0, Math.PI * 2);
+                    if (logoImg) {
+                        ctx.fillStyle = 'white'; ctx.fill(); ctx.clip();
+                        ctx.drawImage(logoImg, 85 - 16, cy - 16, 32, 32);
+                    } else {
+                        ctx.fillStyle = '#e2e8f0'; ctx.fill();
+                    }
+                    ctx.restore();
+
+                    // Nombre
+                    ctx.font = 'bold 12px system-ui';
+                    ctx.fillStyle = '#1e293b';
+                    ctx.textAlign = 'left';
+                    let nombre = eq.nombre.toUpperCase();
+                    while (nombre.length > 1 && ctx.measureText(nombre).width > 200) nombre = nombre.slice(0, -1);
+                    if (nombre.length < eq.nombre.length) nombre += '…';
+                    ctx.fillText(nombre, 108, cy - 4);
+
+                    // Playoff badge
+                    if (eq.playoffZone) {
+                        ctx.font = 'bold 8px system-ui'; ctx.fillStyle = '#10b981';
+                        ctx.fillText('✓ PLAYOFF', 108, cy + 10);
+                    }
+
+                    // Stats
+                    const dif = eq.dif > 0 ? `+${eq.dif}` : String(eq.dif);
+                    const stats = [
+                        { val: String(eq.jj),         x: 330, color: '#64748b' },
+                        { val: String(eq.victorias),  x: 390, color: '#10b981' },
+                        { val: String(eq.derrotas),   x: 445, color: '#ef4444' },
+                        { val: dif,                   x: 510, color: eq.dif >= 0 ? '#3b82f6' : '#ef4444' },
+                        { val: String(eq.puntos),     x: 580, color: grupo.color },
+                    ];
+                    stats.forEach(s => {
+                        ctx.font = s.val === String(eq.puntos) ? 'bold 15px system-ui' : 'bold 13px system-ui';
+                        ctx.fillStyle = s.color;
+                        ctx.textAlign = 'center';
+                        ctx.fillText(s.val, s.x, cy + 5);
+                    });
+
+                    // Forma
+                    const formaX = 620;
+                    eq.forma.slice(-5).forEach((r, fi) => {
+                        ctx.beginPath();
+                        ctx.arc(formaX + fi * 13, cy, 5, 0, Math.PI * 2);
+                        ctx.fillStyle = r === 'G' ? '#10b981' : '#ef4444';
+                        ctx.fill();
+                    });
+
+                    // Separador
+                    ctx.strokeStyle = '#f1f5f9'; ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.moveTo(16, rowY + ROW_H); ctx.lineTo(W - 16, rowY + ROW_H); ctx.stroke();
+
+                    y += ROW_H;
+                }
+                y += 12;
+            }
+
+            // Footer
+            ctx.fillStyle = 'rgba(0,0,0,0.08)';
+            ctx.fillRect(0, H - FOOTER_H, W, FOOTER_H);
+            ctx.font = '11px system-ui'; ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'center';
+            ctx.fillText('Liga Metropolitana Eje Este  ·  San Mateo, Aragua', W / 2, H - 12);
+
+            // Compartir / descargar
+            canvas.toBlob(async blob => {
+                if (!blob) return;
+                const file = new File([blob], `tabla_${categoria}.png`, { type: 'image/png' });
+                try {
+                    if (navigator.canShare?.({ files: [file] })) {
+                        await navigator.share({ files: [file], title: `Tabla ${categoria} · Liga Metropolitana` });
+                    } else {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a'); a.href = url; a.download = `tabla_${categoria}.png`; a.click();
+                        setTimeout(() => URL.revokeObjectURL(url), 2000);
+                    }
+                } catch { /* share cancelado */ }
+                setSharing(false);
+            }, 'image/png');
+        } catch (e) { console.error(e); setSharing(false); }
+    }, [grupoA, grupoB, categoria, getGroupLabel]);
+
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc', paddingBottom: 100, fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
 
@@ -339,9 +554,18 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
                 <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
                     🏆 Tablas {categoria}
                 </h2>
-                <button onClick={onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>
-                    ← VOLVER
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button
+                        onClick={compartirTabla}
+                        disabled={sharing}
+                        style={{ background: sharing ? '#94a3b8' : '#1e3a8a', color: 'white', border: 'none', borderRadius: 8, padding: '7px 14px', fontWeight: 700, fontSize: '0.72rem', cursor: sharing ? 'not-allowed' : 'pointer' }}
+                    >
+                        {sharing ? '⏳...' : '📤 COMPARTIR'}
+                    </button>
+                    <button onClick={onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>
+                        ← VOLVER
+                    </button>
+                </div>
             </div>
 
             <div style={{ maxWidth: 860, margin: '0 auto', padding: '16px 16px 0' }}>
