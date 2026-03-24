@@ -347,7 +347,7 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
             ].filter(Boolean) as { teams: EquipoConStats[]; label: string; color: string }[];
 
             const totalRows = allTeams.length;
-            const H = HEADER_H + grupos.length * GROUP_LABEL_H + totalRows * ROW_H + FOOTER_H + 20;
+            const H = HEADER_H + grupos.length * (GROUP_LABEL_H + 28) + totalRows * ROW_H + FOOTER_H + 40;
 
             const canvas = document.createElement('canvas');
             canvas.width = W; canvas.height = H;
@@ -376,24 +376,30 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, W, HEADER_H);
 
-            // Logo liga
+            // Logo grande en esquina izquierda
             const ligaImg = await loadImg(LIGA_LOGO);
+            const logoR = 40;
+            const logoX = 20 + logoR;
+            const logoY = HEADER_H / 2;
             if (ligaImg) {
-                const r = 32;
                 ctx.save();
-                ctx.beginPath(); ctx.arc(W / 2, 40, r, 0, Math.PI * 2);
+                ctx.beginPath(); ctx.arc(logoX, logoY, logoR, 0, Math.PI * 2);
                 ctx.fillStyle = 'white'; ctx.fill(); ctx.clip();
-                ctx.drawImage(ligaImg, W / 2 - r, 40 - r, r * 2, r * 2);
+                ctx.drawImage(ligaImg, logoX - logoR, logoY - logoR, logoR * 2, logoR * 2);
                 ctx.restore();
-                ctx.beginPath(); ctx.arc(W / 2, 40, r, 0, Math.PI * 2);
-                ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.beginPath(); ctx.arc(logoX, logoY, logoR, 0, Math.PI * 2);
+                ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2.5; ctx.stroke();
             }
 
-            ctx.textAlign = 'center';
-            ctx.font = 'bold 18px system-ui'; ctx.fillStyle = 'white';
-            ctx.fillText(`TABLAS ${categoria.toUpperCase()}`, W / 2, 92);
-            ctx.font = '12px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.6)';
-            ctx.fillText('Liga Metropolitana Eje Este · Fase Regular', W / 2, 108);
+            // Títulos a la derecha del logo
+            const textX = logoX + logoR + 20;
+            ctx.textAlign = 'left';
+            ctx.font = 'bold 22px system-ui'; ctx.fillStyle = 'white';
+            ctx.fillText('TABLA DE POSICIONES', textX, logoY - 10);
+            ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#fbbf24';
+            ctx.fillText('LIGA METROPOLITANA EJE ESTE', textX, logoY + 14);
+            ctx.font = '11px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fillText(`${categoria.toUpperCase()}  ·  Fase Regular`, textX, logoY + 34);
 
             // Precargar todos los logos en paralelo (mucho más rápido)
             const allLogoUrls = [...new Set(
