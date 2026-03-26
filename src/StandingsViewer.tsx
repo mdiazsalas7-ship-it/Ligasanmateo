@@ -225,7 +225,7 @@ const GroupTable = memo(({ teams, groupName, color }: { teams: EquipoConStats[];
         <div style={{
             background: 'white', borderRadius: 24,
             boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
-            marginBottom: 28, overflow: 'hidden',
+            marginBottom: 28,
             border: `1.5px solid ${color}30`,
         }}>
             <div style={{
@@ -239,7 +239,8 @@ const GroupTable = memo(({ teams, groupName, color }: { teams: EquipoConStats[];
                 <span>{groupName}</span>
             </div>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', minWidth: 420 }}>
                 <thead>
                     <tr style={{ background: '#f8fafc', color: '#94a3b8', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
                         <th style={{ padding: '10px', width: 44 }}>#</th>
@@ -258,6 +259,7 @@ const GroupTable = memo(({ teams, groupName, color }: { teams: EquipoConStats[];
                     ))}
                 </tbody>
             </table>
+            </div>
 
             <div style={{
                 padding: '8px 16px', background: '#f8fafc',
@@ -353,11 +355,9 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
             canvas.width = W; canvas.height = H;
             const ctx = canvas.getContext('2d')!;
 
-            // Fondo
             ctx.fillStyle = '#f8fafc';
             ctx.fillRect(0, 0, W, H);
 
-            // Helper cargar imagen — con timeout de 3s para no bloquearse
             const loadImg = (url: string): Promise<HTMLImageElement | null> =>
                 new Promise(resolve => {
                     if (!url) { resolve(null); return; }
@@ -369,18 +369,14 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
                     img.src = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
                 });
 
-            // Header
+            // Header azul
             const grad = ctx.createLinearGradient(0, 0, W, 0);
-            grad.addColorStop(0, '#1e3a8a');
-            grad.addColorStop(1, '#1d4ed8');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, W, HEADER_H);
+            grad.addColorStop(0, '#1e3a8a'); grad.addColorStop(1, '#1d4ed8');
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, W, HEADER_H);
 
-            // Logo grande en esquina izquierda
+            // Logo grande izquierda
             const ligaImg = await loadImg(LIGA_LOGO);
-            const logoR = 40;
-            const logoX = 20 + logoR;
-            const logoY = HEADER_H / 2;
+            const logoR = 40, logoX = 20 + logoR, logoY = HEADER_H / 2;
             if (ligaImg) {
                 ctx.save();
                 ctx.beginPath(); ctx.arc(logoX, logoY, logoR, 0, Math.PI * 2);
@@ -391,7 +387,7 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
                 ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2.5; ctx.stroke();
             }
 
-            // Títulos a la derecha del logo
+            // Títulos
             const textX = logoX + logoR + 20;
             ctx.textAlign = 'left';
             ctx.font = 'bold 22px system-ui'; ctx.fillStyle = 'white';
@@ -401,141 +397,82 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
             ctx.font = '11px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.6)';
             ctx.fillText(`${categoria.toUpperCase()}  ·  Fase Regular`, textX, logoY + 34);
 
-            // Precargar todos los logos en paralelo (mucho más rápido)
-            const allLogoUrls = [...new Set(
-                grupos.flatMap(g => g.teams.map(t => t.logoUrl).filter(Boolean) as string[])
-            )];
+            // Precargar logos en paralelo
+            const allLogoUrls = [...new Set(grupos.flatMap(g => g.teams.map(t => t.logoUrl).filter(Boolean) as string[]))];
             const logoCache: Record<string, HTMLImageElement | null> = {};
-            await Promise.all(allLogoUrls.map(async url => {
-                logoCache[url] = await loadImg(url);
-            }));
+            await Promise.all(allLogoUrls.map(async url => { logoCache[url] = await loadImg(url); }));
 
             let y = HEADER_H + 10;
-
             for (const grupo of grupos) {
-                // Header del grupo
-                ctx.fillStyle = grupo.color;
-                ctx.fillRect(16, y, W - 32, GROUP_LABEL_H);
+                ctx.fillStyle = grupo.color; ctx.fillRect(16, y, W - 32, GROUP_LABEL_H);
                 ctx.font = 'bold 13px system-ui'; ctx.fillStyle = 'white'; ctx.textAlign = 'left';
                 ctx.fillText(`🏀  ${grupo.label}`, 28, y + 23);
                 y += GROUP_LABEL_H;
 
-                // Cabecera columnas
-                ctx.fillStyle = '#f1f5f9';
-                ctx.fillRect(16, y, W - 32, 28);
-                ctx.font = 'bold 10px system-ui'; ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'center';
+                ctx.fillStyle = '#f1f5f9'; ctx.fillRect(16, y, W - 32, 28);
                 const cols = [
-                    { label: '#',     x: 40  },
-                    { label: 'EQUIPO', x: 160, align: 'left' as const },
-                    { label: 'JJ',    x: 330 },
-                    { label: 'JG',    x: 390 },
-                    { label: 'JP',    x: 445 },
-                    { label: 'DIF',   x: 510 },
-                    { label: 'PTS',   x: 580 },
+                    { label: '#', x: 40 }, { label: 'EQUIPO', x: 160, align: 'left' as const },
+                    { label: 'JJ', x: 330 }, { label: 'JG', x: 390 }, { label: 'JP', x: 445 },
+                    { label: 'DIF', x: 510 }, { label: 'PTS', x: 580 },
                 ];
-                cols.forEach(col => {
-                    ctx.textAlign = col.align || 'center';
-                    ctx.fillText(col.label, col.x, y + 19);
-                });
+                ctx.font = 'bold 10px system-ui'; ctx.fillStyle = '#94a3b8';
+                cols.forEach(col => { ctx.textAlign = col.align || 'center'; ctx.fillText(col.label, col.x, y + 19); });
                 y += 28;
 
-                // Filas de equipos
                 for (let i = 0; i < grupo.teams.length; i++) {
                     const eq = grupo.teams[i];
                     const rowY = y;
-                    const isEven = i % 2 === 0;
-
-                    // Fondo fila
-                    ctx.fillStyle = eq.playoffZone
-                        ? `${grupo.color}10`
-                        : isEven ? '#ffffff' : '#f8fafc';
+                    ctx.fillStyle = eq.playoffZone ? `${grupo.color}10` : i % 2 === 0 ? '#ffffff' : '#f8fafc';
                     ctx.fillRect(16, rowY, W - 32, ROW_H);
-
-                    // Borde izquierdo playoff
-                    if (eq.playoffZone) {
-                        ctx.fillStyle = grupo.color;
-                        ctx.fillRect(16, rowY, 3, ROW_H);
-                    }
+                    if (eq.playoffZone) { ctx.fillStyle = grupo.color; ctx.fillRect(16, rowY, 3, ROW_H); }
 
                     const cy = rowY + ROW_H / 2;
-
-                    // Posición
                     ctx.beginPath(); ctx.arc(40, cy, 13, 0, Math.PI * 2);
-                    ctx.fillStyle = eq.playoffZone ? grupo.color : '#f1f5f9';
-                    ctx.fill();
-                    ctx.font = 'bold 11px system-ui';
-                    ctx.fillStyle = eq.playoffZone ? 'white' : '#94a3b8';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(String(i + 1), 40, cy + 4);
+                    ctx.fillStyle = eq.playoffZone ? grupo.color : '#f1f5f9'; ctx.fill();
+                    ctx.font = 'bold 11px system-ui'; ctx.fillStyle = eq.playoffZone ? 'white' : '#94a3b8';
+                    ctx.textAlign = 'center'; ctx.fillText(String(i + 1), 40, cy + 4);
 
-                    // Logo equipo
                     const logoImg = eq.logoUrl ? (logoCache[eq.logoUrl] ?? null) : null;
-                    ctx.save();
-                    ctx.beginPath(); ctx.arc(85, cy, 16, 0, Math.PI * 2);
-                    if (logoImg) {
-                        ctx.fillStyle = 'white'; ctx.fill(); ctx.clip();
-                        ctx.drawImage(logoImg, 85 - 16, cy - 16, 32, 32);
-                    } else {
-                        ctx.fillStyle = '#e2e8f0'; ctx.fill();
-                    }
+                    ctx.save(); ctx.beginPath(); ctx.arc(85, cy, 16, 0, Math.PI * 2);
+                    if (logoImg) { ctx.fillStyle = 'white'; ctx.fill(); ctx.clip(); ctx.drawImage(logoImg, 85 - 16, cy - 16, 32, 32); }
+                    else { ctx.fillStyle = '#e2e8f0'; ctx.fill(); }
                     ctx.restore();
 
-                    // Nombre
-                    ctx.font = 'bold 12px system-ui';
-                    ctx.fillStyle = '#1e293b';
-                    ctx.textAlign = 'left';
+                    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#1e293b'; ctx.textAlign = 'left';
                     let nombre = eq.nombre.toUpperCase();
                     while (nombre.length > 1 && ctx.measureText(nombre).width > 200) nombre = nombre.slice(0, -1);
                     if (nombre.length < eq.nombre.length) nombre += '…';
                     ctx.fillText(nombre, 108, cy - 4);
+                    if (eq.playoffZone) { ctx.font = 'bold 8px system-ui'; ctx.fillStyle = '#10b981'; ctx.fillText('✓ PLAYOFF', 108, cy + 10); }
 
-                    // Playoff badge
-                    if (eq.playoffZone) {
-                        ctx.font = 'bold 8px system-ui'; ctx.fillStyle = '#10b981';
-                        ctx.fillText('✓ PLAYOFF', 108, cy + 10);
-                    }
-
-                    // Stats
                     const dif = eq.dif > 0 ? `+${eq.dif}` : String(eq.dif);
-                    const stats = [
-                        { val: String(eq.jj),         x: 330, color: '#64748b' },
-                        { val: String(eq.victorias),  x: 390, color: '#10b981' },
-                        { val: String(eq.derrotas),   x: 445, color: '#ef4444' },
-                        { val: dif,                   x: 510, color: eq.dif >= 0 ? '#3b82f6' : '#ef4444' },
-                        { val: String(eq.puntos),     x: 580, color: grupo.color },
-                    ];
-                    stats.forEach(s => {
-                        ctx.font = s.val === String(eq.puntos) ? 'bold 15px system-ui' : 'bold 13px system-ui';
-                        ctx.fillStyle = s.color;
-                        ctx.textAlign = 'center';
-                        ctx.fillText(s.val, s.x, cy + 5);
+                    [
+                        { val: String(eq.jj), x: 330, color: '#64748b' },
+                        { val: String(eq.victorias), x: 390, color: '#10b981' },
+                        { val: String(eq.derrotas), x: 445, color: '#ef4444' },
+                        { val: dif, x: 510, color: eq.dif >= 0 ? '#3b82f6' : '#ef4444' },
+                        { val: String(eq.puntos), x: 580, color: grupo.color },
+                    ].forEach(s => {
+                        ctx.font = s.x === 580 ? 'bold 15px system-ui' : 'bold 13px system-ui';
+                        ctx.fillStyle = s.color; ctx.textAlign = 'center'; ctx.fillText(s.val, s.x, cy + 5);
                     });
 
-                    // Forma
-                    const formaX = 620;
                     eq.forma.slice(-5).forEach((r, fi) => {
-                        ctx.beginPath();
-                        ctx.arc(formaX + fi * 13, cy, 5, 0, Math.PI * 2);
-                        ctx.fillStyle = r === 'G' ? '#10b981' : '#ef4444';
-                        ctx.fill();
+                        ctx.beginPath(); ctx.arc(620 + fi * 13, cy, 5, 0, Math.PI * 2);
+                        ctx.fillStyle = r === 'G' ? '#10b981' : '#ef4444'; ctx.fill();
                     });
 
-                    // Separador
                     ctx.strokeStyle = '#f1f5f9'; ctx.lineWidth = 1;
                     ctx.beginPath(); ctx.moveTo(16, rowY + ROW_H); ctx.lineTo(W - 16, rowY + ROW_H); ctx.stroke();
-
                     y += ROW_H;
                 }
                 y += 12;
             }
 
-            // Footer
-            ctx.fillStyle = 'rgba(0,0,0,0.08)';
-            ctx.fillRect(0, H - FOOTER_H, W, FOOTER_H);
+            ctx.fillStyle = 'rgba(0,0,0,0.08)'; ctx.fillRect(0, H - FOOTER_H, W, FOOTER_H);
             ctx.font = '11px system-ui'; ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'center';
             ctx.fillText('Liga Metropolitana Eje Este  ·  San Mateo, Aragua', W / 2, H - 12);
 
-            // Compartir / descargar
             canvas.toBlob(async blob => {
                 if (!blob) return;
                 const file = new File([blob], `tabla_${categoria}.png`, { type: 'image/png' });
@@ -562,11 +499,7 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
                     🏆 Tablas {categoria}
                 </h2>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button
-                        onClick={compartirTabla}
-                        disabled={sharing}
-                        style={{ background: sharing ? '#94a3b8' : '#1e3a8a', color: 'white', border: 'none', borderRadius: 8, padding: '7px 14px', fontWeight: 700, fontSize: '0.72rem', cursor: sharing ? 'not-allowed' : 'pointer' }}
-                    >
+                    <button onClick={compartirTabla} disabled={sharing} style={{ background: sharing ? '#94a3b8' : '#1e3a8a', color: 'white', border: 'none', borderRadius: 8, padding: '7px 14px', fontWeight: 700, fontSize: '0.72rem', cursor: sharing ? 'not-allowed' : 'pointer' }}>
                         {sharing ? '⏳...' : '📤 COMPARTIR'}
                     </button>
                     <button onClick={onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>
