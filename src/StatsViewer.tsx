@@ -20,6 +20,7 @@ interface PlayerStat {
     totalValoracion: number;
     partidosJugados: number;
     juegosDelEquipo: number;
+    grupo: string;
     ppg: number; rpg: number; spg: number; bpg: number;
     tpg: number; dpg: number; ftpg: number; valpg: number;
     logoUrl?: string;
@@ -388,12 +389,12 @@ const LeaderSection = ({
 // ─────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────
-
 const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onClose, categoria }) => {
     const [allPlayers, setAllPlayers] = useState<PlayerStat[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('mvp');
     const [viewMode, setViewMode] = useState<ViewMode>('promedio');
+    const [conferencia, setConferencia] = useState<'A' | 'B' | 'ALL'>('A');
 
     useEffect(() => {
         let unsubscribe: (() => void) | undefined;
@@ -410,9 +411,14 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                 // 1. Logos por nombre de equipo
                 const equiposSnap = await getDocs(collection(db, colEquipos));
                 const logoMap: Record<string, string> = {};
+                const grupoMap: Record<string, string> = {};
                 equiposSnap.forEach(d => {
                     const data = d.data();
-                    if (data.nombre) logoMap[data.nombre.trim().toUpperCase()] = data.logoUrl || DEFAULT_LOGO;
+                    if (data.nombre) {
+                        const key = data.nombre.trim().toUpperCase();
+                        logoMap[key] = data.logoUrl || DEFAULT_LOGO;
+                        grupoMap[key] = (data.grupo || '').toUpperCase();
+                    }
                 });
 
                 // 1b. Fotos de jugadores (jugadorId → fotoUrl)
@@ -465,6 +471,7 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                                     totalBloqueos: 0, totalTriples: 0, totalDobles: 0,
                                     totalTirosLibres: 0, totalValoracion: 0,
                                     partidosJugados: 0,
+                                    grupo: grupoMap[equipoKey] || '',
                                     logoUrl: logoMap[equipoKey] || DEFAULT_LOGO,
                                     fotoUrl: fotoMap[jId] || '',
                                 };
@@ -493,6 +500,7 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                             const den = teamGamesCount[eq] || p.partidosJugados || 1;
                             return {
                                 ...p,
+                                grupo: grupoMap[eq] || p.grupo || '',
                                 juegosDelEquipo: den,
                                 ppg:   parseFloat((p.totalPuntos    / den).toFixed(1)),
                                 rpg:   parseFloat((p.totalRebotes   / den).toFixed(1)),
@@ -525,20 +533,44 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
         <div style={{ minHeight: '100vh', background: '#f8fafc', paddingBottom: 120 }}>
 
             {/* Header */}
-            <div style={{ background: '#fff', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
-                <div>
-                    <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
-                        📊 Líderes {categoria}
-                    </h2>
-                    <p style={{ margin: '2px 0 0', fontSize: '0.6rem', color: '#94a3b8' }}>Fase Regular · por partido</p>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <ViewToggle mode={viewMode} onChange={setViewMode} />
-                    <button onClick={onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>
-                        ← VOLVER
-                    </button>
+            <div style={{
+                background: '#1e3a8a', padding: '20px 18px 16px', color: 'white',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+                borderRadius: '0 0 28px 28px',
+            }}>
+                <div style={{
+                    maxWidth: 800, margin: '0 auto',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontWeight: 900, fontSize: '1.5rem', letterSpacing: '-0.5px' }}>
+                            📊 LÍDERES
+                        </h2>
+                        <p style={{ margin: '2px 0 0', opacity: 0.8, fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: '#fbbf24' }}>
+                            Fase Regular · {categoria}
+                        </p>
+                        <div style={{ display: 'flex', gap: 4, marginTop: 7 }}>
+                            {([{val:'A' as const,label:'CONF. ESTE'},{val:'B' as const,label:'CONF. OESTE'},{val:'ALL' as const,label:'TODAS'}]).map(opt => (
+                                <button key={opt.val} onClick={() => setConferencia(opt.val)} style={{ padding: '3px 8px', borderRadius: 10, border: 'none', cursor: 'pointer', background: conferencia === opt.val ? 'white' : 'rgba(255,255,255,0.15)', color: conferencia === opt.val ? '#1e3a8a' : 'rgba(255,255,255,0.8)', fontSize: '0.5rem', fontWeight: 900 }}>{opt.label}</button>
+                            ))}
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                        <button
+                            onClick={onClose}
+                            style={{
+                                background: 'white', color: '#1e3a8a', border: 'none',
+                                padding: '8px 18px', borderRadius: 12,
+                                fontWeight: 900, fontSize: '0.72rem', cursor: 'pointer',
+                            }}
+                        >
+                            CERRAR
+                        </button>
+                        <ViewToggle mode={viewMode} onChange={setViewMode} />
+                    </div>
                 </div>
             </div>
+
             {/* Tabs de categoría */}
             <div style={{ background: 'white', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
                 <div
@@ -575,7 +607,7 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                 ) : (
                     <LeaderSection
                         cat={activeCat}
-                        players={allPlayers}
+                        players={conferencia === 'ALL' ? allPlayers : allPlayers.filter(p => p.grupo === conferencia)}
                         viewMode={viewMode}
                         categoria={categoria}
                     />
