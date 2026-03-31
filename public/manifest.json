@@ -3,46 +3,22 @@
   "short_name": "LIMEBAL",
   "description": "App oficial de la Liga Metropolitana de Baloncesto Eje Este",
   "start_url": "/",
-  "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
-  "orientation": "portrait",
+  "background_color": "#ffffff",
   "theme_color": "#1e3a8a",
-  "background_color": "#0f172a",
-  "lang": "es",
-  "categories": ["sports"],
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/icon/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/icon/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
-    },
-    {
-      "src": "/icon/apple-touch-icon.png",
-      "sizes": "180x180",
-      "type": "image/png",
-      "purpose": "any"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Tabla de posiciones",
-      "short_name": "Tabla",
-      "url": "/?view=tabla",
-      "icons": [{ "src": "/icon/icon-192.png", "sizes": "192x192", "type": "image/png" }]
-    },
-    {
-      "name": "Calendario",
-      "short_name": "Calendario",
-      "url": "/?view=calendario",
-      "icons": [{ "src": "/icon/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }
