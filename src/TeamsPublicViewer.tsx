@@ -330,7 +330,7 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
 
                 {/* Foto / zona superior */}
                 <div style={{
-                    position: 'relative', height: 240, overflow: 'hidden',
+                    position: 'relative', height: 320, overflow: 'hidden',
                     background: `linear-gradient(160deg, ${accentColor}22, #080c18)`,
                 }}>
                     {/* Shine lateral */}
@@ -351,7 +351,7 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
                     {/* Foto */}
                     {player.fotoUrl ? (
                         <img src={player.fotoUrl} alt={player.nombre}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top center' }}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center' }}
                             onError={e => { e.currentTarget.style.display = 'none'; }} />
                     ) : (
                         <div style={{
@@ -399,7 +399,7 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
                 </div>
 
                 {/* Info + stats */}
-                <div style={{ padding: '12px 14px 16px', background: '#080c18' }}>
+                <div style={{ padding: '8px 12px 12px', background: '#080c18' }}>
                     {/* Nombre y equipo */}
                     <div style={{ textAlign: 'center', marginBottom: 12 }}>
                         <div style={{ fontWeight: 900, fontSize: '1.1rem', color: 'white', textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -408,21 +408,19 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
                         <div style={{ fontSize: '0.6rem', fontWeight: 700, color: accentColor, textTransform: 'uppercase', letterSpacing: '1.5px', marginTop: 2 }}>
                             {team.nombre}
                         </div>
-                        <div style={{ fontSize: '0.52rem', color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>
-                            {pj} PJ REGISTRADO{pj !== 1 ? 'S' : ''}
-                        </div>
+
                     </div>
 
                     {/* Divider */}
                     <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${accentColor}66, transparent)`, marginBottom: 12 }} />
 
                     {/* Stats grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 14 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, marginBottom: 10 }}>
                         {stats.map(s => (
                             <div key={s.label} style={{
                                 background: 'rgba(255,255,255,0.04)',
                                 border: `1px solid ${s.color}33`,
-                                borderRadius: 10, padding: '8px 4px',
+                                borderRadius: 10, padding: '6px 4px',
                                 textAlign: 'center', position: 'relative', overflow: 'hidden',
                             }}>
                                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: s.color, borderRadius: '10px 10px 0 0' }} />
