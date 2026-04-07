@@ -201,6 +201,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     });
 
     const [confirmModal, setConfirmModal] = useState<{ msg: string; onConfirm: () => void } | null>(null);
+    const [forfaitModal, setForfaitModal] = useState<any | null>(null); // NUEVO ESTADO PARA MODAL DE FORFAIT
+    
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [statsCache, setStatsCache] = useState<Record<string, StatMap>>({});
     const [recentPlays, setRecentPlays] = useState<Jugada[]>([]);
@@ -245,6 +247,36 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     const showConfirm = (msg: string, onConfirm: () => void) => {
         setConfirmModal({ msg, onConfirm });
     };
+
+    // --- NUEVA LÓGICA DE FORFAIT ---
+    const executeForfait = async (match: any, faltante: 'local' | 'visitante') => {
+        try {
+            const batch = writeBatch(db);
+            const lRef = doc(db, colTeams, match.equipoLocalId);
+            const vRef = doc(db, colTeams, match.equipoVisitanteId);
+            const calRef = doc(db, colCal, match.id);
+
+            if (faltante === 'visitante') { 
+                // Faltó Visitante -> Gana Local 20-0
+                batch.update(calRef, { estatus: 'finalizado', marcadorLocal: 20, marcadorVisitante: 0, esForfait: true });
+                batch.update(lRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(20) });
+                batch.update(vRef, { derrotas: increment(1), puntos_contra: increment(20) }); // NO suma puntos en tabla
+            } else { 
+                // Faltó Local -> Gana Visitante 20-0
+                batch.update(calRef, { estatus: 'finalizado', marcadorLocal: 0, marcadorVisitante: 20, esForfait: true });
+                batch.update(vRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(20) });
+                batch.update(lRef, { derrotas: increment(1), puntos_contra: increment(20) }); // NO suma puntos en tabla
+            }
+
+            await batch.commit();
+            showToast('✅ FORFAIT APLICADO CORRECTAMENTE', '#10b981');
+            setForfaitModal(null);
+        } catch(e) {
+            showToast('Error al aplicar Forfait', '#ef4444');
+            console.error(e);
+        }
+    };
+    // -------------------------------
 
     useEffect(() => {
         const now = new Date();
@@ -372,7 +404,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             });
 
             if (pts > 0) {
-                // ✅ Estructura correcta: cuartosLocal.Q1 / cuartosVisitante.Q1
                 const cuartoField = team === 'local'
                     ? `cuartosLocal.${cuartoActual}`
                     : `cuartosVisitante.${cuartoActual}`;
@@ -416,7 +447,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                             [jugada.equipo === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(-pts),
                         };
                         if (jugada.cuarto) {
-                            // ✅ Estructura correcta al deshacer
                             const cuartoField = jugada.equipo === 'local'
                                 ? `cuartosLocal.${jugada.cuarto}`
                                 : `cuartosVisitante.${jugada.cuarto}`;
@@ -524,19 +554,56 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             <h2 style={{ color: '#60a5fa', marginBottom: 20, fontSize: '1.1rem', fontWeight: 900 }}>
                 ⏱️ Mesa Técnica — {categoria}
             </h2>
+            
+            {/* Modal para declarar Forfait */}
+            {forfaitModal && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+                    zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+                }}>
+                    <div style={{ background: '#1e293b', borderRadius: 16, padding: 20, maxWidth: 320, width: '100%', border: '1px solid #334155' }}>
+                        <h3 style={{ color: '#ef4444', textAlign: 'center', margin: '0 0 15px 0', fontSize: '1rem', fontWeight: 900 }}>🚨 DECLARAR FORFAIT</h3>
+                        <p style={{ color: 'white', textAlign: 'center', fontSize: '0.85rem', marginBottom: 20 }}>¿Qué equipo <b>NO SE PRESENTÓ</b>?</p>
+                        
+                        <button onClick={() => executeForfait(forfaitModal, 'local')} style={{ width: '100%', padding: 12, background: '#1e3a8a', color: 'white', border: 'none', borderRadius: 8, marginBottom: 10, fontWeight: 700, cursor: 'pointer' }}>
+                            FALTÓ {forfaitModal.equipoLocalNombre} (Local)
+                        </button>
+                        <button onClick={() => executeForfait(forfaitModal, 'visitante')} style={{ width: '100%', padding: 12, background: '#854d0e', color: 'white', border: 'none', borderRadius: 8, marginBottom: 20, fontWeight: 700, cursor: 'pointer' }}>
+                            FALTÓ {forfaitModal.equipoVisitanteNombre} (Visitante)
+                        </button>
+                        
+                        <button onClick={() => setForfaitModal(null)} style={{ width: '100%', padding: 12, background: 'transparent', color: '#94a3b8', border: '1px solid #334155', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>
+                            CANCELAR
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {toast && <Toast msg={toast.msg} color={toast.color} />}
+
             {matches.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40, border: '1px dashed #333', borderRadius: 15 }}>
                     <p style={{ color: '#666', fontSize: '0.85rem' }}>No hay juegos programados hoy.</p>
                 </div>
             ) : matches.map(m => (
-                <button key={m.id} onClick={() => setSelectedMatchId(m.id)} style={{
-                    padding: 18, background: '#1a1a1a', border: '1px solid #333',
-                    borderRadius: 10, color: 'white', width: '100%', marginBottom: 10,
-                    textAlign: 'left', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
-                }}>
-                    🏀 {m.equipoLocalNombre} vs {m.equipoVisitanteNombre}
-                    <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 4 }}>{m.hora} — {m.fechaAsignada}</div>
-                </button>
+                <div key={m.id} style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                    <button onClick={() => setSelectedMatchId(m.id)} style={{
+                        flex: 1, padding: 18, background: '#1a1a1a', border: '1px solid #333',
+                        borderRadius: 10, color: 'white',
+                        textAlign: 'left', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
+                    }}>
+                        🏀 {m.equipoLocalNombre} vs {m.equipoVisitanteNombre}
+                        <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 4 }}>{m.hora} — {m.fechaAsignada}</div>
+                    </button>
+                    
+                    {/* BOTÓN FORFAIT */}
+                    <button onClick={() => setForfaitModal(m)} style={{
+                        background: '#7f1d1d', color: 'white', border: 'none', borderRadius: 10,
+                        padding: '0 15px', fontWeight: 900, fontSize: '0.7rem', cursor: 'pointer'
+                    }}>
+                        W.O.
+                    </button>
+                </div>
             ))}
             <button onClick={onClose} style={{ marginTop: 20, padding: 14, width: '100%', background: '#1e293b', color: 'white', border: '1px solid #334155', borderRadius: 10, fontWeight: 700 }}>
                 ← VOLVER

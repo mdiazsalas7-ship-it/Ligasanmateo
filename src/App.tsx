@@ -319,7 +319,8 @@ function App() {
 
                 // 5. Líderes del dashboard
                 const teamGamesCount: Record<string, number> = {};
-                regularFinalizados.forEach(g => {
+                // 👇 APLICAMOS EL FILTRO AQUÍ PARA IGNORAR LOS FORFAITS EN EL PROMEDIO
+                regularFinalizados.filter(g => !g.esForfait).forEach(g => {
                     const loc = g.equipoLocalNombre?.trim().toUpperCase();
                     const vis = g.equipoVisitanteNombre?.trim().toUpperCase();
                     if (loc) teamGamesCount[loc] = (teamGamesCount[loc] || 0) + 1;
