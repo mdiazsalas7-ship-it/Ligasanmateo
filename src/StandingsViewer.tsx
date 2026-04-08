@@ -20,6 +20,7 @@ interface Partido {
     estatus: string;
     fase?: string;
     fechaAsignada?: string;
+    esForfait?: boolean; // 👈 AGREGADO: Reconoce la etiqueta de W.O.
 }
 
 interface EquipoConStats extends Equipo {
@@ -69,7 +70,8 @@ const calcStats = (equipoId: string, partidos: Partido[]) => {
         const suMarcador = esLocal ? p.marcadorVisitante : p.marcadorLocal;
         pf += miMarcador;
         pc += suMarcador;
-        pts += miMarcador > suMarcador ? 2 : miMarcador < suMarcador ? 1 : 0;
+        // 👈 CASTIGO POR FORFAIT (0 PTS) EN CÁLCULO DE EMPATES FIBA
+        pts += miMarcador > suMarcador ? 2 : miMarcador < suMarcador ? (p.esForfait ? 0 : 1) : 0;
     }
     return { pts, pf, pc, dif: pf - pc };
 };
@@ -300,8 +302,15 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
                 const suMarcador = esLocal ? p.marcadorVisitante : p.marcadorLocal;
                 pf += miMarcador;
                 pc += suMarcador;
-                if (miMarcador > suMarcador) { victorias++; puntos += 2; }
-                else if (miMarcador < suMarcador) { derrotas++; puntos += 1; }
+                if (miMarcador > suMarcador) { 
+                    victorias++; 
+                    puntos += 2; 
+                }
+                else if (miMarcador < suMarcador) { 
+                    derrotas++; 
+                    // 👈 CASTIGO POR FORFAIT (0 PTS) EN LA TABLA GLOBAL
+                    puntos += p.esForfait ? 0 : 1; 
+                }
             }
             return {
                 ...eq, victorias, derrotas, puntos, puntos_favor: pf, puntos_contra: pc,

@@ -297,12 +297,24 @@ function App() {
                     regularFinalizados.forEach(m => {
                         if (m.equipoLocalId === eq.id) {
                             pf += m.marcadorLocal; pc += m.marcadorVisitante;
-                            if (m.marcadorLocal > m.marcadorVisitante) { victorias++; puntos += 2; }
-                            else { derrotas++; puntos += 1; }
+                            if (m.marcadorLocal > m.marcadorVisitante) { 
+                                victorias++; 
+                                puntos += 2; 
+                            }
+                            else { 
+                                derrotas++; 
+                                puntos += m.esForfait ? 0 : 1; // 👈 CASTIGO POR FORFAIT (0 PTS)
+                            }
                         } else if (m.equipoVisitanteId === eq.id) {
                             pf += m.marcadorVisitante; pc += m.marcadorLocal;
-                            if (m.marcadorVisitante > m.marcadorLocal) { victorias++; puntos += 2; }
-                            else { derrotas++; puntos += 1; }
+                            if (m.marcadorVisitante > m.marcadorLocal) { 
+                                victorias++; 
+                                puntos += 2; 
+                            }
+                            else { 
+                                derrotas++; 
+                                puntos += m.esForfait ? 0 : 1; // 👈 CASTIGO POR FORFAIT (0 PTS)
+                            }
                         }
                     });
                     return { ...eq, victorias, derrotas, puntos, puntos_favor: pf, puntos_contra: pc };
