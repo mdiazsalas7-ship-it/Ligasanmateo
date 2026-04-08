@@ -62,7 +62,6 @@ const MetroTicker: React.FC<{ lideres?: LiderTicker[] }> = ({ lideres = [] }) =>
                 } catch { /* sin noticias */ }
 
                 // ── 2. Detectar categorías activas ──
-                // Activa = tiene al menos 1 partido programado o finalizado
                 const categoriasActivas: string[] = [];
                 for (const cat of TODAS_CATS) {
                     const col = getColName('calendario', cat);
@@ -111,48 +110,84 @@ const MetroTicker: React.FC<{ lideres?: LiderTicker[] }> = ({ lideres = [] }) =>
                             });
                         });
 
-                        // ── Tabla de posiciones desde los resultados ──
+                        // ── Tabla de posiciones SEPARADA POR GRUPOS/CONFERENCIAS ──
                         const regularFin = docs.filter((p: any) => {
                             const fase = (p.fase || '').trim().toUpperCase();
                             return p.estatus === 'finalizado' && (fase === 'REGULAR' || fase === '');
                         });
 
                         if (regularFin.length > 0) {
-                            // Acumular puntos por equipo
-                            const tabla: Record<string, { nombre: string; pts: number; v: number; d: number }> = {};
-                            regularFin.forEach((p: any) => {
-                                const l = p.equipoLocalNombre?.trim();
-                                const v = p.equipoVisitanteNombre?.trim();
-                                if (!l || !v) return;
-                                if (!tabla[l]) tabla[l] = { nombre: l, pts: 0, v: 0, d: 0 };
-                                if (!tabla[v]) tabla[v] = { nombre: v, pts: 0, v: 0, d: 0 };
-                                if ((p.marcadorLocal ?? 0) > (p.marcadorVisitante ?? 0)) {
-                                    tabla[l].pts += 2; tabla[l].v++;
-                                    tabla[v].pts += 1; tabla[v].d++;
-                                } else {
-                                    tabla[v].pts += 2; tabla[v].v++;
-                                    tabla[l].pts += 1; tabla[l].d++;
+                            // Obtener los equipos para saber a qué grupo pertenecen
+                            const eqCol = getColName('equipos', cat);
+                            const eqSnap = await getDocs(collection(db, eqCol));
+                            const eqMap: Record<string, { nombre: string; grupo: string; pts: number }> = {};
+
+                            eqSnap.forEach(d => {
+                                const data = d.data();
+                                if (data.nombre) {
+                                    eqMap[data.nombre.trim().toUpperCase()] = {
+                                        nombre: data.nombre.trim(),
+                                        grupo: (data.grupo || 'A').toUpperCase(),
+                                        pts: 0
+                                    };
                                 }
                             });
 
-                            const sorted = Object.values(tabla)
-                                .sort((a, b) => b.pts - a.pts)
-                                .slice(0, 5);
+                            // Acumular puntos (Aplicando regla FIBA del Forfait = 0pts)
+                            regularFin.forEach((p: any) => {
+                                const l = p.equipoLocalNombre?.trim().toUpperCase();
+                                const v = p.equipoVisitanteNombre?.trim().toUpperCase();
+                                if (!l || !v) return;
 
-                            if (sorted.length > 0) {
-                                const posStr = sorted
-                                    .map((e, i) => `${i + 1}.${e.nombre.split(' ')[0]} (${e.pts}pts)`)
-                                    .join(' · ');
-                                result.push({
-                                    type: 'tabla', icon: '🏆',
-                                    text: `[${catLabel}] TABLA: ${posStr}`,
-                                });
-                            }
+                                // Si por error el equipo no existe, lo creamos en grupo A temporal
+                                if (!eqMap[l]) eqMap[l] = { nombre: p.equipoLocalNombre.trim(), grupo: 'A', pts: 0 };
+                                if (!eqMap[v]) eqMap[v] = { nombre: p.equipoVisitanteNombre.trim(), grupo: 'A', pts: 0 };
+
+                                const ml = p.marcadorLocal ?? 0;
+                                const mv = p.marcadorVisitante ?? 0;
+
+                                if (ml > mv) {
+                                    eqMap[l].pts += 2;
+                                    eqMap[v].pts += p.esForfait ? 0 : 1; // Castigo Forfait
+                                } else if (ml < mv) {
+                                    eqMap[v].pts += 2;
+                                    eqMap[l].pts += p.esForfait ? 0 : 1; // Castigo Forfait
+                                }
+                            });
+
+                            // Separar por Conferencias / Grupos
+                            const grupos: Record<string, any[]> = {};
+                            Object.values(eqMap).forEach(eq => {
+                                if (!grupos[eq.grupo]) grupos[eq.grupo] = [];
+                                grupos[eq.grupo].push(eq);
+                            });
+
+                            // Armar el texto del Ticker por cada Conferencia
+                            Object.entries(grupos).forEach(([grupoCode, equipos]) => {
+                                const sorted = equipos.sort((a, b) => b.pts - a.pts).slice(0, 4); // Top 4 por conferencia
+
+                                // Solo mostramos si hay puntos en la conferencia
+                                if (sorted.some(e => e.pts > 0)) {
+                                    const posStr = sorted
+                                        .map((e, i) => `${i + 1}.${e.nombre.split(' ')[0]} (${e.pts}p)`)
+                                        .join(' · ');
+
+                                    let label = `GRUPO ${grupoCode}`;
+                                    if (cat === 'LIBRE') {
+                                        label = grupoCode === 'A' ? 'CONF. ESTE' : 'CONF. OESTE';
+                                    } else if (grupoCode === 'ÚNICO' || Object.keys(grupos).length === 1) {
+                                        label = 'GENERAL';
+                                    }
+
+                                    result.push({
+                                        type: 'tabla', icon: '🏆',
+                                        text: `[${catLabel}] TABLA ${label}: ${posStr}`,
+                                    });
+                                }
+                            });
                         }
 
-
-
-                    } catch { /* error en esta categoría, continuar */ }
+                    } catch { /* error en esta categoría, continuar con la siguiente */ }
                 }
 
             } catch (e) {
@@ -167,7 +202,7 @@ const MetroTicker: React.FC<{ lideres?: LiderTicker[] }> = ({ lideres = [] }) =>
         };
 
         load();
-        const iv = setInterval(load, 5 * 60 * 1000);
+        const iv = setInterval(load, 5 * 60 * 1000); // Recarga cada 5 min
         return () => clearInterval(iv);
     }, []);
 
@@ -197,7 +232,7 @@ const MetroTicker: React.FC<{ lideres?: LiderTicker[] }> = ({ lideres = [] }) =>
 
     if (!loaded) return null;
 
-    // Líderes recibidos desde App.tsx (misma fórmula que StatsViewer)
+    // Líderes recibidos desde App.tsx
     const liderItems: TickerItem[] = lideres.map(l => ({
         type: 'lider' as const,
         icon: l.icon,
@@ -205,7 +240,7 @@ const MetroTicker: React.FC<{ lideres?: LiderTicker[] }> = ({ lideres = [] }) =>
     }));
 
     const combined = [...items, ...liderItems];
-    const allItems = [...combined, ...combined];
+    const allItems = [...combined, ...combined]; // Duplicado para loop infinito
 
     return (
         <div style={{
