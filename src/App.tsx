@@ -435,7 +435,7 @@ function App() {
     const isAdmin = user?.rol === 'admin';
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#ffffff', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: activeView === 'mesa' ? 0 : 110 }}>
+        <div style={{ minHeight: '100vh', backgroundColor: '#ffffff', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: 110 }}>
 
             {/* ── Header ── */}
             {/* ── Sticky wrapper: header + ticker siempre visibles ── */}
@@ -569,7 +569,7 @@ function App() {
             </div>{/* end sticky wrapper */}
 
             {/* ── Contenido principal ── */}
-            <main style={{ padding: 15, maxWidth: 500, margin: '0 auto' }}>
+            <main style={{ padding: activeView === 'mesa' ? 0 : 15, maxWidth: activeView === 'mesa' ? '100%' : 500, margin: '0 auto' }}>
                 {activeView === 'login' ? (
                     <div className="fade-in">
                         <Login />
@@ -836,8 +836,8 @@ function App() {
                 )}
             </main>
 
-            {/* ── Barra de navegación — oculta en mesa técnica ── */}
-            {activeView !== 'mesa' && <nav style={{
+            {/* ── Barra de navegación ── */}
+            <nav style={{
                 position: 'fixed', bottom: 20, left: 20, right: 20,
                 background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(10px)',
                 height: 75, display: 'flex', justifyContent: 'flex-start',
@@ -873,7 +873,7 @@ function App() {
                         <span style={{ fontSize: '0.55rem', fontWeight: 900, textTransform: 'uppercase' }}>{item.l}</span>
                     </button>
                 ))}
-            </nav>}
+            </nav>
 
             {showReset && <ResetTemporada categoria={categoriaActiva} onClose={() => setShowReset(false)} />}
 

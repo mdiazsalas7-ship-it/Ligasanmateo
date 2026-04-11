@@ -126,57 +126,58 @@ const PlayerRow = memo(({
         { accion: 'bloqueos',    label: 'B',  count: s.bloqueos ?? 0,    bg: '#991b1b' },
     ];
 
+    // Primer apellido o primer nombre (máx 8 chars)
+    const shortName = player.nombre.split(' ').slice(0, 2).join(' ').substring(0, 10);
+
     return (
         <div style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            padding: '5px 6px',
-            borderBottom: '1px solid #1e293b',
-            background: flashing ? '#0f172a' : 'transparent',
+            display: 'flex', alignItems: 'center',
+            padding: '4px 4px',
+            borderBottom: '1px solid #1a1a2e',
+            gap: 3,
+            background: flashing ? '#0f1729' : 'transparent',
         }}>
             {/* Número */}
             <div style={{
                 background: teamColor, color: 'white',
-                padding: '4px 7px', borderRadius: 6,
-                fontWeight: 900, fontSize: '0.9rem',
-                minWidth: 32, textAlign: 'center', flexShrink: 0,
+                borderRadius: 6, fontWeight: 900, fontSize: '0.9rem',
+                width: 34, height: 42, flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
                 {player.numero ?? '?'}
             </div>
 
-            {/* Nombre */}
+            {/* Nombre corto */}
             <div style={{
-                flex: 1, fontWeight: 700, color: 'white',
-                fontSize: '0.72rem', overflow: 'hidden',
-                textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                minWidth: 0,
+                color: 'rgba(255,255,255,0.85)', fontSize: '0.6rem',
+                fontWeight: 700, width: 52, flexShrink: 0,
+                lineHeight: 1.1, wordBreak: 'break-word',
             }}>
-                {player.nombre.split(' ')[0]}
+                {shortName}
             </div>
 
-            {/* 6 botones en fila */}
+            {/* 6 botones */}
             {btns.map(btn => {
-                const isFlashing = flashing === btn.accion;
+                const isFlash = flashing === btn.accion;
                 return (
                     <button
                         key={btn.accion}
                         onClick={() => onStat(player, team, btn.accion, 1)}
                         style={{
-                            background: isFlashing ? 'white' : btn.bg,
-                            color: isFlashing ? btn.bg : 'white',
+                            background: isFlash ? 'white' : btn.bg,
+                            color: isFlash ? btn.bg : 'white',
                             border: 'none', borderRadius: 6,
-                            fontWeight: 900, fontSize: '0.65rem',
-                            cursor: 'pointer',
+                            fontWeight: 900, cursor: 'pointer',
                             display: 'flex', flexDirection: 'column',
                             alignItems: 'center', justifyContent: 'center',
-                            width: 38, height: 44, flexShrink: 0,
-                            lineHeight: 1.1,
-                            transform: isFlashing ? 'scale(0.92)' : 'scale(1)',
-                            transition: 'transform 0.12s',
-                            boxShadow: isFlashing ? `0 0 0 2px ${btn.bg}` : 'none',
+                            flex: 1, height: 42,
+                            minWidth: 0,
+                            transform: isFlash ? 'scale(0.9)' : 'scale(1)',
+                            transition: 'transform 0.1s',
                         }}
                     >
-                        <span style={{ fontSize: '0.7rem', fontWeight: 900 }}>{btn.label}</span>
-                        <span style={{ fontSize: '0.85rem', fontWeight: 900 }}>{btn.count}</span>
+                        <span style={{ fontSize: '0.65rem', fontWeight: 900, lineHeight: 1 }}>{btn.label}</span>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 900, lineHeight: 1 }}>{btn.count}</span>
                     </button>
                 );
             })}
@@ -185,10 +186,10 @@ const PlayerRow = memo(({
             <button
                 onClick={() => onSub(player.id)}
                 style={{
-                    background: '#334155', color: '#60a5fa',
+                    background: '#1e293b', color: '#60a5fa',
                     border: 'none', borderRadius: 6,
-                    width: 34, height: 44, flexShrink: 0,
-                    fontSize: '0.7rem', cursor: 'pointer', fontWeight: 700,
+                    width: 32, height: 42, flexShrink: 0,
+                    fontSize: '0.75rem', cursor: 'pointer',
                 }}
             >
                 🔄
