@@ -439,7 +439,7 @@ function App() {
 
             {/* ── Header ── */}
             {/* ── Sticky wrapper: header + ticker siempre visibles ── */}
-            <div style={{ position: 'sticky', top: 0, zIndex: 1000 }}>
+            {activeView !== 'mesa' && <div style={{ position: 'sticky', top: 0, zIndex: 1000 }}>
             <header style={{
                 background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 60%, #1d4ed8 100%)',
                 padding: '14px 15px 0',
@@ -566,7 +566,7 @@ function App() {
 
             {/* ── METRO NEWS TICKER ── */}
             <MetroTicker />
-            </div>{/* end sticky wrapper */}
+            </div>}{/* end sticky wrapper */}
 
             {/* ── Contenido principal ── */}
             <main style={{ padding: activeView === 'mesa' ? 0 : 15, maxWidth: activeView === 'mesa' ? '100%' : 500, margin: '0 auto' }}>
