@@ -783,22 +783,22 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             <div style={{ background: '#0a0f1e', borderBottom: '2px solid #1e293b' }}>
 
                 {/* Fila 1: marcador */}
-                <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', padding: '4px 8px', gap: 6 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'flex-end', overflow: 'hidden' }}>
                         <span style={{ fontWeight: 700, fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {matchData?.equipoLocalNombre}
                         </span>
-                        <img src={logos.local} alt="L" style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #3b82f6', flexShrink: 0 }} />
+                        <img src={logos.local} alt="L" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #3b82f6', flexShrink: 0 }} />
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1e293b', padding: '4px 14px', borderRadius: 10, border: '1px solid #334155', flexShrink: 0 }}>
-                        <span style={{ fontSize: '2rem', fontWeight: 900 }}>{matchData?.marcadorLocal ?? 0}</span>
+                        <span style={{ fontSize: '1.7rem', fontWeight: 900 }}>{matchData?.marcadorLocal ?? 0}</span>
                         <span style={{ fontSize: '0.6rem', color: '#475569' }}>—</span>
-                        <span style={{ fontSize: '2rem', fontWeight: 900 }}>{matchData?.marcadorVisitante ?? 0}</span>
+                        <span style={{ fontSize: '1.7rem', fontWeight: 900 }}>{matchData?.marcadorVisitante ?? 0}</span>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'flex-start', overflow: 'hidden' }}>
-                        <img src={logos.visitante} alt="V" style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #ef4444', flexShrink: 0 }} />
+                        <img src={logos.visitante} alt="V" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #ef4444', flexShrink: 0 }} />
                         <span style={{ fontWeight: 700, fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {matchData?.equipoVisitanteNombre}
                         </span>
@@ -827,29 +827,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     <button onClick={handleFinalize} style={{ ...actionBtnStyle('#065f46'), fontWeight: 900, paddingLeft: 10, paddingRight: 10 }}>✅ FINAL</button>
                 </div>
 
-                {/* Fila 3: puntos por cuarto */}
-                {(() => {
-                    const qL = (matchData?.cuartosLocal    || {}) as Record<string,number>;
-                    const qV = (matchData?.cuartosVisitante || {}) as Record<string,number>;
-                    const quarters = ['Q1','Q2','Q3','Q4','TE'];
-                    const hasAny = quarters.some(q => (qL[q]||0) + (qV[q]||0) > 0);
-                    if (!hasAny) return null;
-                    return (
-                        <div style={{ display: 'flex', padding: '3px 6px', gap: 4, background: '#050a14' }}>
-                            {quarters.map(q => {
-                                const l = qL[q] || 0, v = qV[q] || 0;
-                                if (l === 0 && v === 0) return null;
-                                return (
-                                    <div key={q} style={{ flex: 1, textAlign: 'center', borderRadius: 6, background: cuartoActual === q ? '#1e3a8a22' : 'transparent', padding: '2px 4px' }}>
-                                        <div style={{ fontSize: '0.45rem', color: '#475569', fontWeight: 700 }}>{q}</div>
-                                        <div style={{ fontSize: '0.65rem', fontWeight: 900, color: '#60a5fa' }}>{l}</div>
-                                        <div style={{ fontSize: '0.65rem', fontWeight: 900, color: '#f87171' }}>{v}</div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    );
-                })()}
+
             </div>
 
             {/* ── Jugadores en cancha ── */}
