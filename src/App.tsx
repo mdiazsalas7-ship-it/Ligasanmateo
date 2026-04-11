@@ -297,24 +297,12 @@ function App() {
                     regularFinalizados.forEach(m => {
                         if (m.equipoLocalId === eq.id) {
                             pf += m.marcadorLocal; pc += m.marcadorVisitante;
-                            if (m.marcadorLocal > m.marcadorVisitante) { 
-                                victorias++; 
-                                puntos += 2; 
-                            }
-                            else { 
-                                derrotas++; 
-                                puntos += m.esForfait ? 0 : 1; // 👈 CASTIGO POR FORFAIT (0 PTS)
-                            }
+                            if (m.marcadorLocal > m.marcadorVisitante) { victorias++; puntos += 2; }
+                            else { derrotas++; puntos += 1; }
                         } else if (m.equipoVisitanteId === eq.id) {
                             pf += m.marcadorVisitante; pc += m.marcadorLocal;
-                            if (m.marcadorVisitante > m.marcadorLocal) { 
-                                victorias++; 
-                                puntos += 2; 
-                            }
-                            else { 
-                                derrotas++; 
-                                puntos += m.esForfait ? 0 : 1; // 👈 CASTIGO POR FORFAIT (0 PTS)
-                            }
+                            if (m.marcadorVisitante > m.marcadorLocal) { victorias++; puntos += 2; }
+                            else { derrotas++; puntos += 1; }
                         }
                     });
                     return { ...eq, victorias, derrotas, puntos, puntos_favor: pf, puntos_contra: pc };
@@ -331,8 +319,7 @@ function App() {
 
                 // 5. Líderes del dashboard
                 const teamGamesCount: Record<string, number> = {};
-                // 👇 APLICAMOS EL FILTRO AQUÍ PARA IGNORAR LOS FORFAITS EN EL PROMEDIO
-                regularFinalizados.filter(g => !g.esForfait).forEach(g => {
+                regularFinalizados.forEach(g => {
                     const loc = g.equipoLocalNombre?.trim().toUpperCase();
                     const vis = g.equipoVisitanteNombre?.trim().toUpperCase();
                     if (loc) teamGamesCount[loc] = (teamGamesCount[loc] || 0) + 1;
@@ -405,7 +392,6 @@ function App() {
                                 label: cat.label, unit: cat.unit,
                                 icon: cat.icon, color: cat.color,
                                 p: lider, val: lider[cat.key],
-                                categoria: categoriaActiva,
                             });
                         }
                     });
@@ -449,7 +435,7 @@ function App() {
     const isAdmin = user?.rol === 'admin';
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#ffffff', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: 110 }}>
+        <div style={{ minHeight: '100vh', backgroundColor: '#ffffff', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: activeView === 'mesa' ? 0 : 110 }}>
 
             {/* ── Header ── */}
             {/* ── Sticky wrapper: header + ticker siempre visibles ── */}
@@ -579,7 +565,7 @@ function App() {
             </header>
 
             {/* ── METRO NEWS TICKER ── */}
-            <MetroTicker lideres={leadersList} />
+            <MetroTicker />
             </div>{/* end sticky wrapper */}
 
             {/* ── Contenido principal ── */}
@@ -850,8 +836,8 @@ function App() {
                 )}
             </main>
 
-            {/* ── Barra de navegación ── */}
-            <nav style={{
+            {/* ── Barra de navegación — oculta en mesa técnica ── */}
+            {activeView !== 'mesa' && <nav style={{
                 position: 'fixed', bottom: 20, left: 20, right: 20,
                 background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(10px)',
                 height: 75, display: 'flex', justifyContent: 'flex-start',
@@ -887,7 +873,7 @@ function App() {
                         <span style={{ fontSize: '0.55rem', fontWeight: 900, textTransform: 'uppercase' }}>{item.l}</span>
                     </button>
                 ))}
-            </nav>
+            </nav>}
 
             {showReset && <ResetTemporada categoria={categoriaActiva} onClose={() => setShowReset(false)} />}
 

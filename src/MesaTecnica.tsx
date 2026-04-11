@@ -6,6 +6,9 @@ import {
     limit, orderBy, addDoc, deleteDoc, getDoc
 } from 'firebase/firestore';
 
+// ─────────────────────────────────────────────
+// TIPOS
+// ─────────────────────────────────────────────
 type Team = 'local' | 'visitante';
 
 interface Player {
@@ -35,9 +38,11 @@ interface Jugada {
     accion: string;
     puntos: number;
     timestamp: number;
-    cuarto?: string;
 }
 
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
 const getColName = (base: string, categoria: string) => {
     const cat = categoria.trim().toUpperCase();
     return (cat === 'MASTER40' || cat === 'MASTER') ? base : `${base}_${cat}`;
@@ -46,6 +51,9 @@ const getColName = (base: string, categoria: string) => {
 const puntosDeAccion = (accion: string) =>
     accion === 'tirosLibres' ? 1 : accion === 'dobles' ? 2 : accion === 'triples' ? 3 : 0;
 
+// ─────────────────────────────────────────────
+// COMPONENTE: Modal de confirmación (reemplaza window.confirm)
+// ─────────────────────────────────────────────
 const ConfirmModal: React.FC<{
     mensaje: string;
     onConfirm: () => void;
@@ -77,6 +85,9 @@ const ConfirmModal: React.FC<{
     </div>
 );
 
+// ─────────────────────────────────────────────
+// COMPONENTE: Toast de feedback visual
+// ─────────────────────────────────────────────
 const Toast: React.FC<{ msg: string; color: string }> = ({ msg, color }) => (
     <div style={{
         position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)',
@@ -90,6 +101,9 @@ const Toast: React.FC<{ msg: string; color: string }> = ({ msg, color }) => (
     </div>
 );
 
+// ─────────────────────────────────────────────
+// COMPONENTE: Fila de jugador con botones grandes
+// ─────────────────────────────────────────────
 const PlayerRow = memo(({
     player, team, stats, onStat, onSub, flashing,
 }: {
@@ -103,77 +117,82 @@ const PlayerRow = memo(({
     const s = stats ?? {};
     const teamColor = team === 'local' ? '#3b82f6' : '#ef4444';
 
-    const StatBtn = ({
-        accion, label, count, bg,
-    }: { accion: string; label: string; count: number; bg: string }) => {
-        const isFlashing = flashing === accion;
-        return (
-            <button
-                onClick={() => onStat(player, team, accion, 1)}
-                style={{
-                    padding: '7px 2px',
-                    background: isFlashing ? '#ffffff' : bg,
-                    border: 'none', borderRadius: 6,
-                    color: isFlashing ? bg : 'white',
-                    fontWeight: 900, fontSize: '0.62rem',
-                    cursor: 'pointer',
-                    transform: isFlashing ? 'scale(0.93)' : 'scale(1)',
-                    transition: 'transform 0.15s, background 0.15s',
-                    lineHeight: 1.2,
-                    boxShadow: isFlashing ? `0 0 0 2px ${bg}` : 'none',
-                }}
-            >
-                {label}<br />
-                <span style={{ fontSize: '0.9rem' }}>{count}</span>
-            </button>
-        );
-    };
+    const btns = [
+        { accion: 'tirosLibres', label: '+1', count: s.tirosLibres ?? 0, bg: '#475569' },
+        { accion: 'dobles',      label: '+2', count: s.dobles ?? 0,      bg: '#1e40af' },
+        { accion: 'triples',     label: '+3', count: s.triples ?? 0,     bg: '#7c3aed' },
+        { accion: 'rebotes',     label: 'R',  count: s.rebotes ?? 0,     bg: '#047857' },
+        { accion: 'robos',       label: 'S',  count: s.robos ?? 0,       bg: '#b45309' },
+        { accion: 'bloqueos',    label: 'B',  count: s.bloqueos ?? 0,    bg: '#991b1b' },
+    ];
 
     return (
         <div style={{
-            marginBottom: 8, padding: '10px 10px 8px',
-            borderRadius: 12, background: '#1a1a1a',
-            border: '1px solid #2d2d2d',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '5px 6px',
+            borderBottom: '1px solid #1e293b',
+            background: flashing ? '#0f172a' : 'transparent',
         }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    <span style={{
-                        background: teamColor, color: 'white',
-                        padding: '3px 8px', borderRadius: 6,
-                        fontWeight: 900, fontSize: '0.85rem',
-                        minWidth: 28, textAlign: 'center', flexShrink: 0,
-                    }}>
-                        {player.numero ?? '??'}
-                    </span>
-                    <span style={{
-                        fontWeight: 800, color: 'white', fontSize: '0.82rem',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                        {player.nombre}
-                    </span>
-                </div>
-                <button
-                    onClick={() => onSub(player.id)}
-                    style={{
-                        background: '#334155', color: '#60a5fa',
-                        border: 'none', borderRadius: 6,
-                        padding: '5px 10px', fontSize: '0.65rem',
-                        cursor: 'pointer', fontWeight: 700, flexShrink: 0,
-                    }}
-                >
-                    🔄 CAMBIO
-                </button>
+            {/* Número */}
+            <div style={{
+                background: teamColor, color: 'white',
+                padding: '4px 7px', borderRadius: 6,
+                fontWeight: 900, fontSize: '0.9rem',
+                minWidth: 32, textAlign: 'center', flexShrink: 0,
+            }}>
+                {player.numero ?? '?'}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3 }}>
-                <StatBtn accion="tirosLibres" label="+1"  count={s.tirosLibres ?? 0} bg="#475569" />
-                <StatBtn accion="dobles"      label="+2"  count={s.dobles ?? 0}      bg="#1e40af" />
-                <StatBtn accion="triples"     label="+3"  count={s.triples ?? 0}     bg="#7c3aed" />
-                <StatBtn accion="rebotes"     label="REB" count={s.rebotes ?? 0}     bg="#047857" />
-                <StatBtn accion="robos"       label="ROB" count={s.robos ?? 0}       bg="#b45309" />
-                <StatBtn accion="bloqueos"    label="BLQ" count={s.bloqueos ?? 0}    bg="#991b1b" />
+            {/* Nombre */}
+            <div style={{
+                flex: 1, fontWeight: 700, color: 'white',
+                fontSize: '0.72rem', overflow: 'hidden',
+                textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                minWidth: 0,
+            }}>
+                {player.nombre.split(' ')[0]}
             </div>
+
+            {/* 6 botones en fila */}
+            {btns.map(btn => {
+                const isFlashing = flashing === btn.accion;
+                return (
+                    <button
+                        key={btn.accion}
+                        onClick={() => onStat(player, team, btn.accion, 1)}
+                        style={{
+                            background: isFlashing ? 'white' : btn.bg,
+                            color: isFlashing ? btn.bg : 'white',
+                            border: 'none', borderRadius: 6,
+                            fontWeight: 900, fontSize: '0.65rem',
+                            cursor: 'pointer',
+                            display: 'flex', flexDirection: 'column',
+                            alignItems: 'center', justifyContent: 'center',
+                            width: 38, height: 44, flexShrink: 0,
+                            lineHeight: 1.1,
+                            transform: isFlashing ? 'scale(0.92)' : 'scale(1)',
+                            transition: 'transform 0.12s',
+                            boxShadow: isFlashing ? `0 0 0 2px ${btn.bg}` : 'none',
+                        }}
+                    >
+                        <span style={{ fontSize: '0.7rem', fontWeight: 900 }}>{btn.label}</span>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 900 }}>{btn.count}</span>
+                    </button>
+                );
+            })}
+
+            {/* Cambio */}
+            <button
+                onClick={() => onSub(player.id)}
+                style={{
+                    background: '#334155', color: '#60a5fa',
+                    border: 'none', borderRadius: 6,
+                    width: 34, height: 44, flexShrink: 0,
+                    fontSize: '0.7rem', cursor: 'pointer', fontWeight: 700,
+                }}
+            >
+                🔄
+            </button>
         </div>
     );
 });
@@ -194,29 +213,33 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
 
     const [onCourtLocal, setOnCourtLocal] = useState<string[]>([]);
     const [onCourtVisitante, setOnCourtVisitante] = useState<string[]>([]);
-    const [cuartoActual, setCuartoActual] = useState<string>('Q1');
 
     const [subModal, setSubModal] = useState<{ team: Team; replacingId: string | null; isOpen: boolean }>({
         team: 'local', replacingId: null, isOpen: false,
     });
 
     const [confirmModal, setConfirmModal] = useState<{ msg: string; onConfirm: () => void } | null>(null);
-    const [forfaitModal, setForfaitModal] = useState<any | null>(null); // NUEVO ESTADO PARA MODAL DE FORFAIT
-    
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [statsCache, setStatsCache] = useState<Record<string, StatMap>>({});
     const [recentPlays, setRecentPlays] = useState<Jugada[]>([]);
 
+    // Toast
     const [toast, setToast] = useState<{ msg: string; color: string } | null>(null);
     const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Flash por jugador+accion para el feedback visual del botón
     const [flashMap, setFlashMap] = useState<Record<string, string | null>>({});
+
+    // null = verificando Firestore | false = sin estado guardado | true = estado restaurado
     const [estadoRestaurado, setEstadoRestaurado] = useState<boolean | null>(null);
 
     const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/166/166344.png';
+
     const colCal = getColName('calendario', categoria);
     const colPlayers = getColName('jugadores', categoria);
     const colTeams = getColName('equipos', categoria);
 
+    // Persiste el estado de la mesa en mesa_estado/{matchId}
     const saveEstado = useCallback(async (payload: Partial<{
         presentLocal: string[];
         presentVisitante: string[];
@@ -224,7 +247,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         onCourtVisitante: string[];
         checkInDone: boolean;
         startersDone: boolean;
-        cuartoActual: string;
     }>) => {
         if (!selectedMatchId) return;
         try {
@@ -248,36 +270,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         setConfirmModal({ msg, onConfirm });
     };
 
-    // --- NUEVA LÓGICA DE FORFAIT ---
-    const executeForfait = async (match: any, faltante: 'local' | 'visitante') => {
-        try {
-            const batch = writeBatch(db);
-            const lRef = doc(db, colTeams, match.equipoLocalId);
-            const vRef = doc(db, colTeams, match.equipoVisitanteId);
-            const calRef = doc(db, colCal, match.id);
-
-            if (faltante === 'visitante') { 
-                // Faltó Visitante -> Gana Local 20-0
-                batch.update(calRef, { estatus: 'finalizado', marcadorLocal: 20, marcadorVisitante: 0, esForfait: true });
-                batch.update(lRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(20) });
-                batch.update(vRef, { derrotas: increment(1), puntos_contra: increment(20) }); // NO suma puntos en tabla
-            } else { 
-                // Faltó Local -> Gana Visitante 20-0
-                batch.update(calRef, { estatus: 'finalizado', marcadorLocal: 0, marcadorVisitante: 20, esForfait: true });
-                batch.update(vRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(20) });
-                batch.update(lRef, { derrotas: increment(1), puntos_contra: increment(20) }); // NO suma puntos en tabla
-            }
-
-            await batch.commit();
-            showToast('✅ FORFAIT APLICADO CORRECTAMENTE', '#10b981');
-            setForfaitModal(null);
-        } catch(e) {
-            showToast('Error al aplicar Forfait', '#ef4444');
-            console.error(e);
-        }
-    };
-    // -------------------------------
-
+    // ── Carga de partidos del día ──
     useEffect(() => {
         const now = new Date();
         const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
@@ -290,17 +283,18 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         return onSnapshot(q, snap =>
             setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() })))
         );
-    }, [categoria, colCal]);
+    }, [categoria]);
 
+    // ── Restaurar estado guardado al seleccionar un partido ──
     useEffect(() => {
         if (!selectedMatchId) return;
-        setEstadoRestaurado(null);
+        setEstadoRestaurado(null); // volvemos a "verificando"
         const fetchEstado = async () => {
             try {
                 const snap = await getDoc(doc(db, 'mesa_estado', selectedMatchId));
                 if (snap.exists()) {
                     const d = snap.data();
-                    if (d.cuartoActual) setCuartoActual(d.cuartoActual);
+                    // Solo restauramos si el partido no terminó
                     if (d.startersDone) {
                         if (d.presentLocal)     setPresentLocal(d.presentLocal);
                         if (d.presentVisitante) setPresentVisitante(d.presentVisitante);
@@ -328,6 +322,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         fetchEstado();
     }, [selectedMatchId]);
 
+    // ── Carga de datos del partido seleccionado ──
     useEffect(() => {
         if (!selectedMatchId) return;
         const unsubMatch = onSnapshot(doc(db, colCal, selectedMatchId), async snap => {
@@ -359,8 +354,9 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         );
 
         return () => { unsubMatch(); unsubPlays(); unsubStats(); };
-    }, [selectedMatchId, categoria, colCal, colTeams]);
+    }, [selectedMatchId, categoria]);
 
+    // ── Carga de rosters ──
     useEffect(() => {
         if (!matchData?.equipoLocalId || !matchData?.equipoVisitanteId) return;
         const fetchRosters = async () => {
@@ -374,15 +370,18 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             setPlayersVisitante(sort(snapV.docs));
         };
         fetchRosters();
-    }, [matchData?.equipoLocalId, matchData?.equipoVisitanteId, categoria, colPlayers]);
+    }, [matchData?.id, categoria]);
 
+    // ── Registrar stat ──
     const handleStat = useCallback(async (player: Player, team: Team, accion: string, val: number) => {
         if (!matchData) return;
         const pts = puntosDeAccion(accion);
 
+        // Flash visual en el botón
         setFlashMap(prev => ({ ...prev, [`${player.id}_${accion}`]: accion }));
         setTimeout(() => setFlashMap(prev => ({ ...prev, [`${player.id}_${accion}`]: null })), 300);
 
+        // Toast de confirmación
         const labels: Record<string, string> = {
             tirosLibres: '🎯 +1 TL', dobles: '🏀 +2 PTS', triples: '🔥 +3 PTS',
             rebotes: '🖐 REBOTE', robos: '🛡 ROBO', bloqueos: '🚫 BLOQUEO',
@@ -391,6 +390,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             pts > 0 ? '#3b82f6' : '#10b981');
 
         try {
+            // 1. Jugada en historial
             await addDoc(collection(db, 'jugadas_partido'), {
                 partidoId: matchData.id,
                 jugadorId: player.id,
@@ -400,19 +400,16 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 accion,
                 puntos: pts,
                 timestamp: Date.now(),
-                cuarto: cuartoActual,
             });
 
+            // 2. Marcador
             if (pts > 0) {
-                const cuartoField = team === 'local'
-                    ? `cuartosLocal.${cuartoActual}`
-                    : `cuartosVisitante.${cuartoActual}`;
                 await updateDoc(doc(db, colCal, matchData.id), {
                     [team === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(pts),
-                    [cuartoField]: increment(pts),
                 });
             }
 
+            // 3. Stats acumuladas del jugador en este partido
             await setDoc(
                 doc(db, 'stats_partido', `${matchData.id}_${player.id}`),
                 {
@@ -430,8 +427,9 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             showToast('Error al guardar ⚠️', '#ef4444');
             console.error(e);
         }
-    }, [matchData, colCal, showToast, cuartoActual]);
+    }, [matchData, colCal, showToast]);
 
+    // ── DESHACER jugada (cualquiera del historial) ──
     const handleDeleteJugada = useCallback(async (jugada: Jugada) => {
         if (!matchData) return;
 
@@ -440,21 +438,18 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             async () => {
                 try {
                     const pts = jugada.puntos ?? 0;
+
+                    // 1. Borrar del historial
                     await deleteDoc(doc(db, 'jugadas_partido', jugada.id));
 
+                    // 2. Restar del marcador si tenía puntos
                     if (pts > 0) {
-                        const updates: Record<string, any> = {
+                        await updateDoc(doc(db, colCal, matchData.id), {
                             [jugada.equipo === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(-pts),
-                        };
-                        if (jugada.cuarto) {
-                            const cuartoField = jugada.equipo === 'local'
-                                ? `cuartosLocal.${jugada.cuarto}`
-                                : `cuartosVisitante.${jugada.cuarto}`;
-                            updates[cuartoField] = increment(-pts);
-                        }
-                        await updateDoc(doc(db, colCal, matchData.id), updates);
+                        });
                     }
 
+                    // 3. Restar de stats_partido
                     const statRef = doc(db, 'stats_partido', `${matchData.id}_${jugada.jugadorId}`);
                     const statSnap = await getDoc(statRef);
                     if (statSnap.exists()) {
@@ -472,19 +467,21 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         );
     }, [matchData, colCal, showToast]);
 
+    // Atajo para el botón ↩️ DESHACER (borra la última)
     const handleUndo = useCallback(() => {
         const ultima = recentPlays[0];
         if (!ultima) { showToast('No hay jugadas para deshacer', '#f59e0b'); return; }
         handleDeleteJugada(ultima);
     }, [recentPlays, handleDeleteJugada, showToast]);
 
+    // ── Finalizar partido ──
     const handleFinalize = useCallback(() => {
         if (!matchData) return;
         showConfirm('¿FINALIZAR PARTIDO Y ACTUALIZAR TABLAS?', async () => {
             try {
                 const batch = writeBatch(db);
-                const localGana = (matchData.marcadorLocal || 0) > (matchData.marcadorVisitante || 0);
-                const visitanteGana = (matchData.marcadorVisitante || 0) > (matchData.marcadorLocal || 0);
+                const localGana = matchData.marcadorLocal > matchData.marcadorVisitante;
+                const visitanteGana = matchData.marcadorVisitante > matchData.marcadorLocal;
 
                 const lRef = doc(db, colTeams, matchData.equipoLocalId);
                 const vRef = doc(db, colTeams, matchData.equipoVisitanteId);
@@ -496,10 +493,12 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     batch.update(vRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
                     batch.update(lRef, { derrotas: increment(1), puntos: increment(1), puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
                 } else {
+                    // Empate (no debería pasar en basquetbol pero lo manejamos)
                     batch.update(lRef, { puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
                     batch.update(vRef, { puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
                 }
 
+                // Stats por jugador
                 const statsSnap = await getDocs(
                     query(collection(db, 'stats_partido'), where('partidoId', '==', matchData.id))
                 );
@@ -517,6 +516,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
 
                 batch.update(doc(db, colCal, matchData.id), { estatus: 'finalizado' });
                 await batch.commit();
+                // Limpiar estado guardado de la mesa al finalizar
                 try { await deleteDoc(doc(db, 'mesa_estado', matchData.id)); } catch (_) {}
                 showToast('✅ Partido finalizado', '#10b981');
                 setTimeout(() => onClose(), 1200);
@@ -527,6 +527,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         });
     }, [matchData, colCal, colTeams, colPlayers, onClose, showToast]);
 
+    // ── Sustitución ──
     const executeSwap = useCallback((newPlayerId: string) => {
         const { team, replacingId } = subModal;
         if (!replacingId) return;
@@ -548,62 +549,27 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         showToast('🔄 Cambio realizado', '#8b5cf6');
     }, [subModal, showToast, saveEstado]);
 
-    // ── PANTALLA 1: Selección de partido ──
+    // ─────────────────────────────────────────────
+    // PANTALLA 1: Selección de partido
+    // ─────────────────────────────────────────────
     if (!selectedMatchId) return (
         <div style={{ padding: 20, color: 'white', background: '#000', minHeight: '100vh' }}>
             <h2 style={{ color: '#60a5fa', marginBottom: 20, fontSize: '1.1rem', fontWeight: 900 }}>
                 ⏱️ Mesa Técnica — {categoria}
             </h2>
-            
-            {/* Modal para declarar Forfait */}
-            {forfaitModal && (
-                <div style={{
-                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
-                    zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-                }}>
-                    <div style={{ background: '#1e293b', borderRadius: 16, padding: 20, maxWidth: 320, width: '100%', border: '1px solid #334155' }}>
-                        <h3 style={{ color: '#ef4444', textAlign: 'center', margin: '0 0 15px 0', fontSize: '1rem', fontWeight: 900 }}>🚨 DECLARAR FORFAIT</h3>
-                        <p style={{ color: 'white', textAlign: 'center', fontSize: '0.85rem', marginBottom: 20 }}>¿Qué equipo <b>NO SE PRESENTÓ</b>?</p>
-                        
-                        <button onClick={() => executeForfait(forfaitModal, 'local')} style={{ width: '100%', padding: 12, background: '#1e3a8a', color: 'white', border: 'none', borderRadius: 8, marginBottom: 10, fontWeight: 700, cursor: 'pointer' }}>
-                            FALTÓ {forfaitModal.equipoLocalNombre} (Local)
-                        </button>
-                        <button onClick={() => executeForfait(forfaitModal, 'visitante')} style={{ width: '100%', padding: 12, background: '#854d0e', color: 'white', border: 'none', borderRadius: 8, marginBottom: 20, fontWeight: 700, cursor: 'pointer' }}>
-                            FALTÓ {forfaitModal.equipoVisitanteNombre} (Visitante)
-                        </button>
-                        
-                        <button onClick={() => setForfaitModal(null)} style={{ width: '100%', padding: 12, background: 'transparent', color: '#94a3b8', border: '1px solid #334155', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>
-                            CANCELAR
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {toast && <Toast msg={toast.msg} color={toast.color} />}
-
             {matches.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40, border: '1px dashed #333', borderRadius: 15 }}>
                     <p style={{ color: '#666', fontSize: '0.85rem' }}>No hay juegos programados hoy.</p>
                 </div>
             ) : matches.map(m => (
-                <div key={m.id} style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                    <button onClick={() => setSelectedMatchId(m.id)} style={{
-                        flex: 1, padding: 18, background: '#1a1a1a', border: '1px solid #333',
-                        borderRadius: 10, color: 'white',
-                        textAlign: 'left', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
-                    }}>
-                        🏀 {m.equipoLocalNombre} vs {m.equipoVisitanteNombre}
-                        <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 4 }}>{m.hora} — {m.fechaAsignada}</div>
-                    </button>
-                    
-                    {/* BOTÓN FORFAIT */}
-                    <button onClick={() => setForfaitModal(m)} style={{
-                        background: '#7f1d1d', color: 'white', border: 'none', borderRadius: 10,
-                        padding: '0 15px', fontWeight: 900, fontSize: '0.7rem', cursor: 'pointer'
-                    }}>
-                        W.O.
-                    </button>
-                </div>
+                <button key={m.id} onClick={() => setSelectedMatchId(m.id)} style={{
+                    padding: 18, background: '#1a1a1a', border: '1px solid #333',
+                    borderRadius: 10, color: 'white', width: '100%', marginBottom: 10,
+                    textAlign: 'left', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
+                }}>
+                    🏀 {m.equipoLocalNombre} vs {m.equipoVisitanteNombre}
+                    <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 4 }}>{m.hora} — {m.fechaAsignada}</div>
+                </button>
             ))}
             <button onClick={onClose} style={{ marginTop: 20, padding: 14, width: '100%', background: '#1e293b', color: 'white', border: '1px solid #334155', borderRadius: 10, fontWeight: 700 }}>
                 ← VOLVER
@@ -611,7 +577,9 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         </div>
     );
 
-    // ── PANTALLA 2: Check-in ──
+    // ─────────────────────────────────────────────
+    // PANTALLA 2: Check-in de asistencia
+    // ─────────────────────────────────────────────
     if (!checkInDone) {
         const PlayerCheckItem = ({ p, present, setPresent, color }: any) => (
             <div
@@ -629,7 +597,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 <span style={{ opacity: present.includes(p.id) ? 1 : 0.4 }}>
                     {present.includes(p.id) ? '✓' : '○'}
                 </span>
-                {p.numero} — {p.nombre}
+                #{p.numero} — {p.nombre}
             </div>
         );
 
@@ -639,6 +607,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     REGISTRO DE ASISTENCIA
                 </h3>
                 <div style={{ flex: 1, display: 'flex', gap: 10, overflow: 'hidden' }}>
+                    {/* Local */}
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                         <div style={{ background: '#1e3a8a', padding: '6px 10px', fontSize: '0.65rem', fontWeight: 900, textAlign: 'center', borderRadius: 6, marginBottom: 8 }}>
                             LOCAL ({presentLocal.length})
@@ -649,6 +618,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                             ))}
                         </div>
                     </div>
+                    {/* Visitante */}
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                         <div style={{ background: '#854d0e', padding: '6px 10px', fontSize: '0.65rem', fontWeight: 900, textAlign: 'center', borderRadius: 6, marginBottom: 8 }}>
                             VISITANTE ({presentVisitante.length})
@@ -680,7 +650,9 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         );
     }
 
-    // ── PANTALLA 3: Abridores ──
+    // ─────────────────────────────────────────────
+    // PANTALLA 3: Selección de 5 abridores
+    // ─────────────────────────────────────────────
     if (!startersDone) {
         const StarterItem = ({ p, onCourt, setOnCourt, color }: any) => (
             <div
@@ -700,7 +672,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 <span style={{ opacity: onCourt.includes(p.id) ? 1 : 0.3 }}>
                     {onCourt.includes(p.id) ? '✓' : '○'}
                 </span>
-                {p.numero} — {p.nombre}
+                #{p.numero} — {p.nombre}
             </div>
         );
 
@@ -738,7 +710,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                             presentLocal, presentVisitante,
                             onCourtLocal, onCourtVisitante,
                             checkInDone: true, startersDone: true,
-                            cuartoActual,
                         });
                     }}
                     disabled={onCourtLocal.length !== 5 || onCourtVisitante.length !== 5}
@@ -748,12 +719,15 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                         color: 'white', fontWeight: 900, fontSize: '0.85rem', cursor: 'pointer',
                     }}
                 >
-                    {onCourtLocal.length === 5 && onCourtVisitante.length === 5 ? '🏀 INICIAR PARTIDO' : 'Selecciona 5 por equipo'}
+                    {onCourtLocal.length === 5 && onCourtVisitante.length === 5 ? '🏀 INICIAR PARTIDO' : `Selecciona 5 por equipo`}
                 </button>
             </div>
         );
     }
 
+    // ─────────────────────────────────────────────
+    // Esperando verificación de estado en Firestore
+    // ─────────────────────────────────────────────
     if (startersDone && estadoRestaurado === null) return (
         <div style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', gap: 16 }}>
             <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #334155', borderTop: '3px solid #60a5fa', animation: 'spin 0.8s linear infinite' }} />
@@ -762,7 +736,9 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         </div>
     );
 
-    // ── PANTALLA 4: Mesa activa ──
+    // ─────────────────────────────────────────────
+    // PANTALLA 4: Mesa técnica activa
+    // ─────────────────────────────────────────────
     return (
         <div style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', color: 'white', overflow: 'hidden' }}>
             <style>{`
@@ -772,18 +748,22 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 }
             `}</style>
 
+            {/* Banner de estado restaurado */}
             {estadoRestaurado === true && (
                 <div style={{
                     background: '#065f46', color: '#6ee7b7',
                     fontSize: '0.65rem', fontWeight: 700,
-                    textAlign: 'center', padding: '6px 16px', letterSpacing: '0.5px',
+                    textAlign: 'center', padding: '6px 16px',
+                    letterSpacing: '0.5px',
                 }}>
                     ♻️ PARTIDO RESTAURADO — los titulares y estadísticas fueron recuperados
                 </div>
             )}
 
+            {/* Toast de feedback */}
             {toast && <Toast msg={toast.msg} color={toast.color} />}
 
+            {/* Modales */}
             {confirmModal && (
                 <ConfirmModal
                     mensaje={confirmModal.msg}
@@ -792,7 +772,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 />
             )}
 
-            {/* Scoreboard */}
+            {/* ── Scoreboard ── */}
             <div style={{
                 minHeight: 68, background: '#111', borderBottom: '2px solid #222',
                 display: 'flex', alignItems: 'center', padding: '5px 12px',
@@ -819,33 +799,18 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 </div>
             </div>
 
-            {/* Selector de cuartos */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, background: '#0f172a', padding: '8px 0', borderBottom: '1px solid #1e293b' }}>
-                {['Q1', 'Q2', 'Q3', 'Q4', 'TE'].map(q => (
-                    <button
-                        key={q}
-                        onClick={() => { setCuartoActual(q); saveEstado({ cuartoActual: q }); }}
-                        style={{
-                            padding: '6px 14px', borderRadius: 8, border: 'none',
-                            background: cuartoActual === q ? '#3b82f6' : '#1e293b',
-                            color: cuartoActual === q ? 'white' : '#64748b',
-                            fontWeight: 900, cursor: 'pointer', fontSize: '0.75rem',
-                        }}
-                    >
-                        {q}
-                    </button>
-                ))}
-            </div>
-
-            {/* Jugadores en cancha */}
+            {/* ── Jugadores en cancha ── */}
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                {/* LOCAL */}
                 <div style={{ flex: 1, padding: '6px 5px', borderRight: '1px solid #1e293b', overflowY: 'auto' }}>
                     <div style={{ textAlign: 'center', marginBottom: 6, background: '#1e3a8a', padding: '4px 0', borderRadius: 6, fontSize: '0.62rem', fontWeight: 900 }}>
                         LOCAL
                     </div>
                     {playersLocal.filter(p => onCourtLocal.includes(p.id)).map(p => (
                         <PlayerRow
-                            key={p.id} player={p} team="local"
+                            key={p.id}
+                            player={p}
+                            team="local"
                             stats={statsCache[p.id] ?? {}}
                             onStat={handleStat}
                             onSub={id => setSubModal({ team: 'local', replacingId: id, isOpen: true })}
@@ -854,13 +819,16 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     ))}
                 </div>
 
+                {/* VISITANTE */}
                 <div style={{ flex: 1, padding: '6px 5px', overflowY: 'auto' }}>
                     <div style={{ textAlign: 'center', marginBottom: 6, background: '#7f1d1d', padding: '4px 0', borderRadius: 6, fontSize: '0.62rem', fontWeight: 900 }}>
                         VISITANTE
                     </div>
                     {playersVisitante.filter(p => onCourtVisitante.includes(p.id)).map(p => (
                         <PlayerRow
-                            key={p.id} player={p} team="visitante"
+                            key={p.id}
+                            player={p}
+                            team="visitante"
                             stats={statsCache[p.id] ?? {}}
                             onStat={handleStat}
                             onSub={id => setSubModal({ team: 'visitante', replacingId: id, isOpen: true })}
@@ -870,7 +838,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 </div>
             </div>
 
-            {/* Barra de acciones */}
+            {/* ── Barra de acciones ── */}
             <div style={{ padding: '10px 10px', background: '#0f172a', display: 'flex', gap: 6, borderTop: '2px solid #1e293b' }}>
                 <button onClick={() => setSelectedMatchId(null)} style={actionBtnStyle('#1e293b')}>SALIR</button>
                 <button onClick={handleUndo} style={actionBtnStyle('#92400e')}>↩️ DESHACER</button>
@@ -878,7 +846,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 <button onClick={handleFinalize} style={{ ...actionBtnStyle('#065f46'), flex: 2, fontWeight: 900 }}>✅ FINALIZAR</button>
             </div>
 
-            {/* Modal sustitución */}
+            {/* ── Modal de sustitución ── */}
             {subModal.isOpen && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.93)', zIndex: 4000, padding: 20, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <div style={{ background: '#1e293b', width: '100%', maxWidth: 380, borderRadius: 16, overflow: 'hidden', border: '1px solid #334155' }}>
@@ -896,7 +864,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                                         padding: '14px 16px', borderBottom: '1px solid #0f172a',
                                         cursor: 'pointer', display: 'flex', justifyContent: 'space-between',
                                         color: 'white', fontWeight: 700, fontSize: '0.85rem',
-                                        borderRadius: 8, marginBottom: 4, background: '#0f172a',
+                                        borderRadius: 8, marginBottom: 4,
+                                        background: '#0f172a',
                                     }}>
                                         <span>#{p.numero} — {p.nombre}</span>
                                         <span style={{ color: '#10b981' }}>ENTRAR ➔</span>
@@ -910,7 +879,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 </div>
             )}
 
-            {/* Modal historial */}
+            {/* ── Modal historial ── */}
             {isHistoryOpen && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.93)', zIndex: 4000, padding: 20, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <div style={{ background: '#1e293b', width: '100%', maxWidth: 400, borderRadius: 16, overflow: 'hidden', maxHeight: '80vh', display: 'flex', flexDirection: 'column', border: '1px solid #334155' }}>
@@ -927,8 +896,10 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                                     padding: '10px 14px', marginBottom: 4, borderRadius: 8,
                                     background: i === 0 ? '#0f2d1f' : '#0f172a',
                                     border: `1px solid ${i === 0 ? '#10b981' : '#1e293b'}`,
-                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    gap: 8,
                                 }}>
+                                    {/* Info de la jugada */}
                                     <div style={{ display: 'flex', gap: 10, alignItems: 'center', flex: 1, minWidth: 0 }}>
                                         <span style={{
                                             background: play.equipo === 'local' ? '#1e3a8a' : '#7f1d1d',
@@ -942,22 +913,36 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                                                 {play.jugadorNombre}
                                             </div>
                                             <div style={{ fontSize: '0.55rem', color: i === 0 ? '#10b981' : '#475569' }}>
-                                                {i === 0 ? '← última' : `#${i + 1}`} | {play.cuarto}
+                                                {i === 0 ? '← última' : `#${i + 1}`}
                                             </div>
                                         </div>
                                     </div>
-                                    <span style={{ fontWeight: 900, flexShrink: 0, color: play.puntos > 0 ? '#10b981' : '#f59e0b', fontSize: '0.72rem' }}>
-                                        {play.accion.toUpperCase()}{play.puntos > 0 && ` +${play.puntos}`}
+
+                                    {/* Acción */}
+                                    <span style={{
+                                        fontWeight: 900, flexShrink: 0,
+                                        color: play.puntos > 0 ? '#10b981' : '#f59e0b',
+                                        fontSize: '0.72rem',
+                                    }}>
+                                        {play.accion.toUpperCase()}
+                                        {play.puntos > 0 && ` +${play.puntos}`}
                                     </span>
+
+                                    {/* Botón borrar esta jugada */}
                                     <button
                                         onClick={() => handleDeleteJugada(play)}
                                         style={{
-                                            background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
-                                            color: '#f87171', borderRadius: 6, width: 28, height: 28, flexShrink: 0,
+                                            background: 'rgba(239,68,68,0.15)',
+                                            border: '1px solid rgba(239,68,68,0.3)',
+                                            color: '#f87171', borderRadius: 6,
+                                            width: 28, height: 28, flexShrink: 0,
                                             cursor: 'pointer', fontSize: '0.75rem',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         }}
-                                    >🗑️</button>
+                                        title="Borrar esta jugada"
+                                    >
+                                        🗑️
+                                    </button>
                                 </div>
                             ))}
                         </div>
