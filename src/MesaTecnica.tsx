@@ -112,91 +112,80 @@ const PlayerRow = memo(({
     stats: StatMap;
     onStat: (player: Player, team: Team, accion: string, val: number) => void;
     onSub: (id: string) => void;
-    flashing: string | null; // accion que acaba de registrarse
+    flashing: string | null;
 }) => {
     const s = stats ?? {};
     const teamColor = team === 'local' ? '#3b82f6' : '#ef4444';
 
-    const StatBtn = ({
-        accion, label, count, bg,
-    }: { accion: string; label: string; count: number; bg: string }) => {
-        const isFlashing = flashing === accion;
+    const StatBtn = ({ accion, label, count, bg }: { accion: string; label: string; count: number; bg: string }) => {
+        const isFlash = flashing === accion;
         return (
             <button
                 onClick={() => onStat(player, team, accion, 1)}
                 style={{
-                    padding: '12px 4px',
-                    background: isFlashing ? '#ffffff' : bg,
-                    border: 'none', borderRadius: 8,
-                    color: isFlashing ? bg : 'white',
-                    fontWeight: 900, fontSize: '0.72rem',
-                    cursor: 'pointer',
-                    transform: isFlashing ? 'scale(0.93)' : 'scale(1)',
-                    transition: 'transform 0.15s, background 0.15s',
-                    lineHeight: 1.3,
-                    boxShadow: isFlashing ? `0 0 0 2px ${bg}` : 'none',
+                    flex: 1, height: 36,
+                    background: isFlash ? 'white' : bg,
+                    color: isFlash ? bg : 'white',
+                    border: 'none', borderRadius: 6,
+                    fontWeight: 900, fontSize: '0.65rem',
+                    cursor: 'pointer', lineHeight: 1.2,
+                    transform: isFlash ? 'scale(0.92)' : 'scale(1)',
+                    transition: 'transform 0.12s',
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
                 }}
             >
-                {label}<br />
-                <span style={{ fontSize: '0.9rem' }}>{count}</span>
+                <span style={{ fontSize: '0.6rem' }}>{label}</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 900 }}>{count}</span>
             </button>
         );
     };
 
     return (
         <div style={{
-            marginBottom: 8, padding: '10px 10px 8px',
-            borderRadius: 12, background: '#1a1a1a',
-            border: `1px solid #2d2d2d`,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+            marginBottom: 5, padding: '6px 6px 5px',
+            borderRadius: 10, background: '#1a1a1a',
+            border: '1px solid #2d2d2d',
         }}>
-            {/* Nombre y número */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            {/* Fila superior: número + nombre + cambio */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                     <span style={{
                         background: teamColor, color: 'white',
-                        padding: '3px 8px', borderRadius: 6,
-                        fontWeight: 900, fontSize: '0.85rem',
-                        minWidth: 28, textAlign: 'center', flexShrink: 0,
+                        padding: '2px 7px', borderRadius: 5,
+                        fontWeight: 900, fontSize: '0.82rem',
+                        minWidth: 26, textAlign: 'center', flexShrink: 0,
                     }}>
                         {player.numero ?? '??'}
                     </span>
                     <span style={{
-                        fontWeight: 800, color: 'white', fontSize: '0.82rem',
+                        fontWeight: 800, color: 'white', fontSize: '0.78rem',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                         {player.nombre}
                     </span>
                 </div>
-                <button
-                    onClick={() => onSub(player.id)}
-                    style={{
-                        background: '#334155', color: '#60a5fa',
-                        border: 'none', borderRadius: 6,
-                        padding: '5px 10px', fontSize: '0.65rem',
-                        cursor: 'pointer', fontWeight: 700, flexShrink: 0,
-                    }}
-                >
-                    🔄 CAMBIO
-                </button>
+                <button onClick={() => onSub(player.id)} style={{
+                    background: '#334155', color: '#60a5fa',
+                    border: 'none', borderRadius: 5,
+                    padding: '3px 8px', fontSize: '0.6rem',
+                    cursor: 'pointer', fontWeight: 700, flexShrink: 0,
+                }}>🔄</button>
             </div>
 
-            {/* Botones de stat — más grandes */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-                <StatBtn accion="tirosLibres" label="+1 TL" count={s.tirosLibres ?? 0} bg="#475569" />
-                <StatBtn accion="dobles"      label="+2 PT" count={s.dobles ?? 0}      bg="#1e40af" />
-                <StatBtn accion="triples"     label="+3 PT" count={s.triples ?? 0}     bg="#7c3aed" />
-                <StatBtn accion="rebotes"     label="REB"   count={s.rebotes ?? 0}     bg="#047857" />
-                <StatBtn accion="robos"       label="ROBO"  count={s.robos ?? 0}       bg="#b45309" />
-                <StatBtn accion="bloqueos"    label="BLOQ"  count={s.bloqueos ?? 0}    bg="#991b1b" />
+            {/* Fila de botones 3+3 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3 }}>
+                <StatBtn accion="tirosLibres" label="+1"  count={s.tirosLibres ?? 0} bg="#475569" />
+                <StatBtn accion="dobles"      label="+2"  count={s.dobles ?? 0}      bg="#1e40af" />
+                <StatBtn accion="triples"     label="+3"  count={s.triples ?? 0}     bg="#7c3aed" />
+                <StatBtn accion="rebotes"     label="REB" count={s.rebotes ?? 0}     bg="#047857" />
+                <StatBtn accion="robos"       label="ROB" count={s.robos ?? 0}       bg="#b45309" />
+                <StatBtn accion="bloqueos"    label="BLQ" count={s.bloqueos ?? 0}    bg="#991b1b" />
             </div>
         </div>
     );
 });
 
-// ─────────────────────────────────────────────
-// COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────
 const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ categoria, onClose }) => {
     const [matches, setMatches] = useState<any[]>([]);
     const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
