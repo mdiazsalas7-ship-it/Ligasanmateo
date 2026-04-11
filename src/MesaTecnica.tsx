@@ -744,17 +744,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 }
             `}</style>
 
-            {/* Banner de estado restaurado */}
-            {estadoRestaurado === true && (
-                <div style={{
-                    background: '#065f46', color: '#6ee7b7',
-                    fontSize: '0.65rem', fontWeight: 700,
-                    textAlign: 'center', padding: '6px 16px',
-                    letterSpacing: '0.5px',
-                }}>
-                    ♻️ PARTIDO RESTAURADO — los titulares y estadísticas fueron recuperados
-                </div>
-            )}
+
 
             {/* Toast de feedback */}
             {toast && <Toast msg={toast.msg} color={toast.color} />}
