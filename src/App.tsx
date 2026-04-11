@@ -39,20 +39,15 @@ const getColName = (base: string, cat: string) =>
 
 // ─────────────────────────────────────────────
 // HELPER: ORDENAMIENTO FIBA CORRECTO
-// Bug original: tiedIds se recalculaba dentro del comparador de .sort()
-// causando que el grupo de empatados cambiara a mitad de la ordenación.
-// Fix: resolver empates ANTES de ordenar, una vez por grupo.
 // ─────────────────────────────────────────────
 const resolverEmpate = (teams: any[], matchesRegulares: any[]): any[] => {
     if (teams.length <= 1) return teams;
 
-    // Ordenar por puntos totales primero
     const sorted = [...teams].sort((a, b) => b.puntos - a.puntos);
     const result: any[] = [];
     let i = 0;
 
     while (i < sorted.length) {
-        // Detectar grupo empatado en puntos
         let j = i + 1;
         while (j < sorted.length && sorted[j].puntos === sorted[i].puntos) j++;
         const grupo = sorted.slice(i, j);
@@ -60,7 +55,6 @@ const resolverEmpate = (teams: any[], matchesRegulares: any[]): any[] => {
         if (grupo.length === 1) {
             result.push(grupo[0]);
         } else {
-            // Partidos H2H calculados UNA SOLA VEZ para este grupo
             const ids = new Set(grupo.map((t: any) => t.id));
             const h2h = matchesRegulares.filter((m: any) =>
                 ids.has(m.equipoLocalId) && ids.has(m.equipoVisitanteId)
@@ -82,15 +76,10 @@ const resolverEmpate = (teams: any[], matchesRegulares: any[]): any[] => {
 
             const conH2H = grupo.map((t: any) => ({ ...t, _h2h: calcH2H(t.id) }));
 
-            // FIBA Appendix D: criterios 1 → 2 → 3 → 4
             const resuelto = conH2H.sort((a: any, b: any) => {
-                // 1. Récord H2H (puntos: 2=victoria, 1=derrota)
                 if (b._h2h.pts !== a._h2h.pts) return b._h2h.pts - a._h2h.pts;
-                // 2. Diferencia de puntos en H2H
                 if (b._h2h.dif !== a._h2h.dif) return b._h2h.dif - a._h2h.dif;
-                // 3. Puntos anotados en H2H
                 if (b._h2h.pf !== a._h2h.pf) return b._h2h.pf - a._h2h.pf;
-                // 4. Diferencia de puntos global (toda la fase regular)
                 const difA = a.puntos_favor - a.puntos_contra;
                 const difB = b.puntos_favor - b.puntos_contra;
                 return difB - difA;
@@ -194,10 +183,8 @@ function App() {
     const [leaderIndex, setLeaderIndex]     = useState(0);
     const [leadersList, setLeadersList]     = useState<any[]>([]);
 
-    // Ref para cancelar fetchData si cambia categoría antes de terminar
     const fetchAbort = useRef<{ cancelled: boolean }>({ cancelled: false });
 
-    // ── Registrar token FCM para notificaciones push ──
     useNotifications(user?.uid);
 
     const getGroupLabel = (grupo: string, cat: string) => {
@@ -210,7 +197,6 @@ function App() {
         return `GRUPO ${g}`;
     };
 
-    // ── Auth — sin activeView en las dependencias ──
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, (u) => {
             if (u) {
@@ -229,11 +215,9 @@ function App() {
             setLoading(false);
         });
         return () => unsub();
-    }, []); // ← sin activeView: no re-suscribir al auth en cada cambio de pantalla
+    }, []);
 
-    // ── Carga de datos principal ──
     useEffect(() => {
-        // Cancelar fetch anterior si cambia la categoría antes de terminar
         const abortToken = { cancelled: false };
         fetchAbort.current = abortToken;
 
@@ -242,7 +226,6 @@ function App() {
                 setLoading(true);
                 setLeadersList([]);
 
-                // 1. Equipos
                 const colEquipos = getColName('equipos', categoriaActiva);
                 const equiposSnap = await getDocs(collection(db, colEquipos));
                 if (abortToken.cancelled) return;
@@ -263,7 +246,6 @@ function App() {
                 });
                 setTeamLogos(logoMap);
 
-                // 2. Calendario completo
                 const colCal = getColName('calendario', categoriaActiva);
                 const calSnap = await getDocs(
                     query(collection(db, colCal), orderBy('fechaAsignada', 'asc'))
@@ -272,7 +254,6 @@ function App() {
 
                 const allMatches: any[] = calSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                // FILTRO MAESTRO: solo fase regular finalizada
                 const regularFinalizados = allMatches.filter(m => {
                     const fase = (m.fase || '').trim().toUpperCase();
                     return m.estatus === 'finalizado' && (fase === 'REGULAR' || fase === '');
@@ -281,7 +262,6 @@ function App() {
                 setAllMatchesGlobal(allMatches);
                 setResultadosRecientes([...regularFinalizados].reverse().slice(0, 5));
 
-                // Próximos juegos
                 const proximos = allMatches
                     .filter(m => m.estatus !== 'finalizado')
                     .sort((a, b) =>
@@ -291,7 +271,6 @@ function App() {
                     .slice(0, 2);
                 setProximosJuegos(proximos);
 
-                // 3. Recalcular stats de equipos (solo con fase regular)
                 const equiposConStats = equiposBase.map(eq => {
                     let victorias = 0, derrotas = 0, pf = 0, pc = 0, puntos = 0;
                     regularFinalizados.forEach(m => {
@@ -308,7 +287,6 @@ function App() {
                     return { ...eq, victorias, derrotas, puntos, puntos_favor: pf, puntos_contra: pc };
                 });
 
-                // 4. Ordenamiento FIBA correcto (función separada, sin bug)
                 const grupoA = equiposConStats.filter(e =>
                     e.grupo?.toUpperCase() === 'A' || e.grupo?.toUpperCase() === 'ÚNICO'
                 );
@@ -317,7 +295,6 @@ function App() {
                 setEquiposA(resolverEmpate(grupoA, regularFinalizados));
                 setEquiposB(resolverEmpate(grupoB, regularFinalizados));
 
-                // 5. Líderes del dashboard
                 const teamGamesCount: Record<string, number> = {};
                 regularFinalizados.forEach(g => {
                     const loc = g.equipoLocalNombre?.trim().toUpperCase();
@@ -326,7 +303,6 @@ function App() {
                     if (vis) teamGamesCount[vis] = (teamGamesCount[vis] || 0) + 1;
                 });
 
-                // Fotos de jugadores para el card del líder
                 const colJugadores = getColName('jugadores', categoriaActiva);
                 const jugSnap = await getDocs(collection(db, colJugadores));
                 if (abortToken.cancelled) return;
@@ -374,7 +350,6 @@ function App() {
                     };
                 });
 
-                // Construir un líder por cada categoría estadística
                 if (playerList.length > 0) {
                     const top = (key: string) => [...playerList].sort((a: any, b: any) => b[key] - a[key])[0];
                     const cats = [
@@ -398,7 +373,6 @@ function App() {
                     setLeadersList(nuevosLideres);
                 }
 
-                // 6. Noticias y entrevistas
                 const [newsSnap, interviewsSnap] = await Promise.all([
                     getDocs(query(collection(db, 'noticias'),    orderBy('fecha', 'desc'), limit(5))),
                     getDocs(query(collection(db, 'entrevistas'), orderBy('fecha', 'desc'), limit(5))),
@@ -419,9 +393,8 @@ function App() {
 
         fetchData();
         return () => { abortToken.cancelled = true; };
-    }, [categoriaActiva]); // ← solo categoría, no activeView
+    }, [categoriaActiva]);
 
-    // ── Carrusel automático ──
     useEffect(() => {
         const itv = setInterval(() => {
             setNoticiaIndex(p => (p + 1) % (noticias.length   || 1));
@@ -437,15 +410,13 @@ function App() {
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#ffffff', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: activeView === 'mesa' ? 0 : 110 }}>
 
-            {/* ── Header ── */}
-            {/* ── Sticky wrapper: header + ticker siempre visibles ── */}
+            {/* ── Sticky wrapper: header + ticker ── */}
             {activeView !== 'mesa' && <div style={{ position: 'sticky', top: 0, zIndex: 1000 }}>
             <header style={{
                 background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 60%, #1d4ed8 100%)',
                 padding: '14px 15px 0',
                 boxShadow: '0 4px 20px rgba(30,58,138,0.4)',
             }}>
-                {/* Fila superior: logo + título + botones */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
 
                     {/* Logo */}
@@ -479,7 +450,7 @@ function App() {
                         </p>
                     </div>
 
-                    {/* Botones árbitro + reglamento */}
+                    {/* Botones árbitro + reglamentos */}
                     <div style={{ display: 'flex', gap: 6 }}>
                         {/* Árbitro Virtual */}
                         <button
@@ -514,7 +485,7 @@ function App() {
                             <span style={{ fontSize: '0.38rem', fontWeight: 900, color: 'white', letterSpacing: '0.8px', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>ÁRBITRO</span>
                         </button>
 
-                        {/* Reglamento */}
+                        {/* Reglamento General */}
                         <button
                             onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=ee680a1c-b93d-4159-ae99-0aef67cb4703', '_blank')}
                             style={{
@@ -536,6 +507,30 @@ function App() {
                                 fontSize: '1.1rem',
                             }}>📜</div>
                             <span style={{ fontSize: '0.38rem', fontWeight: 900, color: 'white', letterSpacing: '0.8px', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>REGLAMENTO</span>
+                        </button>
+
+                        {/* Reglamento Formativas */}
+                        <button
+                            onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento_Interno_Categorias_Formativas_2026.pdf?alt=media&token=147dc532-e199-4384-9a12-f25b4159ecd4', '_blank')}
+                            style={{
+                                background: 'rgba(255,255,255,0.12)',
+                                border: '1px solid rgba(255,255,255,0.25)',
+                                borderRadius: 12, padding: '6px 8px',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                                cursor: 'pointer', transition: 'background 0.2s',
+                                minWidth: 52,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.22)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+                        >
+                            <div style={{
+                                width: 32, height: 32, borderRadius: '50%',
+                                background: 'rgba(255,255,255,0.15)',
+                                border: '2px solid rgba(255,255,255,0.4)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '1.1rem',
+                            }}>📋</div>
+                            <span style={{ fontSize: '0.38rem', fontWeight: 900, color: 'white', letterSpacing: '0.8px', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>FORMATIVAS</span>
                         </button>
                     </div>
                 </div>
@@ -594,19 +589,19 @@ function App() {
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
                                             {/* Local */}
                                             <div style={{ textAlign: 'center', flex: 1 }}>
-                                                <img src={teamLogos[resultadosRecientes[juegoIndex].equipoLocalNombre?.trim().toUpperCase()] || DEFAULT_LOGO} onError={(e) => { e.currentTarget.src = DEFAULT_LOGO; }} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: '50%', background: 'white' }} alt="" />
-                                                <p style={{ fontSize: '0.55rem', fontWeight: 900, marginTop: 5 }}>{resultadosRecientes[juegoIndex].equipoLocalNombre}</p>
+                                                <img src={teamLogos[resultadosRecientes[juegoIndex]?.equipoLocalNombre?.trim().toUpperCase()] || DEFAULT_LOGO} onError={(e) => { e.currentTarget.src = DEFAULT_LOGO; }} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: '50%', background: 'white' }} alt="" />
+                                                <p style={{ fontSize: '0.55rem', fontWeight: 900, marginTop: 5 }}>{resultadosRecientes[juegoIndex]?.equipoLocalNombre}</p>
                                             </div>
                                             {/* Marcador */}
                                             <div style={{ textAlign: 'center', flex: 1 }}>
                                                 <p style={{ fontSize: '1.8rem', fontWeight: 900, margin: 0 }}>
-                                                    {resultadosRecientes[juegoIndex].marcadorLocal} - {resultadosRecientes[juegoIndex].marcadorVisitante}
+                                                    {resultadosRecientes[juegoIndex]?.marcadorLocal} - {resultadosRecientes[juegoIndex]?.marcadorVisitante}
                                                 </p>
                                             </div>
                                             {/* Visitante */}
                                             <div style={{ textAlign: 'center', flex: 1 }}>
-                                                <img src={teamLogos[resultadosRecientes[juegoIndex].equipoVisitanteNombre?.trim().toUpperCase()] || DEFAULT_LOGO} onError={(e) => { e.currentTarget.src = DEFAULT_LOGO; }} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: '50%', background: 'white' }} alt="" />
-                                                <p style={{ fontSize: '0.55rem', fontWeight: 900, marginTop: 5 }}>{resultadosRecientes[juegoIndex].equipoVisitanteNombre}</p>
+                                                <img src={teamLogos[resultadosRecientes[juegoIndex]?.equipoVisitanteNombre?.trim().toUpperCase()] || DEFAULT_LOGO} onError={(e) => { e.currentTarget.src = DEFAULT_LOGO; }} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: '50%', background: 'white' }} alt="" />
+                                                <p style={{ fontSize: '0.55rem', fontWeight: 900, marginTop: 5 }}>{resultadosRecientes[juegoIndex]?.equipoVisitanteNombre}</p>
                                             </div>
                                         </div>
                                         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
@@ -643,7 +638,7 @@ function App() {
                                 </div>
                                 <div style={{ height: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', padding: 5 }}>
                                     {noticias.length > 0 && (
-                                        <img key={noticiaIndex} src={noticias[noticiaIndex].imageUrl} className="fade-in" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} alt="" />
+                                        <img key={noticiaIndex} src={noticias[noticiaIndex]?.imageUrl} className="fade-in" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} alt="" />
                                     )}
                                 </div>
                                 <p style={{ fontSize: '0.6rem', fontWeight: 800, padding: '8px 12px', textAlign: 'center', color: '#1e293b' }}>
@@ -660,14 +655,10 @@ function App() {
                                     const inicial = (ldr.p?.nombre || '?').charAt(0).toUpperCase();
                                     return (
                                         <div key={leaderIndex} className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                                            {/* Header coloreado */}
                                             <div style={{ background: ldr.color, padding: '6px 10px', color: 'white', fontSize: '0.58rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                                                 {ldr.icon} LÍDER {ldr.label}
                                             </div>
-
-                                            {/* Cuerpo */}
                                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '8px 10px', gap: 5 }}>
-                                                {/* Foto del jugador */}
                                                 <div style={{ width: 58, height: 58, borderRadius: '50%', overflow: 'hidden', border: `2.5px solid ${ldr.color}`, background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                                     {fotoUrl ? (
                                                         <img src={fotoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt=""
@@ -678,21 +669,15 @@ function App() {
                                                         {inicial}
                                                     </div>
                                                 </div>
-
-                                                {/* Nombre del jugador */}
                                                 <div style={{ fontSize: '0.72rem', fontWeight: 900, color: '#1e293b', lineHeight: 1.1, textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
                                                     {ldr.p?.nombre}
                                                 </div>
-
-                                                {/* Logo + nombre del equipo */}
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                                     <img src={logoUrl} style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: '50%', background: '#f1f5f9', border: '1px solid #e2e8f0' }} alt="" onError={e => { e.currentTarget.src = DEFAULT_LOGO; }} />
                                                     <span style={{ fontSize: '0.5rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
                                                         {ldr.p?.equipo}
                                                     </span>
                                                 </div>
-
-                                                {/* Estadística */}
                                                 <div style={{ fontSize: '1.9rem', fontWeight: 900, color: ldr.color, lineHeight: 1 }}>
                                                     {ldr.val}
                                                     <span style={{ fontSize: '0.6rem', color: '#94a3b8', marginLeft: 2 }}>{ldr.unit}</span>
@@ -836,7 +821,7 @@ function App() {
                 )}
             </main>
 
-            {/* ── Barra de navegación — oculta en mesa ── */}
+            {/* ── Barra de navegación ── */}
             {activeView !== 'mesa' && <nav style={{
                 position: 'fixed', bottom: 20, left: 20, right: 20,
                 background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(10px)',
