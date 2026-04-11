@@ -783,7 +783,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             <div style={{ background: '#0a0f1e', borderBottom: '2px solid #1e293b' }}>
 
                 {/* Fila 1: marcador */}
-                <div style={{ display: 'flex', alignItems: 'center', padding: '4px 8px', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', padding: '3px 8px', gap: 6 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'flex-end', overflow: 'hidden' }}>
                         <span style={{ fontWeight: 700, fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {matchData?.equipoLocalNombre}
@@ -792,9 +792,9 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1e293b', padding: '4px 14px', borderRadius: 10, border: '1px solid #334155', flexShrink: 0 }}>
-                        <span style={{ fontSize: '1.7rem', fontWeight: 900 }}>{matchData?.marcadorLocal ?? 0}</span>
+                        <span style={{ fontSize: '1.5rem', fontWeight: 900 }}>{matchData?.marcadorLocal ?? 0}</span>
                         <span style={{ fontSize: '0.6rem', color: '#475569' }}>—</span>
-                        <span style={{ fontSize: '1.7rem', fontWeight: 900 }}>{matchData?.marcadorVisitante ?? 0}</span>
+                        <span style={{ fontSize: '1.5rem', fontWeight: 900 }}>{matchData?.marcadorVisitante ?? 0}</span>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'flex-start', overflow: 'hidden' }}>
@@ -810,10 +810,10 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     {/* Selector de cuarto */}
                     {['Q1','Q2','Q3','Q4','TE'].map(q => (
                         <button key={q} onClick={() => { setCuartoActual(q); saveEstado({ cuartoActual: q }); }} style={{
-                            padding: '6px 10px', borderRadius: 8, border: 'none',
+                            padding: '4px 8px', borderRadius: 6, border: 'none',
                             background: cuartoActual === q ? '#3b82f6' : '#1e293b',
                             color: cuartoActual === q ? 'white' : '#64748b',
-                            fontWeight: 900, cursor: 'pointer', fontSize: '0.78rem', flexShrink: 0,
+                            fontWeight: 900, cursor: 'pointer', fontSize: '0.7rem', flexShrink: 0,
                         }}>{q}</button>
                     ))}
 
@@ -833,8 +833,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             {/* ── Jugadores en cancha ── */}
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                 {/* LOCAL */}
-                <div style={{ flex: 1, padding: '6px 5px', borderRight: '1px solid #1e293b', overflowY: 'auto' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 6, background: '#1e3a8a', padding: '4px 0', borderRadius: 6, fontSize: '0.62rem', fontWeight: 900 }}>
+                <div style={{ flex: 1, padding: '4px 4px', borderRight: '1px solid #1e293b', overflowY: 'hidden' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 6, background: '#1e3a8a', padding: '3px 0', borderRadius: 6, fontSize: '0.58rem', fontWeight: 900 }}>
                         LOCAL
                     </div>
                     {playersLocal.filter(p => onCourtLocal.includes(p.id)).map(p => (
@@ -851,8 +851,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 </div>
 
                 {/* VISITANTE */}
-                <div style={{ flex: 1, padding: '6px 5px', overflowY: 'auto' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 6, background: '#7f1d1d', padding: '4px 0', borderRadius: 6, fontSize: '0.62rem', fontWeight: 900 }}>
+                <div style={{ flex: 1, padding: '4px 4px', overflowY: 'hidden' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 6, background: '#7f1d1d', padding: '3px 0', borderRadius: 6, fontSize: '0.58rem', fontWeight: 900 }}>
                         VISITANTE
                     </div>
                     {playersVisitante.filter(p => onCourtVisitante.includes(p.id)).map(p => (
