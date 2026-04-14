@@ -208,6 +208,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     });
 
     const [confirmModal, setConfirmModal] = useState<{ msg: string; onConfirm: () => void } | null>(null);
+    const [forfaitModal, setForfaitModal] = useState<any | null>(null);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [statsCache, setStatsCache] = useState<Record<string, StatMap>>({});
     const [recentPlays, setRecentPlays] = useState<Jugada[]>([]);
@@ -261,6 +262,31 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         setConfirmModal({ msg, onConfirm });
     };
 
+    // ── FORFAIT / W.O. ──
+    const executeForfait = async (match: any, faltante: 'local' | 'visitante') => {
+        try {
+            const batch = writeBatch(db);
+            const lRef = doc(db, colTeams, match.equipoLocalId);
+            const vRef = doc(db, colTeams, match.equipoVisitanteId);
+            const calRef = doc(db, colCal, match.id);
+            if (faltante === 'visitante') {
+                batch.update(calRef, { estatus: 'finalizado', marcadorLocal: 20, marcadorVisitante: 0, esForfait: true });
+                batch.update(lRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(20) });
+                batch.update(vRef, { derrotas: increment(1), puntos_contra: increment(20) });
+            } else {
+                batch.update(calRef, { estatus: 'finalizado', marcadorLocal: 0, marcadorVisitante: 20, esForfait: true });
+                batch.update(vRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(20) });
+                batch.update(lRef, { derrotas: increment(1), puntos_contra: increment(20) });
+            }
+            await batch.commit();
+            showToast('✅ W.O. APLICADO', '#10b981');
+            setForfaitModal(null);
+        } catch (e) {
+            showToast('Error al aplicar W.O.', '#ef4444');
+            console.error(e);
+        }
+    };
+
     // ── Carga de partidos del día ──
     useEffect(() => {
         const now = new Date();
@@ -285,6 +311,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 const snap = await getDoc(doc(db, 'mesa_estado', selectedMatchId));
                 if (snap.exists()) {
                     const d = snap.data();
+                    if (d.cuartoActual) setCuartoActual(d.cuartoActual);
                     // Solo restauramos si el partido no terminó
                     if (d.startersDone) {
                         if (d.presentLocal)     setPresentLocal(d.presentLocal);
@@ -553,19 +580,46 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             <h2 style={{ color: '#60a5fa', marginBottom: 20, fontSize: '1.1rem', fontWeight: 900 }}>
                 ⏱️ Mesa Técnica — {categoria}
             </h2>
+            {/* Modal W.O. */}
+            {forfaitModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                    <div style={{ background: '#1e293b', borderRadius: 16, padding: 20, maxWidth: 320, width: '100%', border: '1px solid #334155' }}>
+                        <h3 style={{ color: '#ef4444', textAlign: 'center', margin: '0 0 15px', fontSize: '1rem', fontWeight: 900 }}>🚨 DECLARAR W.O.</h3>
+                        <p style={{ color: 'white', textAlign: 'center', fontSize: '0.85rem', marginBottom: 20 }}>¿Qué equipo <b>NO SE PRESENTÓ</b>?</p>
+                        <button onClick={() => executeForfait(forfaitModal, 'local')} style={{ width: '100%', padding: 12, background: '#1e3a8a', color: 'white', border: 'none', borderRadius: 8, marginBottom: 10, fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
+                            FALTÓ {forfaitModal.equipoLocalNombre} (Local)
+                        </button>
+                        <button onClick={() => executeForfait(forfaitModal, 'visitante')} style={{ width: '100%', padding: 12, background: '#854d0e', color: 'white', border: 'none', borderRadius: 8, marginBottom: 20, fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
+                            FALTÓ {forfaitModal.equipoVisitanteNombre} (Visitante)
+                        </button>
+                        <button onClick={() => setForfaitModal(null)} style={{ width: '100%', padding: 12, background: 'transparent', color: '#94a3b8', border: '1px solid #334155', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>
+                            CANCELAR
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {toast && <Toast msg={toast.msg} color={toast.color} />}
+
             {matches.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40, border: '1px dashed #333', borderRadius: 15 }}>
                     <p style={{ color: '#666', fontSize: '0.85rem' }}>No hay juegos programados hoy.</p>
                 </div>
             ) : matches.map(m => (
-                <button key={m.id} onClick={() => setSelectedMatchId(m.id)} style={{
-                    padding: 18, background: '#1a1a1a', border: '1px solid #333',
-                    borderRadius: 10, color: 'white', width: '100%', marginBottom: 10,
-                    textAlign: 'left', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
-                }}>
-                    🏀 {m.equipoLocalNombre} vs {m.equipoVisitanteNombre}
-                    <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 4 }}>{m.hora} — {m.fechaAsignada}</div>
-                </button>
+                <div key={m.id} style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                    <button onClick={() => setSelectedMatchId(m.id)} style={{
+                        flex: 1, padding: 18, background: '#1a1a1a', border: '1px solid #333',
+                        borderRadius: 10, color: 'white',
+                        textAlign: 'left', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
+                    }}>
+                        🏀 {m.equipoLocalNombre} vs {m.equipoVisitanteNombre}
+                        <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 4 }}>{m.hora} — {m.fechaAsignada}</div>
+                    </button>
+                    <button onClick={() => setForfaitModal(m)} style={{
+                        background: '#7f1d1d', color: 'white', border: 'none', borderRadius: 10,
+                        padding: '0 16px', fontWeight: 900, fontSize: '0.75rem', cursor: 'pointer', flexShrink: 0,
+                    }}>W.O.</button>
+                </div>
             ))}
             <button onClick={onClose} style={{ marginTop: 20, padding: 14, width: '100%', background: '#1e293b', color: 'white', border: '1px solid #334155', borderRadius: 10, fontWeight: 700 }}>
                 ← VOLVER
@@ -744,7 +798,17 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 }
             `}</style>
 
-
+            {/* Banner de estado restaurado */}
+            {estadoRestaurado === true && (
+                <div style={{
+                    background: '#065f46', color: '#6ee7b7',
+                    fontSize: '0.65rem', fontWeight: 700,
+                    textAlign: 'center', padding: '6px 16px',
+                    letterSpacing: '0.5px',
+                }}>
+                    ♻️ PARTIDO RESTAURADO — los titulares y estadísticas fueron recuperados
+                </div>
+            )}
 
             {/* Toast de feedback */}
             {toast && <Toast msg={toast.msg} color={toast.color} />}
@@ -786,7 +850,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
 
                 {/* Fila 2: cuartos + acciones en la misma barra */}
                 <div style={{ display: 'flex', alignItems: 'center', padding: '4px 6px', gap: 4, background: '#0f172a' }}>
-                    {/* Selector de cuarto */}
                     {['Q1','Q2','Q3','Q4','TE'].map(q => (
                         <button key={q} onClick={() => { setCuartoActual(q); saveEstado({ cuartoActual: q }); }} style={{
                             padding: '4px 8px', borderRadius: 6, border: 'none',
@@ -795,17 +858,12 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                             fontWeight: 900, cursor: 'pointer', fontSize: '0.7rem', flexShrink: 0,
                         }}>{q}</button>
                     ))}
-
-                    {/* Separador */}
                     <div style={{ flex: 1 }} />
-
-                    {/* Acciones */}
                     <button onClick={() => setSelectedMatchId(null)} style={actionBtnStyle('#1e293b')}>SALIR</button>
                     <button onClick={handleUndo} style={actionBtnStyle('#92400e')}>↩️</button>
                     <button onClick={() => setIsHistoryOpen(true)} style={actionBtnStyle('#334155')}>📜</button>
                     <button onClick={handleFinalize} style={{ ...actionBtnStyle('#065f46'), fontWeight: 900, paddingLeft: 10, paddingRight: 10 }}>✅ FINAL</button>
                 </div>
-
 
             </div>
 
@@ -847,7 +905,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     ))}
                 </div>
             </div>
-
 
 
             {/* ── Modal de sustitución ── */}

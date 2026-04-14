@@ -294,17 +294,23 @@ const MatchForm: React.FC<{
                     <div>
                         <label style={labelStyle}>Fase</label>
                         <select style={inputStyle} value={fase} onChange={e => setFase(e.target.value)}>
-                            {['REGULAR','CUARTOS','SEMIFINAL','3ER LUGAR','FINAL'].map(f =>
-                                <option key={f} value={f}>{f}</option>
-                            )}
+                            {[
+                                { v: 'REGULAR',    l: 'Regular'        },
+                                { v: 'PLAYIN',     l: '⚡ Play-In'     },
+                                { v: 'SEMIFINAL',  l: 'Semifinal'      },
+                                { v: '3ER LUGAR',  l: '3er Lugar'      },
+                                { v: 'FINAL',      l: 'Final'          },
+                                { v: 'GRAN FINAL', l: '👑 Gran Final'  },
+                            ].map(f => <option key={f.v} value={f.v}>{f.l}</option>)}
                         </select>
                     </div>
                     <div>
                         <label style={labelStyle}>Grupo</label>
                         <select style={inputStyle} value={grupo} onChange={e => setGrupo(e.target.value)}>
                             <option value="">—</option>
-                            <option value="A">Grupo A</option>
-                            <option value="B">Grupo B</option>
+                            <option value="A">🔵 Conf. Este (A)</option>
+                            <option value="B">🟠 Conf. Oeste (B)</option>
+                            <option value="GRAND">👑 Gran Final</option>
                         </select>
                     </div>
                 </div>
@@ -362,6 +368,10 @@ const BoxScoreModal = memo(({
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [editedStats, setEditedStats] = useState<Record<string, Stat>>({});
+    const [editedCuartos, setEditedCuartos] = useState<{
+        local: Record<string, number>;
+        visitante: Record<string, number>;
+    }>({ local: {}, visitante: {} });
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -402,6 +412,14 @@ const BoxScoreModal = memo(({
                 const init: Record<string, Stat> = {};
                 dataConFoto.forEach(s => { init[s.id] = { ...s, bloqueos: s.bloqueos ?? s.tapones ?? 0 }; });
                 setEditedStats(init);
+                // Inicializar cuartos editables
+                const qL: Record<string, number> = {};
+                const qV: Record<string, number> = {};
+                ['Q1','Q2','Q3','Q4'].forEach(q => {
+                    qL[q] = (match as any).cuartosLocal?.[q] ?? 0;
+                    qV[q] = (match as any).cuartosVisitante?.[q] ?? 0;
+                });
+                setEditedCuartos({ local: qL, visitante: qV });
             } catch (e) { console.error(e); }
             setLoading(false);
         };
@@ -450,6 +468,14 @@ const BoxScoreModal = memo(({
                     tapones: Number(stat.bloqueos) || 0,
                 });
             }));
+            // Guardar puntos por cuarto
+            const colCal = getColName('calendario', (match as any).categoria || 'LIBRE');
+            const cuartosUpdate: Record<string, any> = {};
+            ['Q1','Q2','Q3','Q4'].forEach(q => {
+                cuartosUpdate[`cuartosLocal.${q}`]     = editedCuartos.local[q] ?? 0;
+                cuartosUpdate[`cuartosVisitante.${q}`] = editedCuartos.visitante[q] ?? 0;
+            });
+            await updateDoc(doc(db, colCal, match.id), cuartosUpdate);
             setIsEditing(false);
             setStats(Object.values(editedStats));
         } catch (e: any) { alert(`Error: ${e.message}`); }
@@ -900,9 +926,16 @@ const BoxScoreModal = memo(({
                             </div>
                         </div>
                     )}
-                    {/* Tabla de cuartos */}
-                    {(match.cuartosLocal || match.cuartosVisitante) && (
-                        <div style={{ marginBottom: 20, border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                    {/* Tabla de cuartos — editable en modo admin */}
+                    {(match.cuartosLocal || match.cuartosVisitante || isEditing) && (
+                        <div style={{ marginBottom: 20, border: `1px solid ${isEditing ? '#f59e0b' : '#e2e8f0'}`, borderRadius: 10, overflow: 'hidden' }}>
+                            {isEditing && (
+                                <div style={{ background: '#fffbeb', padding: '6px 14px', borderBottom: '1px solid #fde68a' }}>
+                                    <span style={{ fontSize: '0.6rem', fontWeight: 900, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                        ✏️ Editar puntos por cuarto
+                                    </span>
+                                </div>
+                            )}
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', textAlign: 'center' }}>
                                 <thead>
                                     <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
@@ -917,20 +950,38 @@ const BoxScoreModal = memo(({
                                     <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                         <td style={{ textAlign: 'left', padding: '8px 14px', fontWeight: 700, fontSize: '0.72rem' }}>{match.equipoLocalNombre}</td>
                                         {['Q1','Q2','Q3','Q4'].map(q => (
-                                            <td key={q} style={{ padding: '8px', color: '#3b82f6', fontWeight: 700 }}>
-                                                {match.cuartosLocal?.[q] ?? 0}
+                                            <td key={q} style={{ padding: '6px 4px', color: '#3b82f6', fontWeight: 700 }}>
+                                                {isEditing ? (
+                                                    <input
+                                                        type="number" min={0}
+                                                        value={editedCuartos.local[q] ?? 0}
+                                                        onChange={e => setEditedCuartos(prev => ({ ...prev, local: { ...prev.local, [q]: parseInt(e.target.value) || 0 } }))}
+                                                        style={{ width: 42, padding: '4px 2px', textAlign: 'center', border: '1px solid #fde68a', borderRadius: 4, fontSize: '0.8rem', background: '#fffbeb' }}
+                                                    />
+                                                ) : (match.cuartosLocal?.[q] ?? 0)}
                                             </td>
                                         ))}
-                                        <td style={{ fontWeight: 900, fontSize: '0.9rem' }}>{match.marcadorLocal ?? 0}</td>
+                                        <td style={{ fontWeight: 900, fontSize: '0.9rem' }}>
+                                            {isEditing ? Object.values(editedCuartos.local).reduce((a, b) => a + b, 0) : (match.marcadorLocal ?? 0)}
+                                        </td>
                                     </tr>
                                     <tr>
                                         <td style={{ textAlign: 'left', padding: '8px 14px', fontWeight: 700, fontSize: '0.72rem' }}>{match.equipoVisitanteNombre}</td>
                                         {['Q1','Q2','Q3','Q4'].map(q => (
-                                            <td key={q} style={{ padding: '8px', color: '#ef4444', fontWeight: 700 }}>
-                                                {match.cuartosVisitante?.[q] ?? 0}
+                                            <td key={q} style={{ padding: '6px 4px', color: '#ef4444', fontWeight: 700 }}>
+                                                {isEditing ? (
+                                                    <input
+                                                        type="number" min={0}
+                                                        value={editedCuartos.visitante[q] ?? 0}
+                                                        onChange={e => setEditedCuartos(prev => ({ ...prev, visitante: { ...prev.visitante, [q]: parseInt(e.target.value) || 0 } }))}
+                                                        style={{ width: 42, padding: '4px 2px', textAlign: 'center', border: '1px solid #fde68a', borderRadius: 4, fontSize: '0.8rem', background: '#fffbeb' }}
+                                                    />
+                                                ) : (match.cuartosVisitante?.[q] ?? 0)}
                                             </td>
                                         ))}
-                                        <td style={{ fontWeight: 900, fontSize: '0.9rem' }}>{match.marcadorVisitante ?? 0}</td>
+                                        <td style={{ fontWeight: 900, fontSize: '0.9rem' }}>
+                                            {isEditing ? Object.values(editedCuartos.visitante).reduce((a, b) => a + b, 0) : (match.marcadorVisitante ?? 0)}
+                                        </td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1272,7 +1323,6 @@ const DateDivider = ({ fecha, isToday, isFuture }: { fecha: string; isToday: boo
 // ─────────────────────────────────────────────
 type FilterType = 'TODOS' | 'A' | 'B' | 'PLAYOFFS' | 'PENDIENTES' | 'FINALIZADOS';
 
-
 const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: string }> = ({
     rol, onClose, categoria,
 }) => {
@@ -1366,7 +1416,7 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
     ];
 
     return (
-        <div style={{ position: 'relative', background: '#f3f4f6', minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
+        <div style={{ position: 'fixed', inset: 0, background: '#f3f4f6', zIndex: 1000, display: 'flex', flexDirection: 'column', fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
 
             {selectedBoxScore && (
                 <BoxScoreModal
@@ -1389,6 +1439,7 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
                     ← VOLVER
                 </button>
             </div>
+
             {/* Filtros */}
             <div className="no-scrollbar" style={{ background: '#fff', padding: '10px 16px', display: 'flex', gap: 8, overflowX: 'auto', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
                 {filters.map(f => (

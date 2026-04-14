@@ -8,6 +8,7 @@ import {
 interface Partido {
     id: string;
     fase: string;
+    grupo?: string;
     fechaAsignada?: string;
     estatus?: 'finalizado' | 'pendiente' | string;
     equipoLocalNombre?: string;
@@ -18,12 +19,11 @@ interface Partido {
     marcadorVisitante?: number;
     cuartosLocal?: Record<string, number>;
     cuartosVisitante?: Record<string, number>;
-    lado?: 'izquierda' | 'derecha';
-    posicion?: number;
+    categoria?: string;
 }
 
 interface EditScore { l: number; v: number; }
-interface PlayoffViewerProps { categoria: string; onClose: () => void }
+interface PlayoffViewerProps { categoria: string; onClose: () => void; onCategoriaChange?: (cat: string) => void; }
 
 interface EditContextType {
     editMode: boolean;
@@ -35,239 +35,241 @@ interface EditContextType {
 }
 
 const EditContext = createContext<EditContextType | null>(null);
-const useEditContext = () => {
-    const ctx = useContext(EditContext);
-    if (!ctx) throw new Error('useEditContext must be used inside EditContext.Provider');
-    return ctx;
-};
+const useEditCtx = () => useContext(EditContext)!;
 
-function useTeamLogo(logoPath: string, teamName: string, categoria: string) {
-    const [url, setUrl]     = useState('');
-    const [error, setError] = useState(false);
-
+// ── Logo ──────────────────────────────────────────────────────────────────
+const TeamLogo: React.FC<{ logoPath?: string; teamName: string; categoria: string; size?: number }> = ({ logoPath, teamName, categoria, size = 22 }) => {
+    const [url, setUrl] = useState('');
     useEffect(() => {
-        let cancelled = false;
-        const fetchLogo = async () => {
-            if (logoPath?.startsWith('http')) { setUrl(logoPath); return; }
-            try {
-                const col = categoria.trim().toUpperCase() === 'MASTER40'
-                    ? 'equipos' : `equipos_${categoria.trim().toUpperCase()}`;
-                const snap = await getDocs(
-                    query(collection(db, col), where('nombre', '==', teamName))
-                );
-                if (!cancelled) {
-                    const logoUrl = snap.docs[0]?.data()?.logoUrl;
-                    logoUrl ? setUrl(logoUrl) : setError(true);
-                }
-            } catch { if (!cancelled) setError(true); }
-        };
-        fetchLogo();
-        return () => { cancelled = true; };
+        if (!teamName) return;
+        if (logoPath?.startsWith('http')) { setUrl(logoPath); return; }
+        const col = categoria.trim().toUpperCase() === 'MASTER40' ? 'equipos' : `equipos_${categoria.trim().toUpperCase()}`;
+        getDocs(query(collection(db, col), where('nombre', '==', teamName)))
+            .then(snap => { const u = snap.docs[0]?.data()?.logoUrl; if (u) setUrl(u); })
+            .catch(() => {});
     }, [logoPath, teamName, categoria]);
 
-    return { url, error };
-}
+    const style: React.CSSProperties = { width: size, height: size, borderRadius: '50%', flexShrink: 0, overflow: 'hidden', border: '1.5px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+    if (url) return <div style={{ ...style, background: 'white' }}><img src={url} alt={teamName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>;
+    return <div style={{ ...style, background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', color: 'white', fontWeight: 900, fontSize: size * 0.38 }}>{teamName?.charAt(0).toUpperCase()}</div>;
+};
 
-const TeamLogo: React.FC<{
-    logoPath: string; teamName: string; categoria: string; size?: number;
-}> = ({ logoPath, teamName, categoria, size = 28 }) => {
-    const { url, error } = useTeamLogo(logoPath, teamName, categoria);
-    const initial = teamName?.charAt(0).toUpperCase() ?? '?';
+// ── BracketCard ───────────────────────────────────────────────────────────
+const BracketCard: React.FC<{ partido: Partido; highlight?: boolean; cardW: number; cardH: number }> = ({ partido: m, highlight = false, cardW, cardH }) => {
+    const { editMode, editScores, setEditScore, handleSaveScore, categoria } = useEditCtx();
+    const fin = m.estatus === 'finalizado';
+    const lG  = fin && (m.marcadorLocal ?? -1) > (m.marcadorVisitante ?? -1);
+    const vG  = fin && (m.marcadorVisitante ?? -1) > (m.marcadorLocal ?? -1);
+    const rowH = cardH / 2;
 
-    const base: React.CSSProperties = {
-        width: size, height: size, borderRadius: '50%', flexShrink: 0,
-        border: '2px solid rgba(255,255,255,0.12)', overflow: 'hidden',
-        display: 'flex', justifyContent: 'center', alignItems: 'center',
-    };
-
-    if (error || !url) return (
-        <div style={{
-            ...base,
-            background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)',
-            color: 'white', fontWeight: 900, fontSize: size * 0.4,
-        }}>
-            {initial}
-        </div>
-    );
     return (
-        <div style={{ ...base, background: 'white' }}>
-            <img src={url} alt={teamName}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <div style={{ width: cardW, height: cardH, borderRadius: 8, overflow: 'hidden', background: highlight ? 'rgba(251,191,36,0.1)' : 'rgba(30,41,59,0.95)', border: `1.5px solid ${highlight ? 'rgba(251,191,36,0.5)' : fin ? 'rgba(16,185,129,0.25)' : 'rgba(255,255,255,0.08)'}`, boxShadow: highlight ? '0 0 16px rgba(251,191,36,0.15)' : '0 2px 6px rgba(0,0,0,0.5)', position: 'relative' }}>
+            {/* Local */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: rowH, padding: '0 6px', background: lG ? 'rgba(251,191,36,0.08)' : 'transparent', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <TeamLogo logoPath={m.equipoLocalLogo} teamName={m.equipoLocalNombre ?? ''} categoria={categoria} size={18} />
+                <span style={{ flex: 1, fontSize: '0.55rem', fontWeight: lG ? 900 : 500, color: lG ? '#fbbf24' : 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.equipoLocalNombre ?? 'TBD'}</span>
+                {editMode
+                    ? <input type="number" defaultValue={m.marcadorLocal ?? 0} onChange={e => setEditScore(m.id, 'l', Number(e.target.value))} style={{ width: 26, textAlign: 'center', background: '#0f172a', color: 'white', border: '1px solid #3b82f6', borderRadius: 4, fontSize: '0.6rem', flexShrink: 0 }} />
+                    : <span style={{ fontSize: '0.78rem', fontWeight: 900, minWidth: 16, textAlign: 'right', flexShrink: 0, color: lG ? '#fbbf24' : !fin ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)' }}>{!fin ? '—' : (m.marcadorLocal ?? '—')}</span>
+                }
+            </div>
+            {/* Visitante */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: rowH, padding: '0 6px', background: vG ? 'rgba(251,191,36,0.08)' : 'transparent' }}>
+                <TeamLogo logoPath={m.equipoVisitanteLogo} teamName={m.equipoVisitanteNombre ?? ''} categoria={categoria} size={18} />
+                <span style={{ flex: 1, fontSize: '0.55rem', fontWeight: vG ? 900 : 500, color: vG ? '#fbbf24' : 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.equipoVisitanteNombre ?? 'TBD'}</span>
+                {editMode
+                    ? <input type="number" defaultValue={m.marcadorVisitante ?? 0} onChange={e => setEditScore(m.id, 'v', Number(e.target.value))} style={{ width: 26, textAlign: 'center', background: '#0f172a', color: 'white', border: '1px solid #3b82f6', borderRadius: 4, fontSize: '0.6rem', flexShrink: 0 }} />
+                    : <span style={{ fontSize: '0.78rem', fontWeight: 900, minWidth: 16, textAlign: 'right', flexShrink: 0, color: vG ? '#fbbf24' : !fin ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)' }}>{!fin ? '—' : (m.marcadorVisitante ?? '—')}</span>
+                }
+            </div>
+            {editMode && <button onClick={() => handleSaveScore(m)} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '2px 0', background: 'rgba(16,185,129,0.9)', color: 'white', border: 'none', fontSize: '0.42rem', fontWeight: 900, cursor: 'pointer' }}>GUARDAR</button>}
         </div>
     );
 };
 
-interface BracketCardProps {
-    partido: Partido;
-    highlight?: boolean;
-    x: number; y: number;
-    cardW: number; cardH: number;
-}
-
-const BracketCard: React.FC<BracketCardProps> = ({ partido: m, highlight = false, x, y, cardW, cardH }) => {
-    const { editMode, editScores, setEditScore, handleSaveScore, categoria } = useEditContext();
-
-    const finalizado    = m.estatus === 'finalizado';
-    const isPending     = !finalizado;
-    const localGana     = finalizado && (m.marcadorLocal  ?? -1) > (m.marcadorVisitante ?? -1);
-    const visitanteGana = finalizado && (m.marcadorVisitante ?? -1) > (m.marcadorLocal  ?? -1);
-
-    const qL = m.cuartosLocal    as Record<string,number> | undefined;
-    const qV = m.cuartosVisitante as Record<string,number> | undefined;
-    const hasQuarters = finalizado && (qL || qV) && ['Q1','Q2','Q3','Q4'].some(q => (qL?.[q] ?? 0) + (qV?.[q] ?? 0) > 0);
-    const quarterH = hasQuarters ? 18 : 0;
-    const teamRowH = (cardH - quarterH) / 2;
+// ── PlayIn Card (más visual) ────────────────────────────────────────────
+const PlayInCard: React.FC<{ partido: Partido; label: string }> = ({ partido: m, label }) => {
+    const { editMode, editScores, setEditScore, handleSaveScore, categoria } = useEditCtx();
+    const fin = m.estatus === 'finalizado';
+    const lG  = fin && (m.marcadorLocal ?? -1) > (m.marcadorVisitante ?? -1);
+    const vG  = fin && (m.marcadorVisitante ?? -1) > (m.marcadorLocal ?? -1);
 
     return (
-        <div style={{
-            position: 'relative', left: 0, top: 0,
-            width: cardW, height: cardH,
-            borderRadius: 8, overflow: 'hidden',
-            background: highlight
-                ? 'linear-gradient(135deg,rgba(251,191,36,0.12),rgba(15,23,42,0.98))'
-                : 'rgba(30,41,59,0.95)',
-            border: `1.5px solid ${highlight ? 'rgba(251,191,36,0.5)' : finalizado ? 'rgba(16,185,129,0.25)' : 'rgba(255,255,255,0.08)'}`,
-            boxShadow: highlight ? '0 0 20px rgba(251,191,36,0.15)' : '0 2px 8px rgba(0,0,0,0.5)',
-        }}>
-            <div style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                height: teamRowH, padding: '0 6px',
-                background: localGana ? 'rgba(251,191,36,0.08)' : 'transparent',
-                borderBottom: '1px solid rgba(255,255,255,0.06)',
-            }}>
-                <TeamLogo logoPath={m.equipoLocalLogo ?? ''} teamName={m.equipoLocalNombre ?? ''} categoria={categoria} size={20} />
-                <span style={{ flex: 1, fontSize: '0.58rem', fontWeight: localGana ? 900 : 500, color: localGana ? '#fbbf24' : 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {m.equipoLocalNombre ?? 'TBD'}
-                </span>
+        <div style={{ background: 'rgba(30,41,59,0.95)', borderRadius: 10, border: '1.5px solid rgba(99,102,241,0.35)', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.4)', position: 'relative' }}>
+            {/* Badge */}
+            <div style={{ background: 'rgba(99,102,241,0.2)', padding: '4px 10px', borderBottom: '1px solid rgba(99,102,241,0.25)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.48rem', fontWeight: 900, color: '#818cf8', letterSpacing: '1.5px', textTransform: 'uppercase' }}>⚡ PLAY-IN · {label}</span>
+                {fin && <span style={{ fontSize: '0.45rem', color: '#10b981', fontWeight: 700 }}>✓ FINALIZADO</span>}
+            </div>
+            {/* Local */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: lG ? 'rgba(251,191,36,0.06)' : 'transparent', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <TeamLogo teamName={m.equipoLocalNombre ?? ''} categoria={categoria} size={24} />
+                <span style={{ flex: 1, fontSize: '0.68rem', fontWeight: lG ? 900 : 600, color: lG ? '#fbbf24' : 'rgba(255,255,255,0.9)' }}>{m.equipoLocalNombre ?? 'TBD'}</span>
                 {editMode
-                    ? <input type="number" defaultValue={m.marcadorLocal ?? 0} onChange={e => setEditScore(m.id,'l',Number(e.target.value))} style={{ width: 28, textAlign: 'center', background: '#0f172a', color: 'white', border: '1px solid #3b82f6', borderRadius: 4, padding: '1px', fontSize: '0.65rem', flexShrink: 0 }} />
-                    : <span style={{ fontSize: '0.82rem', fontWeight: 900, minWidth: 18, textAlign: 'right', flexShrink: 0, color: localGana ? '#fbbf24' : isPending ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)' }}>{isPending ? '—' : (m.marcadorLocal ?? '—')}</span>
+                    ? <input type="number" defaultValue={m.marcadorLocal ?? 0} onChange={e => setEditScore(m.id, 'l', Number(e.target.value))} style={{ width: 32, textAlign: 'center', background: '#0f172a', color: 'white', border: '1px solid #6366f1', borderRadius: 4, fontSize: '0.7rem' }} />
+                    : <span style={{ fontSize: '1rem', fontWeight: 900, color: lG ? '#fbbf24' : !fin ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.6)', minWidth: 24, textAlign: 'right' }}>{!fin ? '—' : m.marcadorLocal}</span>
                 }
             </div>
-
-            <div style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                height: teamRowH, padding: '0 6px',
-                background: visitanteGana ? 'rgba(251,191,36,0.08)' : 'transparent',
-            }}>
-                <TeamLogo logoPath={m.equipoVisitanteLogo ?? ''} teamName={m.equipoVisitanteNombre ?? ''} categoria={categoria} size={20} />
-                <span style={{ flex: 1, fontSize: '0.58rem', fontWeight: visitanteGana ? 900 : 500, color: visitanteGana ? '#fbbf24' : 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {m.equipoVisitanteNombre ?? 'TBD'}
-                </span>
+            {/* Visitante */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: vG ? 'rgba(251,191,36,0.06)' : 'transparent' }}>
+                <TeamLogo teamName={m.equipoVisitanteNombre ?? ''} categoria={categoria} size={24} />
+                <span style={{ flex: 1, fontSize: '0.68rem', fontWeight: vG ? 900 : 600, color: vG ? '#fbbf24' : 'rgba(255,255,255,0.9)' }}>{m.equipoVisitanteNombre ?? 'TBD'}</span>
                 {editMode
-                    ? <input type="number" defaultValue={m.marcadorVisitante ?? 0} onChange={e => setEditScore(m.id,'v',Number(e.target.value))} style={{ width: 28, textAlign: 'center', background: '#0f172a', color: 'white', border: '1px solid #3b82f6', borderRadius: 4, padding: '1px', fontSize: '0.65rem', flexShrink: 0 }} />
-                    : <span style={{ fontSize: '0.82rem', fontWeight: 900, minWidth: 18, textAlign: 'right', flexShrink: 0, color: visitanteGana ? '#fbbf24' : isPending ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)' }}>{isPending ? '—' : (m.marcadorVisitante ?? '—')}</span>
+                    ? <input type="number" defaultValue={m.marcadorVisitante ?? 0} onChange={e => setEditScore(m.id, 'v', Number(e.target.value))} style={{ width: 32, textAlign: 'center', background: '#0f172a', color: 'white', border: '1px solid #6366f1', borderRadius: 4, fontSize: '0.7rem' }} />
+                    : <span style={{ fontSize: '1rem', fontWeight: 900, color: vG ? '#fbbf24' : !fin ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.6)', minWidth: 24, textAlign: 'right' }}>{!fin ? '—' : m.marcadorVisitante}</span>
                 }
             </div>
-
-            {hasQuarters && (
-                <div style={{
-                    height: quarterH, background: 'rgba(0,0,0,0.3)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3,
-                    borderTop: '1px solid rgba(255,255,255,0.06)',
-                }}>
-                    {['Q1','Q2','Q3','Q4'].map(q => {
-                        const l = qL?.[q] ?? 0;
-                        const v = qV?.[q] ?? 0;
-                        if (l === 0 && v === 0) return null;
-                        return (
-                            <div key={q} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 22 }}>
-                                <span style={{ fontSize: '0.38rem', color: '#475569', fontWeight: 700, letterSpacing: '0.5px' }}>{q}</span>
-                                <span style={{ fontSize: '0.48rem', color: localGana || l > v ? '#60a5fa' : '#94a3b8', fontWeight: 800 }}>{l}</span>
-                                <span style={{ fontSize: '0.48rem', color: visitanteGana || v > l ? '#f87171' : '#94a3b8', fontWeight: 800 }}>{v}</span>
-                            </div>
-                        );
-                    })}
+            {fin && (
+                <div style={{ padding: '4px 10px', background: 'rgba(16,185,129,0.1)', borderTop: '1px solid rgba(16,185,129,0.2)', fontSize: '0.5rem', color: '#6ee7b7', fontWeight: 700 }}>
+                    🏆 Avanza: {lG ? m.equipoLocalNombre : m.equipoVisitanteNombre}
                 </div>
             )}
+            {editMode && <button onClick={() => handleSaveScore(m)} style={{ width: '100%', padding: '4px 0', background: 'rgba(16,185,129,0.9)', color: 'white', border: 'none', fontSize: '0.5rem', fontWeight: 900, cursor: 'pointer' }}>GUARDAR</button>}
+        </div>
+    );
+};
 
-            {editMode && (
-                <button onClick={() => handleSaveScore(m)} style={{
-                    position: 'absolute', bottom: 0, left: 0, right: 0,
-                    padding: '3px 0', background: 'rgba(16,185,129,0.9)',
-                    color: 'white', border: 'none', fontSize: '0.45rem', fontWeight: 900, cursor: 'pointer',
-                }}>GUARDAR</button>
+// ── SimpleBracket (Semis → Final) ────────────────────────────────────────
+const SimpleBracket: React.FC<{ semis: Partido[]; final: Partido[]; tercero: Partido[]; title: string; accentColor: string }> = ({ semis, final, tercero, title, accentColor }) => {
+    const CW = 148; const CH = 72; const CONN = 24; const PG = 10;
+
+    const rounds: { matches: Partido[]; label: string }[] = [];
+    if (semis.length > 0) rounds.push({ matches: semis, label: 'SEMIS' });
+    if (final.length > 0) rounds.push({ matches: final, label: 'FINAL' });
+
+    if (rounds.length === 0) return null;
+
+    const getYs = (n: number, ri: number): number[] => {
+        if (ri === 0) {
+            const ys: number[] = [];
+            for (let i = 0; i < n; i++) {
+                const pair = Math.floor(i / 2);
+                const pos  = i % 2;
+                ys.push(pair * (2 * CH + PG + 20) + pos * (CH + PG));
+            }
+            return ys;
+        }
+        const prev = getYs(rounds[ri - 1].matches.length, ri - 1);
+        return Array.from({ length: n }, (_, i) => {
+            const y1 = prev[i * 2] ?? prev[0] ?? 0;
+            const y2 = prev[i * 2 + 1] ?? y1;
+            return (y1 + y2) / 2;
+        });
+    };
+
+    const allYs = rounds.map((r, ri) => getYs(r.matches.length, ri));
+    const firstYs = allYs[0] ?? [];
+    const totalH = firstYs.length > 0 ? firstYs[firstYs.length - 1] + CH + 20 : CH + 40;
+
+    return (
+        <div style={{ marginBottom: 24 }}>
+            {/* Conference header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '0 4px' }}>
+                <div style={{ flex: 1, height: 1, background: `${accentColor}40` }} />
+                <span style={{ fontSize: '0.55rem', fontWeight: 900, color: accentColor, letterSpacing: '2px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{title}</span>
+                <div style={{ flex: 1, height: 1, background: `${accentColor}40` }} />
+            </div>
+
+            {/* Round headers */}
+            <div style={{ display: 'flex', marginBottom: 6 }}>
+                {rounds.map((r, ri) => (
+                    <React.Fragment key={ri}>
+                        <div style={{ width: CW, textAlign: 'center', flexShrink: 0 }}>
+                            <span style={{ fontSize: '0.42rem', fontWeight: 900, letterSpacing: '1.5px', color: r.label === 'FINAL' ? '#fbbf24' : '#475569', textTransform: 'uppercase' }}>
+                                {r.label === 'FINAL' ? '👑 FINAL' : r.label}
+                            </span>
+                        </div>
+                        {ri < rounds.length - 1 && <div style={{ width: CONN, flexShrink: 0 }} />}
+                    </React.Fragment>
+                ))}
+            </div>
+
+            {/* Bracket */}
+            <div style={{ display: 'flex', position: 'relative', height: totalH }}>
+                {rounds.map((r, ri) => (
+                    <React.Fragment key={ri}>
+                        <div style={{ position: 'relative', width: CW, flexShrink: 0, height: totalH }}>
+                            {r.matches.map((m, mi) => (
+                                <div key={m.id} style={{ position: 'absolute', top: allYs[ri]?.[mi] ?? 0, left: 0, width: CW }}>
+                                    <BracketCard partido={m} highlight={r.label === 'FINAL'} cardW={CW} cardH={CH} />
+                                </div>
+                            ))}
+                        </div>
+                        {ri < rounds.length - 1 && (
+                            <div style={{ position: 'relative', width: CONN, flexShrink: 0, height: totalH }}>
+                                {allYs[ri + 1]?.map((toY, ti) => {
+                                    const fromYs = allYs[ri] ?? [];
+                                    const y1 = (fromYs[ti * 2] ?? 0) + CH / 2;
+                                    const y2 = fromYs[ti * 2 + 1] !== undefined ? (fromYs[ti * 2 + 1] + CH / 2) : y1;
+                                    const yTo = toY + CH / 2;
+                                    const hasPair = fromYs[ti * 2 + 1] !== undefined;
+                                    const half = CONN / 2;
+                                    const bc = ri === rounds.length - 2 ? 'rgba(251,191,36,0.6)' : 'rgba(100,116,139,0.5)';
+                                    if (!hasPair) return <div key={ti} style={{ position: 'absolute', top: y1 - 1, left: 0, right: 0, height: 2, background: bc }} />;
+                                    const top = Math.min(y1, y2); const bot = Math.max(y1, y2);
+                                    return (
+                                        <div key={ti} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+                                            <div style={{ position: 'absolute', top: y1 - 1, left: 0, width: half, height: 2, background: bc }} />
+                                            <div style={{ position: 'absolute', top: y2 - 1, left: 0, width: half, height: 2, background: bc }} />
+                                            <div style={{ position: 'absolute', top: top - 1, left: half - 1, width: 2, height: bot - top + 2, background: bc }} />
+                                            <div style={{ position: 'absolute', top: yTo - 1, left: half, right: 0, height: 2, background: bc }} />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </React.Fragment>
+                ))}
+            </div>
+
+            {/* Tercer lugar */}
+            {tercero.length > 0 && (
+                <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ fontSize: '0.42rem', fontWeight: 900, color: '#78716c', letterSpacing: '1.5px', textAlign: 'center', marginBottom: 6 }}>🥉 TERCER LUGAR</div>
+                    {tercero.map(m => (
+                        <BracketCard key={m.id} partido={m} cardW={CW} cardH={CH} />
+                    ))}
+                </div>
             )}
         </div>
     );
 };
 
-const LoadingState = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16 }}>
-        <div style={{
-            width: 44, height: 44, borderRadius: '50%',
-            border: '3px solid rgba(251,191,36,0.2)',
-            borderTop: '3px solid #fbbf24',
-            animation: 'spin 0.8s linear infinite',
-        }} />
-        <p style={{ color: '#475569', fontSize: '0.85rem', letterSpacing: '2px', textTransform: 'uppercase' }}>
-            Cargando llaves...
-        </p>
-    </div>
-);
-
-const ErrorState = ({ message }: { message: string }) => (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 12 }}>
-        <span style={{ fontSize: '2.5rem' }}>⚠️</span>
-        <p style={{ color: '#f87171', fontSize: '0.9rem', fontWeight: 600, maxWidth: 300, textAlign: 'center' }}>
-            {message}
-        </p>
-    </div>
-);
-
-
+// ── MAIN COMPONENT ────────────────────────────────────────────────────────
 const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => {
     const [partidos, setPartidos]     = useState<Partido[]>([]);
     const [loading, setLoading]       = useState(true);
-    const [error, setError]           = useState<string | null>(null);
     const [isAdmin, setIsAdmin]       = useState(false);
     const [editMode, setEditMode]     = useState(false);
     const [editScores, setEditScores] = useState<Record<string, EditScore>>({});
     const [toast, setToast]           = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+    const [tab, setTab]               = useState<'este' | 'oeste'>('este');
 
     const colName = categoria.trim().toUpperCase() === 'MASTER40'
-        ? 'calendario'
-        : `calendario_${categoria.trim().toUpperCase()}`;
+        ? 'calendario' : `calendario_${categoria.trim().toUpperCase()}`;
 
     useEffect(() => {
-        const check = async () => {
-            const user = auth.currentUser;
-            if (!user) return;
-            try {
-                const snap = await getDoc(doc(db, 'usuarios', user.uid));
-                if (snap.exists() && snap.data().rol === 'admin') setIsAdmin(true);
-            } catch { /* silencioso */ }
-        };
-        check();
+        const user = auth.currentUser;
+        if (!user) return;
+        getDoc(doc(db, 'usuarios', user.uid))
+            .then(snap => { if (snap.data()?.rol === 'admin') setIsAdmin(true); })
+            .catch(() => {});
     }, []);
 
     useEffect(() => {
         setLoading(true);
-        setError(null);
         const q = query(collection(db, colName), orderBy('fechaAsignada', 'asc'));
-        const unsub = onSnapshot(
-            q,
-            snap => {
-                const data = snap.docs
-                    .map(d => ({ id: d.id, ...d.data() } as Partido))
-                    .filter(m => m.fase && m.fase.toUpperCase() !== 'REGULAR');
-                setPartidos(data);
-                setLoading(false);
-            },
-            err => {
-                console.error(err);
-                setError('No se pudieron cargar las llaves. Verifica tu conexión.');
-                setLoading(false);
-            }
-        );
-        return () => unsub();
+        return onSnapshot(q, snap => {
+            const data = snap.docs
+                .map(d => ({ id: d.id, ...d.data() } as Partido))
+                .filter(m => m.fase && m.fase.toUpperCase() !== 'REGULAR');
+            setPartidos(data);
+            setLoading(false);
+        }, () => setLoading(false));
     }, [colName]);
 
     const setEditScore = useCallback((id: string, field: 'l' | 'v', value: number) => {
-        setEditScores(prev => ({
-            ...prev,
-            [id]: { ...(prev[id] ?? { l: 0, v: 0 }), [field]: value },
-        }));
+        setEditScores(prev => ({ ...prev, [id]: { ...(prev[id] ?? { l: 0, v: 0 }), [field]: value } }));
     }, []);
 
     const handleSaveScore = useCallback(async (partido: Partido) => {
@@ -275,14 +277,10 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
         if (!score) { showToast('Modifica el marcador antes de guardar.', 'err'); return; }
         try {
             await updateDoc(doc(db, colName, partido.id), {
-                marcadorLocal: score.l,
-                marcadorVisitante: score.v,
-                estatus: 'finalizado',
+                marcadorLocal: score.l, marcadorVisitante: score.v, estatus: 'finalizado',
             });
             showToast('Resultado guardado ✓', 'ok');
-        } catch {
-            showToast('Error al guardar. Intenta de nuevo.', 'err');
-        }
+        } catch { showToast('Error al guardar.', 'err'); }
     }, [editScores, colName]);
 
     const showToast = (msg: string, type: 'ok' | 'err') => {
@@ -290,291 +288,194 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
         setTimeout(() => setToast(null), 3000);
     };
 
-    const getByFase = (...nombres: string[]) =>
-        partidos.filter(m => nombres.some(n => m.fase?.toUpperCase() === n.toUpperCase()));
+    // ── Filtros por conferencia y fase ──────────────────────────────────
+    const byConf = (conf: 'A' | 'B' | 'GRAND') =>
+        partidos.filter(m => (m.grupo ?? '').toUpperCase() === conf);
 
-    const octavos     = getByFase('OCTAVOS');
-    const cuartos     = getByFase('CUARTOS');
-    const semis       = getByFase('SEMIS', 'SEMIFINAL');
-    const finalP      = getByFase('FINAL', 'GRAN FINAL');
-    const tercerLugar = getByFase('3ER LUGAR', 'TERCER LUGAR');
+    const byFase = (list: Partido[], ...fases: string[]) =>
+        list.filter(m => fases.some(f => m.fase?.toUpperCase() === f.toUpperCase()));
 
-    const hayPartidos = octavos.length + cuartos.length + semis.length + finalP.length > 0;
+    // CONF. ESTE (grupo A)
+    const esteAll     = byConf('A');
+    const estePlayIn  = byFase(esteAll, 'PLAYIN', 'PLAY-IN', 'PLAY_IN');
+    const esteSemis   = byFase(esteAll, 'SEMIS', 'SEMIFINAL');
+    const esteFinal   = byFase(esteAll, 'FINAL', 'GRAN FINAL');
+    const esteTercero = byFase(esteAll, '3ER LUGAR', 'TERCER LUGAR');
 
-    const editCtx: EditContextType = {
-        editMode, editScores, setEditScore, handleSaveScore, categoria, colName,
-    };
+    // CONF. OESTE (grupo B)
+    const oesteAll     = byConf('B');
+    const oesteSemis   = byFase(oesteAll, 'SEMIS', 'SEMIFINAL');
+    const oesteFinal   = byFase(oesteAll, 'FINAL', 'GRAN FINAL');
+    const oesteTercero = byFase(oesteAll, '3ER LUGAR', 'TERCER LUGAR');
 
-    // Trophy URL — replace with Firebase Storage URL if available
-    const TROPHY_URL = 'https://i.postimg.cc/43GDW4jB/image.png';
+    // Grand Final (sin grupo, o grupo GRAND)
+    const grandFinal = byFase(byConf('GRAND'), 'FINAL', 'GRAN FINAL')
+        .concat(byFase(partidos.filter(m => !m.grupo || m.grupo.toUpperCase() === 'GRAND'), 'GRAN FINAL', 'GRAND FINAL'));
+
+    const hayDatos = partidos.length > 0;
+
+    const editCtx: EditContextType = { editMode, editScores, setEditScore, handleSaveScore, categoria, colName };
 
     return (
         <EditContext.Provider value={editCtx}>
-            <div style={{
-                position: 'relative', minHeight: '100vh',
-                background: 'radial-gradient(ellipse at 50% 0%, #0f1f3d 0%, #020617 70%)',
-                overflowY: 'auto', overflowX: 'hidden',
-                color: 'white', fontFamily: "'Inter','Segoe UI',sans-serif",
-            }}>
-                <div style={{
-                    position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
-                    background: 'radial-gradient(circle at 30% 20%,rgba(59,130,246,0.05) 0%,transparent 50%), radial-gradient(circle at 70% 80%,rgba(251,191,36,0.04) 0%,transparent 50%)',
-                }} />
-
-                <style>{`
-                    @keyframes spin        { to { transform: rotate(360deg); } }
-                    @keyframes fadeUp      { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
-                    @keyframes trophyFloat { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-7px); } }
-                `}</style>
+            <div style={{ position: 'relative', minHeight: '100vh', background: 'radial-gradient(ellipse at 50% 0%, #0f1f3d 0%, #020617 70%)', color: 'white', fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes fadeUp { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`}</style>
 
                 {/* Header */}
-                <div style={{ background: '#fff', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+                <div style={{ background: '#fff', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e7eb' }}>
                     <div>
-                        <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
-                            🏆 Playoff {categoria}
-                        </h2>
+                        <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>🏆 Playoff {categoria}</h2>
                         <p style={{ margin: '2px 0 0', fontSize: '0.6rem', color: '#94a3b8' }}>Road to the Finals</p>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
                         {isAdmin && (
                             <button onClick={() => setEditMode(v => !v)} style={{ background: editMode ? '#fef3c7' : '#f1f5f9', color: editMode ? '#d97706' : '#64748b', border: 'none', padding: '6px 12px', borderRadius: 8, fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer' }}>
                                 {editMode ? '👁 VER' : '⚙️ EDITAR'}
                             </button>
                         )}
-                        <button onClick={onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>
-                            ← VOLVER
-                        </button>
+                        <button onClick={onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>← VOLVER</button>
                     </div>
                 </div>
-                {/* Contenido */}
-                {loading    ? <LoadingState /> :
-                 error      ? <ErrorState message={error} /> :
-                 !hayPartidos ? (
-                    <div style={{ textAlign: 'center', padding: '80px 20px', color: '#475569' }}>
-                        <div style={{ fontSize: '3rem', marginBottom: 16 }}>🏆</div>
-                        <p style={{ fontWeight: 700, fontSize: '0.9rem', color: '#64748b' }}>
-                            Los playoffs aún no han comenzado
-                        </p>
-                        <p style={{ fontSize: '0.72rem', marginTop: 8, color: '#334155' }}>
-                            Los partidos aparecerán aquí cuando se programen.
-                        </p>
+
+                {/* Tabs */}
+                <div style={{ display: 'flex', background: 'rgba(0,0,0,0.4)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    {([['este', '🔵 CONF. ESTE', '#3b82f6'], ['oeste', '🟠 CONF. OESTE', '#f97316']] as const).map(([id, label, color]) => (
+                        <button key={id} onClick={() => setTab(id)} style={{ flex: 1, padding: '10px 0', background: tab === id ? `${color}22` : 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${color}` : '2px solid transparent', color: tab === id ? color : 'rgba(255,255,255,0.4)', fontSize: '0.65rem', fontWeight: 900, cursor: 'pointer', letterSpacing: '1px' }}>
+                            {label}
+                        </button>
+                    ))}
+                </div>
+
+                {loading ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16, flexDirection: 'column' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid rgba(251,191,36,0.2)', borderTop: '3px solid #fbbf24', animation: 'spin 0.8s linear infinite' }} />
+                        <p style={{ color: '#475569', fontSize: '0.85rem' }}>Cargando llaves...</p>
                     </div>
-                 ) : (
-                    <main style={{ padding: '12px 0 80px', position: 'relative', zIndex: 1 }}>
-                    {(() => {
-                        const hasOct  = octavos.length  > 0;
-                        const hasQtr  = cuartos.length  > 0;
-                        const hasSemi = semis.length    > 0;
-                        const hasFin  = finalP.length   > 0;
+                ) : !hayDatos ? (
+                    <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+                        <div style={{ fontSize: '3rem', marginBottom: 16 }}>🏆</div>
+                        <p style={{ fontWeight: 700, color: '#64748b' }}>Los playoffs aún no han comenzado</p>
+                    </div>
+                ) : (
+                    <main style={{ padding: '16px 12px 100px', maxWidth: 500, margin: '0 auto' }}>
 
-                        type Round = { matches: Partido[]; label: string };
-                        const rounds: Round[] = [];
-                        if (hasOct)  rounds.push({ matches: octavos, label: 'OCTAVOS' });
-                        if (hasQtr)  rounds.push({ matches: cuartos, label: 'CUARTOS' });
-                        if (hasSemi) rounds.push({ matches: semis,   label: 'SEMIS'   });
-                        if (hasFin)  rounds.push({ matches: finalP,  label: 'FINAL'   });
-
-                        const PAD    = 10;
-                        const CH     = 82;
-                        const PG     = 8;
-                        const BG     = 28;
-                        const nCols  = rounds.length;
-                        const scrW   = Math.min(window.innerWidth, 500);
-                        const usable = scrW - PAD * 2;
-                        const CW     = Math.floor(usable / (nCols + 0.14 * Math.max(nCols - 1, 0)));
-                        const CONN   = Math.floor(CW * 0.14);
-                        const bc     = 'rgba(100,116,139,0.5)';
-                        const bcG    = 'rgba(251,191,36,0.6)';
-
-                        // Trophy height reserved above FINAL column header
-                        const TROPHY_H = hasFin ? 110 : 0;
-
-                        const getYs = (n: number, roundIdx: number): number[] => {
-                            if (roundIdx === 0) {
-                                const ys: number[] = [];
-                                for (let i = 0; i < n; i++) {
-                                    const pair = Math.floor(i / 2);
-                                    const pos  = i % 2;
-                                    ys.push(pair * (2 * CH + PG + BG) + pos * (CH + PG));
-                                }
-                                return ys;
-                            }
-                            const prevYs = getYs(rounds[roundIdx - 1].matches.length, roundIdx - 1);
-                            const ys: number[] = [];
-                            for (let i = 0; i < n; i++) {
-                                const y1 = prevYs[i * 2]       ?? prevYs[0] ?? 0;
-                                const y2 = prevYs[i * 2 + 1]   ?? y1;
-                                ys.push((y1 + y2) / 2);
-                            }
-                            return ys;
-                        };
-
-                        const TROPHY_BOX = 100;
-                        const allYs  = rounds.map((r, ri) => getYs(r.matches.length, ri));
-                        const firstYs = allYs[0] ?? [];
-                        const totalH  = firstYs.length > 0
-                            ? firstYs[firstYs.length - 1] + CH + 20
-                            : CH + 20;
-
-                        const renderConnectors = (ri: number) => {
-                            const fromYs = allYs[ri]     ?? [];
-                            const toYs   = allYs[ri + 1] ?? [];
-                            const isFinal = ri === rounds.length - 2;
-                            const color  = isFinal ? bcG : bc;
-
-                            return toYs.map((toY, ti) => {
-                                const fi1 = ti * 2;
-                                const fi2 = ti * 2 + 1;
-                                const y1  = (fromYs[fi1] ?? fromYs[0] ?? 0) + CH / 2;
-                                const y2  = (fromYs[fi2] !== undefined ? fromYs[fi2] : fromYs[fi1] ?? 0) + CH / 2;
-                                const yTo = toY + CH / 2;
-                                const hasPair = fromYs[fi2] !== undefined;
-
-                                if (!hasPair) {
-                                    return (
-                                        <div key={ti} style={{
-                                            position: 'absolute',
-                                            top: y1 - 1, left: 0, right: 0, height: 2,
-                                            background: color,
-                                        }} />
-                                    );
-                                }
-
-                                const top    = Math.min(y1, y2);
-                                const bot    = Math.max(y1, y2);
-                                const half   = CONN / 2;
-
-                                return (
-                                    <div key={ti} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
-                                        <div style={{ position: 'absolute', top: y1 - 1, left: 0, width: half, height: 2, background: color }} />
-                                        <div style={{ position: 'absolute', top: y2 - 1, left: 0, width: half, height: 2, background: color }} />
-                                        <div style={{ position: 'absolute', top: top - 1, left: half - 1, width: 2, height: bot - top + 2, background: color }} />
-                                        <div style={{ position: 'absolute', top: yTo - 1, left: half, right: 0, height: 2, background: color }} />
-                                    </div>
-                                );
-                            });
-                        };
-
-                        return (
-                            <div style={{ padding: `0 ${PAD}px` }}>
-                                {/* Headers row */}
-                                <div style={{ display: 'flex', marginBottom: 8, alignItems: 'center' }}>
-                                    {rounds.map((r, ri) => {
-                                        const isFinal = r.label === 'FINAL';
-                                        return (
-                                            <React.Fragment key={ri}>
-                                                <div style={{ width: CW, textAlign: 'center', flexShrink: 0 }}>
-                                                    <span style={{
-                                                        fontSize: '0.45rem', fontWeight: 900, letterSpacing: '2px',
-                                                        color: isFinal ? '#fbbf24' : '#475569',
-                                                        textTransform: 'uppercase',
-                                                    }}>
-                                                        {r.label === 'SEMIS' ? 'SEMIFINAL' : isFinal ? '👑 GRAN FINAL' : r.label}
-                                                    </span>
-                                                </div>
-                                                {ri < rounds.length - 1 && <div style={{ width: CONN, flexShrink: 0 }} />}
-                                            </React.Fragment>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* Bracket */}
-                                <div style={{ display: 'flex', position: 'relative', height: totalH, marginTop: hasFin ? TROPHY_BOX + 14 : 0 }}>
-                                    {rounds.map((r, ri) => (
-                                        <React.Fragment key={ri}>
-                                            <div style={{ position: 'relative', width: CW, flexShrink: 0, height: totalH }}>
-                                                {r.matches.map((m, mi) => {
-                                                    const cardTop = allYs[ri]?.[mi] ?? 0;
-                                                    const isFinalCard = r.label === 'FINAL';
-                                                    return (
-                                                        <React.Fragment key={m.id}>
-                                                            {/* Trophy frame between label and final card */}
-                                                            {isFinalCard && mi === 0 && (
-                                                                <div style={{
-                                                                    position: 'absolute',
-                                                                    top: cardTop - TROPHY_BOX - 10,
-                                                                    left: CW / 2 - TROPHY_BOX / 2,
-                                                                    width: TROPHY_BOX,
-                                                                    height: TROPHY_BOX,
-                                                                    borderRadius: 12,
-                                                                    border: '2px solid rgba(251,191,36,0.6)',
-                                                                    background: 'linear-gradient(135deg, rgba(251,191,36,0.08) 0%, rgba(15,23,42,0.9) 100%)',
-                                                                    boxShadow: '0 0 24px rgba(251,191,36,0.2), inset 0 0 16px rgba(251,191,36,0.05)',
-                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                    overflow: 'hidden',
-                                                                }}>
-                                                                    <img
-                                                                        src={TROPHY_URL}
-                                                                        alt="Trofeo"
-                                                                        style={{
-                                                                            width: '88%', height: '88%',
-                                                                            objectFit: 'contain',
-                                                                            filter: 'drop-shadow(0 0 12px rgba(251,191,36,0.6))',
-                                                                            animation: 'trophyFloat 3s ease-in-out infinite',
-                                                                        }}
-                                                                    />
-                                                                </div>
-                                                            )}
-                                                            <div style={{
-                                                                position: 'absolute',
-                                                                top: cardTop,
-                                                                left: 0, width: CW,
-                                                            }}>
-                                                                <BracketCard
-                                                                    partido={m}
-                                                                    highlight={isFinalCard}
-                                                                    x={0} y={0}
-                                                                    cardW={CW}
-                                                                    cardH={CH}
-                                                                />
-                                                            </div>
-                                                        </React.Fragment>
-                                                    );
-                                                })}
+                        {/* ── CONF. ESTE ── */}
+                        {tab === 'este' && (
+                            <>
+                                {/* PLAY-IN */}
+                                {estePlayIn.length > 0 && (
+                                    <div style={{ marginBottom: 24 }}>
+                                        {/* Header Play-In */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                                            <div style={{ flex: 1, height: 1, background: 'rgba(99,102,241,0.4)' }} />
+                                            <div style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)', borderRadius: 20, padding: '4px 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span style={{ fontSize: '0.55rem', fontWeight: 900, color: '#818cf8', letterSpacing: '2px' }}>⚡ PLAY-IN CONFERENCIA ESTE</span>
                                             </div>
+                                            <div style={{ flex: 1, height: 1, background: 'rgba(99,102,241,0.4)' }} />
+                                        </div>
 
-                                            {ri < rounds.length - 1 && (
-                                                <div style={{ position: 'relative', width: CONN, flexShrink: 0, height: totalH }}>
-                                                    {renderConnectors(ri)}
-                                                </div>
-                                            )}
-                                        </React.Fragment>
-                                    ))}
-                                </div>
-                            </div>
-                        );
-                    })()}
+                                        {/* Explicación */}
+                                        <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 12, fontSize: '0.55rem', color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>
+                                            🏅 <b style={{ color: '#818cf8' }}>1° y 2°</b> pasan directo a Semis&nbsp;&nbsp;·&nbsp;&nbsp;
+                                            🎯 <b style={{ color: '#818cf8' }}>3°-6°</b> disputan Play-In — los ganadores avanzan a Semis
+                                        </div>
 
-                    {/* 3er lugar */}
-                    {tercerLugar.length > 0 && (
-                        <div style={{ margin: '20px 10px 0', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
-                            <div style={{ textAlign: 'center', marginBottom: 8, fontSize: '0.5rem', fontWeight: 900, letterSpacing: '2px', color: '#78716c' }}>
-                                🥉 TERCER LUGAR
-                            </div>
-                            {tercerLugar.map(m => (
-                                <div key={m.id} style={{ position: 'relative', height: 82, marginBottom: 8 }}>
-                                    <BracketCard partido={m} highlight={false} x={0} y={0} cardW={280} cardH={82} />
+                                        {/* Matches Play-In */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                            {(() => {
+                                                // Ordenar: 3v6 primero, 4v5 segundo (por hora/fecha o índice)
+                                                const sorted = [...estePlayIn].sort((a, b) =>
+                                                    (a.fechaAsignada ?? '').localeCompare(b.fechaAsignada ?? '') ||
+                                                    (a.equipoLocalNombre ?? '').localeCompare(b.equipoLocalNombre ?? '')
+                                                );
+                                                const labels = ['3° vs 6°', '4° vs 5°'];
+                                                return sorted.map((m, i) => (
+                                                    <PlayInCard key={m.id} partido={m} label={labels[i] ?? `Partido ${i + 1}`} />
+                                                ));
+                                            })()}
+                                        </div>
+
+                                        {/* Flecha indicando que los ganadores van a Semis */}
+                                        {estePlayIn.length > 0 && esteSemis.length > 0 && (
+                                            <div style={{ textAlign: 'center', margin: '10px 0 0', fontSize: '0.5rem', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                                <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                                                <span style={{ color: '#6366f1' }}>↓ ganadores pasan a Semis</span>
+                                                <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* BRACKET ESTE */}
+                                {(esteSemis.length > 0 || esteFinal.length > 0) && (
+                                    <SimpleBracket
+                                        semis={esteSemis}
+                                        final={esteFinal}
+                                        tercero={esteTercero}
+                                        title="🔵 Bracket Conferencia Este"
+                                        accentColor="#3b82f6"
+                                    />
+                                )}
+
+                                {estePlayIn.length === 0 && esteSemis.length === 0 && esteFinal.length === 0 && (
+                                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#475569' }}>
+                                        <div style={{ fontSize: '2rem', marginBottom: 10 }}>🔵</div>
+                                        <p style={{ fontSize: '0.8rem' }}>No hay partidos de Conf. Este programados aún</p>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {/* ── CONF. OESTE ── */}
+                        {tab === 'oeste' && (
+                            <>
+                                {/* Info directas */}
+                                {oesteSemis.length > 0 && (
+                                    <div style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 16, fontSize: '0.55rem', color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>
+                                        🏅 Los <b style={{ color: '#fb923c' }}>4 mejores</b> de Conf. Oeste avanzan directo a Semis — sin Play-In
+                                    </div>
+                                )}
+
+                                {/* BRACKET OESTE */}
+                                {(oesteSemis.length > 0 || oesteFinal.length > 0) ? (
+                                    <SimpleBracket
+                                        semis={oesteSemis}
+                                        final={oesteFinal}
+                                        tercero={oesteTercero}
+                                        title="🟠 Bracket Conferencia Oeste"
+                                        accentColor="#f97316"
+                                    />
+                                ) : (
+                                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#475569' }}>
+                                        <div style={{ fontSize: '2rem', marginBottom: 10 }}>🟠</div>
+                                        <p style={{ fontSize: '0.8rem' }}>No hay partidos de Conf. Oeste programados aún</p>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {/* ── GRAN FINAL ── (visible en ambos tabs si existe) */}
+                        {grandFinal.length > 0 && (
+                            <div style={{ marginTop: 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                                    <div style={{ flex: 1, height: 1, background: 'rgba(251,191,36,0.4)' }} />
+                                    <div style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.4)', borderRadius: 20, padding: '5px 16px' }}>
+                                        <span style={{ fontSize: '0.58rem', fontWeight: 900, color: '#fbbf24', letterSpacing: '2px' }}>👑 GRAN FINAL</span>
+                                    </div>
+                                    <div style={{ flex: 1, height: 1, background: 'rgba(251,191,36,0.4)' }} />
                                 </div>
-                            ))}
-                        </div>
-                    )}
+                                {grandFinal.map(m => (
+                                    <BracketCard key={m.id} partido={m} highlight cardW={300} cardH={80} />
+                                ))}
+                            </div>
+                        )}
+
                     </main>
                 )}
 
                 {/* Toast */}
                 {toast && (
-                    <div style={{
-                        position: 'fixed', bottom: 28, left: '50%',
-                        transform: 'translateX(-50%)',
-                        background: toast.type === 'ok'
-                            ? 'rgba(16,185,129,0.95)' : 'rgba(239,68,68,0.95)',
-                        color: 'white', padding: '10px 24px', borderRadius: 10,
-                        fontSize: '0.8rem', fontWeight: 700,
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                        zIndex: 9999, backdropFilter: 'blur(8px)',
-                        animation: 'fadeUp 0.2s ease',
-                        whiteSpace: 'nowrap',
-                    }}>
+                    <div style={{ position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)', background: toast.type === 'ok' ? 'rgba(16,185,129,0.95)' : 'rgba(239,68,68,0.95)', color: 'white', padding: '10px 24px', borderRadius: 10, fontSize: '0.8rem', fontWeight: 700, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 9999, animation: 'fadeUp 0.2s ease', whiteSpace: 'nowrap' }}>
                         {toast.msg}
                     </div>
                 )}
