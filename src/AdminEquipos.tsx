@@ -53,7 +53,6 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
     const [uploadingId, setUploadingId] = useState<string | null>(null);
 
     const [teamName, setTeamName]   = useState('');
-    const [teamGroup, setTeamGroup] = useState('A');
     const [newLogoUrl, setNewLogoUrl] = useState('');
 
     const [selectedTeam, setSelectedTeam] = useState<Equipo | null>(null);
@@ -215,7 +214,6 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
         try {
             await addDoc(collection(db, colEquipos), {
                 nombre: teamName.toUpperCase(),
-                grupo: teamGroup,
                 logoUrl: newLogoUrl || DEFAULT_LOGO,
                 victorias: 0, derrotas: 0, puntos: 0,
                 puntos_favor: 0, puntos_contra: 0,
@@ -387,13 +385,7 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
                                 onChange={e => setTeamName(e.target.value.toUpperCase())}
                                 style={{ width: '100%', padding: 12, marginBottom: 10, borderRadius: 8, border: '1px solid #ccc' }}
                             />
-                            <select
-                                value={teamGroup} onChange={e => setTeamGroup(e.target.value)}
-                                style={{ width: '100%', padding: 12, marginBottom: 10, borderRadius: 8, border: '1px solid #ccc' }}
-                            >
-                                <option value="A">Grupo A</option>
-                                <option value="B">Grupo B</option>
-                            </select>
+
                             <button
                                 onClick={handleCreateTeam}
                                 style={{ width: '100%', padding: 15, background: '#1e3a8a', color: 'white', border: 'none', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}
