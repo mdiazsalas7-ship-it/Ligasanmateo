@@ -537,7 +537,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     });
                 });
 
-                batch.update(doc(db, colCal, matchData.id), { estatus: 'finalizado' });
+                batch.update(doc(db, colCal, matchData.id), { estatus: 'finalizado', enVivo: false });
                 await batch.commit();
                 // Limpiar estado guardado de la mesa al finalizar
                 try { await deleteDoc(doc(db, 'mesa_estado', matchData.id)); } catch (_) {}
@@ -754,13 +754,14 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     </div>
                 </div>
                 <button
-                    onClick={() => {
+                    onClick={async () => {
                         setStartersDone(true);
                         saveEstado({
                             presentLocal, presentVisitante,
                             onCourtLocal, onCourtVisitante,
                             checkInDone: true, startersDone: true,
                         });
+                        try { await updateDoc(doc(db, colCal, selectedMatchId!), { enVivo: true }); } catch(_) {}
                     }}
                     disabled={onCourtLocal.length !== 5 || onCourtVisitante.length !== 5}
                     style={{
@@ -859,7 +860,10 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                         }}>{q}</button>
                     ))}
                     <div style={{ flex: 1 }} />
-                    <button onClick={() => setSelectedMatchId(null)} style={actionBtnStyle('#1e293b')}>SALIR</button>
+                    <button onClick={async () => {
+                        try { if (matchData) await updateDoc(doc(db, colCal, matchData.id), { enVivo: false }); } catch(_) {}
+                        setSelectedMatchId(null);
+                    }} style={actionBtnStyle('#1e293b')}>SALIR</button>
                     <button onClick={handleUndo} style={actionBtnStyle('#92400e')}>↩️</button>
                     <button onClick={() => setIsHistoryOpen(true)} style={actionBtnStyle('#334155')}>📜</button>
                     <button onClick={handleFinalize} style={{ ...actionBtnStyle('#065f46'), fontWeight: 900, paddingLeft: 10, paddingRight: 10 }}>✅ FINAL</button>
