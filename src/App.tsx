@@ -191,6 +191,7 @@ function App() {
     const [liveGameId, setLiveGameId]               = useState<string | null>(null);
     const [showLiveSelector, setShowLiveSelector]   = useState(false);
     const [hasLiveGame, setHasLiveGame]             = useState(false);
+    const [liveMatchName, setLiveMatchName]         = useState('');
 
     const [noticiaIndex, setNoticiaIndex]   = useState(0);
     const [juegoIndex, setJuegoIndex]       = useState(0);
@@ -232,6 +233,10 @@ function App() {
                     // Store categoria too for the viewer
                     (window as any).__liveCategoria = cat;
                     (window as any).__livePartidoId = match.id;
+                    const d = match.data();
+                    const local = (d.equipoLocalNombre || '').split(' ')[0];
+                    const visit = (d.equipoVisitanteNombre || '').split(' ')[0];
+                    setLiveMatchName(`${local} vs ${visit}`);
                 }
             });
             unsubs.push(unsub);
@@ -926,8 +931,11 @@ function App() {
                         boxShadow: '0 4px 20px rgba(239,68,68,0.5)',
                     }}
                 >
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />
-                    🔴 EN VIVO
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white', flexShrink: 0 }} />
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.2 }}>
+                        <span style={{ fontSize: '0.58rem', fontWeight: 900, letterSpacing: '1px' }}>🔴 EN VIVO</span>
+                        {liveMatchName && <span style={{ fontSize: '0.52rem', fontWeight: 600, opacity: 0.85 }}>{liveMatchName}</span>}
+                    </div>
                 </button>
             )}
             {liveGameId && (
