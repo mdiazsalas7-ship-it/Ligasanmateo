@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, memo } from 'react';
 import './App.css';
 import { db, auth } from './firebase';
-import { doc, onSnapshot, collection, query, orderBy, getDocs, limit } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, orderBy, getDocs, limit, where } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 // Componentes
@@ -17,9 +17,9 @@ import NewsFeed from './NewsFeed';
 import PlayoffViewer from './PlayoffViewer';
 import AdminVideos from './AdminVideos';
 import MetroTicker from './MetroTicker';
+import LiveGameViewer, { LiveGameSelector } from './LiveGameViewer';
 import { useNotifications } from './useNotifications';
 import ResetTemporada from './ResetTemporada';
-import ConfigTorneo from './ConfigTorneo';
 
 // ─────────────────────────────────────────────
 // CONSTANTES
@@ -188,7 +188,9 @@ function App() {
     const [loading, setLoading]                     = useState(true);
     const [activeView, setActiveView]               = useState('dashboard');
     const [showReset, setShowReset]                 = useState(false);
-    const [showConfig, setShowConfig]               = useState(false);
+    const [liveGameId, setLiveGameId]               = useState<string | null>(null);
+    const [showLiveSelector, setShowLiveSelector]   = useState(false);
+    const [hasLiveGame, setHasLiveGame]             = useState(false);
 
     const [noticiaIndex, setNoticiaIndex]   = useState(0);
     const [juegoIndex, setJuegoIndex]       = useState(0);
@@ -211,6 +213,31 @@ function App() {
         }
         return `GRUPO ${g}`;
     };
+
+    // ── Detectar partidos EN VIVO en todas las categorías ──
+    useEffect(() => {
+        const categorias = ['LIBRE','INTERINDUSTRIAL','U16_FEMENINO','U16M','MASTER40'];
+        const unsubs: (() => void)[] = [];
+        const counts: Record<string, number> = {};
+        categorias.forEach(cat => {
+            const colCal = cat === 'MASTER40' ? 'calendario' : `calendario_${cat}`;
+            const q2 = query(collection(db, colCal), where('enVivo', '==', true));
+            const unsub = onSnapshot(q2, snap => {
+                counts[cat] = snap.docs.length;
+                const total = Object.values(counts).reduce((a, b) => a + b, 0);
+                setHasLiveGame(total > 0);
+                if (total > 0 && snap.docs.length > 0) {
+                    // Set the first live game found
+                    const match = snap.docs[0];
+                    // Store categoria too for the viewer
+                    (window as any).__liveCategoria = cat;
+                    (window as any).__livePartidoId = match.id;
+                }
+            });
+            unsubs.push(unsub);
+        });
+        return () => unsubs.forEach(u => u());
+    }, []);
 
     // ── Auth — sin activeView en las dependencias ──
     useEffect(() => {
@@ -815,10 +842,7 @@ function App() {
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
                                     <button onClick={() => setActiveView('adminVideos')} style={adminBtnStyle}>🎥 VIDEOS</button>
-                                    <button onClick={() => setShowConfig(true)} style={{ ...adminBtnStyle, background: 'rgba(99,102,241,0.2)', border: '1px solid #6366f1', color: '#c7d2fe' }}>⚙️ CONFIG</button>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10, marginTop: 10 }}>
-                                    <button onClick={() => setShowReset(true)} style={{ ...adminBtnStyle, background: 'rgba(239,68,68,0.25)', border: '1px solid #ef4444', color: '#fca5a5' }}>☢️ RESET TEMPORADA</button>
+                                    <button onClick={() => setShowReset(true)} style={{ ...adminBtnStyle, background: 'rgba(239,68,68,0.25)', border: '1px solid #ef4444', color: '#fca5a5' }}>☢️ RESET</button>
                                 </div>
                                 <button onClick={() => signOut(auth)} style={{ marginTop: 10, background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: '0.5rem', fontWeight: 'bold', cursor: 'pointer' }}>
                                     SALIR ADMIN
@@ -841,8 +865,8 @@ function App() {
                 )}
             </main>
 
-            {/* ── Barra de navegación ── */}
-            <nav style={{
+            {/* ── Barra de navegación — oculta en mesa ── */}
+            {activeView !== 'mesa' && <nav style={{
                 position: 'fixed', bottom: 20, left: 20, right: 20,
                 background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(10px)',
                 height: 75, display: 'flex', justifyContent: 'flex-start',
@@ -878,10 +902,52 @@ function App() {
                         <span style={{ fontSize: '0.55rem', fontWeight: 900, textTransform: 'uppercase' }}>{item.l}</span>
                     </button>
                 ))}
-            </nav>
+            </nav>}
+
+            {/* ── Botón EN VIVO flotante ── */}
+            {hasLiveGame && activeView !== 'mesa' && !liveGameId && (
+                <button
+                    onClick={() => {
+                        // If only one live game, go directly
+                        const id = (window as any).__livePartidoId;
+                        const cat = (window as any).__liveCategoria;
+                        if (id && cat) {
+                            setLiveGameId(id);
+                        } else {
+                            setShowLiveSelector(true);
+                        }
+                    }}
+                    style={{
+                        position: 'fixed', bottom: 104, right: 16, zIndex: 1100,
+                        background: '#ef4444', color: 'white', border: 'none',
+                        borderRadius: 30, padding: '10px 16px',
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        fontWeight: 900, fontSize: '0.72rem', cursor: 'pointer',
+                        boxShadow: '0 4px 20px rgba(239,68,68,0.5)',
+                    }}
+                >
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />
+                    🔴 EN VIVO
+                </button>
+            )}
+            {liveGameId && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 4500, overflowY: 'auto' }}>
+                    <LiveGameViewer
+                        partidoId={liveGameId}
+                        categoria={(window as any).__liveCategoria || categoriaActiva}
+                        onClose={() => setLiveGameId(null)}
+                    />
+                </div>
+            )}
+            {showLiveSelector && (
+                <LiveGameSelector
+                    categoria={categoriaActiva}
+                    onSelect={id => { setLiveGameId(id); setShowLiveSelector(false); }}
+                    onClose={() => setShowLiveSelector(false)}
+                />
+            )}
 
             {showReset && <ResetTemporada categoria={categoriaActiva} onClose={() => setShowReset(false)} />}
-            {showConfig && <div style={{ position: 'fixed', inset: 0, zIndex: 4000, overflowY: 'auto' }}><ConfigTorneo onClose={() => setShowConfig(false)} /></div>}
 
             <style>{`
                 .no-scrollbar::-webkit-scrollbar { display: none; }
