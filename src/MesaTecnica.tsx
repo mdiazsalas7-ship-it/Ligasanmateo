@@ -119,35 +119,50 @@ const PlayerRow = memo(({
         const isFlash = flashing === accion;
         return (
             <button onClick={() => onStat(player, team, accion, 1)} style={{
-                flex: 1, background: isFlash ? 'white' : bg,
-                color: isFlash ? bg : 'white', border: 'none', borderRadius: 6,
+                flex: 1,
+                background: isFlash ? 'white' : bg,
+                color: isFlash ? bg : 'white',
+                border: 'none', borderRadius: 5,
                 fontWeight: 900, cursor: 'pointer',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                transform: isFlash ? 'scale(0.92)' : 'scale(1)', transition: 'transform 0.1s',
-                minWidth: 0, padding: '4px 0',
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                transform: isFlash ? 'scale(0.92)' : 'scale(1)',
+                transition: 'transform 0.1s',
+                minWidth: 0, minHeight: 0,
             }}>
-                <span style={{ fontSize: '0.6rem', lineHeight: 1 }}>{label}</span>
-                <span style={{ fontSize: '0.88rem', fontWeight: 900, lineHeight: 1.2 }}>{count}</span>
+                <span style={{ fontSize: '0.58rem', lineHeight: 1 }}>{label}</span>
+                <span style={{ fontSize: '0.95rem', fontWeight: 900, lineHeight: 1.2 }}>{count}</span>
             </button>
         );
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', padding: '3px 2px', borderBottom: '1px solid #111', flex: 1 }}>
-            {/* Fila: número + nombre + cambio */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3, minWidth: 0 }}>
-                <span style={{ background: teamColor, color: 'white', padding: '2px 6px', borderRadius: 5, fontWeight: 900, fontSize: '0.82rem', minWidth: 28, textAlign: 'center', flexShrink: 0 }}>
-                    {player.numero ?? '??'}
-                </span>
-                <span style={{ fontWeight: 800, color: 'white', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                    {player.nombre}
-                </span>
-                <button onClick={() => onSub(player.id)} style={{ background: '#334155', color: '#60a5fa', border: 'none', borderRadius: 5, padding: '3px 8px', fontSize: '0.58rem', cursor: 'pointer', fontWeight: 700, flexShrink: 0 }}>
-                    🔄
-                </button>
+        <div style={{
+            display: 'flex', flexDirection: 'column',
+            flex: 1, minHeight: 0,
+            padding: '2px 3px',
+            borderBottom: '1px solid #111',
+        }}>
+            {/* Línea: número + nombre + cambio */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2, flexShrink: 0 }}>
+                <span style={{
+                    background: teamColor, color: 'white',
+                    padding: '2px 7px', borderRadius: 5,
+                    fontWeight: 900, fontSize: '0.85rem',
+                    minWidth: 30, textAlign: 'center', flexShrink: 0,
+                }}>{player.numero ?? '??'}</span>
+                <span style={{
+                    fontWeight: 800, color: 'white', fontSize: '0.75rem',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                }}>{player.nombre}</span>
+                <button onClick={() => onSub(player.id)} style={{
+                    background: '#334155', color: '#60a5fa', border: 'none',
+                    borderRadius: 5, padding: '2px 8px',
+                    fontSize: '0.6rem', cursor: 'pointer', fontWeight: 700, flexShrink: 0,
+                }}>🔄</button>
             </div>
-            {/* Botones de stats en fila */}
-            <div style={{ display: 'flex', gap: 3, flex: 1 }}>
+            {/* Botones estadísticas — usan todo el espacio restante */}
+            <div style={{ display: 'flex', gap: 3, flex: 1, minHeight: 0 }}>
                 <StatBtn accion="tirosLibres" label="+1"  count={s.tirosLibres ?? 0} bg="#475569" />
                 <StatBtn accion="dobles"      label="+2"  count={s.dobles ?? 0}      bg="#1e40af" />
                 <StatBtn accion="triples"     label="+3"  count={s.triples ?? 0}     bg="#7c3aed" />

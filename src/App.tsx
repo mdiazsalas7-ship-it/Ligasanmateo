@@ -602,7 +602,7 @@ function App() {
             </div>}{/* end sticky wrapper */}
 
             {/* ── Contenido principal ── */}
-            <main style={{ padding: 15, maxWidth: 500, margin: '0 auto' }}>
+            <main style={{ padding: activeView === 'mesa' ? 0 : 15, maxWidth: activeView === 'mesa' ? '100%' : 500, margin: '0 auto' }}>
                 {activeView === 'login' ? (
                     <div className="fade-in">
                         <Login />
