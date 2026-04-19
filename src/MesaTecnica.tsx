@@ -1,942 +1,975 @@
-import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { db } from './firebase';
-import {
-    doc, updateDoc, onSnapshot, collection, query,
-    getDocs, setDoc, increment, where, writeBatch,
-    limit, orderBy, addDoc, deleteDoc, getDoc
-} from 'firebase/firestore';
+import { useEffect, useState, useRef, memo } from 'react';
+import './App.css';
+import { db, auth } from './firebase';
+import { doc, onSnapshot, collection, query, orderBy, getDocs, limit, where } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+
+// Componentes
+import Login from './Login';
+import AdminEquipos from './AdminEquipos';
+import TeamsPublicViewer from './TeamsPublicViewer';
+import CalendarViewer from './CalendarViewer';
+import MesaTecnica from './MesaTecnica';
+import StatsViewer from './StatsViewer';
+import StandingsViewer from './StandingsViewer';
+import NewsAdmin from './NewsAdmin';
+import NewsFeed from './NewsFeed';
+import PlayoffViewer from './PlayoffViewer';
+import AdminVideos from './AdminVideos';
+import MetroTicker from './MetroTicker';
+import LiveGameViewer, { LiveGameSelector } from './LiveGameViewer';
+import { useNotifications } from './useNotifications';
+import ResetTemporada from './ResetTemporada';
 
 // ─────────────────────────────────────────────
-// TIPOS
+// CONSTANTES
 // ─────────────────────────────────────────────
-type Team = 'local' | 'visitante';
 
-interface Player {
-    id: string;
-    nombre: string;
-    numero?: string | number;
-    equipoId?: string;
-}
+const CATEGORIAS_DISPONIBLES = [
+    { id: 'LIBRE',           label: '🏀 LIBRE'           },
+    { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL' },
+    { id: 'U16_FEMENINO',    label: '👧 U16 FEMENINO'    },
+    { id: 'U16M',            label: '👦 U16 MASCULINO'   },
+    { id: 'MASTER40',        label: '🍷 MASTER 40'       },
+];
 
-interface StatMap {
-    puntos?: number;
-    rebotes?: number;
-    robos?: number;
-    bloqueos?: number;
-    triples?: number;
-    dobles?: number;
-    tirosLibres?: number;
-}
+const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/15568/15568903.png';
 
-interface Jugada {
-    id: string;
-    partidoId: string;
-    jugadorId: string;
-    jugadorNombre: string;
-    jugadorNumero: string;
-    equipo: Team;
-    accion: string;
-    puntos: number;
-    timestamp: number;
-}
+const getColName = (base: string, cat: string) =>
+    cat === 'MASTER40' ? base : `${base}_${cat}`;
 
 // ─────────────────────────────────────────────
-// HELPERS
+// HELPER: ORDENAMIENTO FIBA CORRECTO
+// Bug original: tiedIds se recalculaba dentro del comparador de .sort()
+// causando que el grupo de empatados cambiara a mitad de la ordenación.
+// Fix: resolver empates ANTES de ordenar, una vez por grupo.
 // ─────────────────────────────────────────────
-const getColName = (base: string, categoria: string) => {
-    const cat = categoria.trim().toUpperCase();
-    return (cat === 'MASTER40' || cat === 'MASTER') ? base : `${base}_${cat}`;
+const resolverEmpate = (teams: any[], matchesRegulares: any[]): any[] => {
+    if (teams.length <= 1) return teams;
+
+    // Ordenar por puntos totales primero
+    const sorted = [...teams].sort((a, b) => b.puntos - a.puntos);
+    const result: any[] = [];
+    let i = 0;
+
+    while (i < sorted.length) {
+        // Detectar grupo empatado en puntos
+        let j = i + 1;
+        while (j < sorted.length && sorted[j].puntos === sorted[i].puntos) j++;
+        const grupo = sorted.slice(i, j);
+
+        if (grupo.length === 1) {
+            result.push(grupo[0]);
+        } else {
+            // Partidos H2H calculados UNA SOLA VEZ para este grupo
+            const ids = new Set(grupo.map((t: any) => t.id));
+            const h2h = matchesRegulares.filter((m: any) =>
+                ids.has(m.equipoLocalId) && ids.has(m.equipoVisitanteId)
+            );
+
+            const calcH2H = (id: string) => {
+                let pts = 0, pf = 0, pc = 0;
+                h2h.forEach((m: any) => {
+                    if (m.equipoLocalId === id) {
+                        pf += m.marcadorLocal; pc += m.marcadorVisitante;
+                        pts += m.marcadorLocal > m.marcadorVisitante ? 2 : 1;
+                    } else if (m.equipoVisitanteId === id) {
+                        pf += m.marcadorVisitante; pc += m.marcadorLocal;
+                        pts += m.marcadorVisitante > m.marcadorLocal ? 2 : 1;
+                    }
+                });
+                return { pts, dif: pf - pc, pf };
+            };
+
+            const conH2H = grupo.map((t: any) => ({ ...t, _h2h: calcH2H(t.id) }));
+
+            // FIBA Appendix D: criterios 1 → 2 → 3 → 4
+            const resuelto = conH2H.sort((a: any, b: any) => {
+                // 1. Récord H2H (puntos: 2=victoria, 1=derrota)
+                if (b._h2h.pts !== a._h2h.pts) return b._h2h.pts - a._h2h.pts;
+                // 2. Diferencia de puntos en H2H
+                if (b._h2h.dif !== a._h2h.dif) return b._h2h.dif - a._h2h.dif;
+                // 3. Puntos anotados en H2H
+                if (b._h2h.pf !== a._h2h.pf) return b._h2h.pf - a._h2h.pf;
+                // 4. Diferencia de puntos global (toda la fase regular)
+                const difA = a.puntos_favor - a.puntos_contra;
+                const difB = b.puntos_favor - b.puntos_contra;
+                return difB - difA;
+            });
+
+            result.push(...resuelto.map(({ _h2h, ...t }: any) => t));
+        }
+        i = j;
+    }
+    return result;
 };
 
-const puntosDeAccion = (accion: string) =>
-    accion === 'tirosLibres' ? 1 : accion === 'dobles' ? 2 : accion === 'triples' ? 3 : 0;
-
 // ─────────────────────────────────────────────
-// COMPONENTE: Modal de confirmación (reemplaza window.confirm)
+// COMPONENTE: Tabla resumen del dashboard
 // ─────────────────────────────────────────────
-const ConfirmModal: React.FC<{
-    mensaje: string;
-    onConfirm: () => void;
-    onCancel: () => void;
-}> = ({ mensaje, onConfirm, onCancel }) => (
-    <div style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
-        zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+const RenderTableSummary = memo(({ title, data, color }: {
+    title: string; data: any[]; color: string;
+}) => (
+    <div className="fade-in" style={{
+        width: '100%', background: 'white', borderRadius: 24,
+        overflow: 'hidden', boxShadow: '0 8px 20px rgba(0,0,0,0.06)',
+        border: `2.5px solid ${color}`,
     }}>
-        <div style={{
-            background: '#1e293b', borderRadius: 16, padding: 28,
-            maxWidth: 320, width: '100%', border: '1px solid #334155',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-        }}>
-            <p style={{ color: 'white', fontWeight: 700, fontSize: '0.95rem', textAlign: 'center', marginBottom: 24, lineHeight: 1.5 }}>
-                {mensaje}
-            </p>
-            <div style={{ display: 'flex', gap: 12 }}>
-                <button onClick={onCancel} style={{
-                    flex: 1, padding: '12px 0', background: '#334155', color: '#94a3b8',
-                    border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
-                }}>CANCELAR</button>
-                <button onClick={onConfirm} style={{
-                    flex: 1, padding: '12px 0', background: '#10b981', color: 'white',
-                    border: 'none', borderRadius: 10, fontWeight: 900, fontSize: '0.8rem', cursor: 'pointer',
-                }}>CONFIRMAR</button>
-            </div>
+        <div style={{ background: color, padding: 10, textAlign: 'center' }}>
+            <h4 style={{ fontSize: '0.7rem', color: 'white', margin: 0, fontWeight: 900, textTransform: 'uppercase' }}>
+                {title}
+            </h4>
+        </div>
+        <div style={{ padding: 10 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.7rem' }}>
+                <thead>
+                    <tr style={{ color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>
+                        <th style={{ textAlign: 'left', paddingBottom: 5 }}>EQUIPO</th>
+                        <th style={{ textAlign: 'center' }}>JG</th>
+                        <th style={{ textAlign: 'center' }}>JP</th>
+                        <th style={{ textAlign: 'center' }}>DIF</th>
+                        <th style={{ textAlign: 'center', color }}>PTS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {data.length > 0 ? data.slice(0, 4).map((eq) => {
+                        const dif = (eq.puntos_favor || 0) - (eq.puntos_contra || 0);
+                        return (
+                            <tr key={eq.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                                <td style={{ padding: '8px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <div style={{ width: 28, height: 28, borderRadius: '50%', overflow: 'hidden', border: '1px solid #eee', background: 'white', flexShrink: 0 }}>
+                                        <img
+                                            src={eq.logoUrl || DEFAULT_LOGO}
+                                            onError={(e) => { e.currentTarget.src = DEFAULT_LOGO; }}
+                                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                            alt="L"
+                                        />
+                                    </div>
+                                    <span style={{ fontWeight: 800, color: '#1e293b', fontSize: '0.65rem' }}>
+                                        {eq.nombre.toUpperCase()}
+                                    </span>
+                                </td>
+                                <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{eq.victorias || 0}</td>
+                                <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{eq.derrotas || 0}</td>
+                                <td style={{ textAlign: 'center', fontWeight: 'bold', color: dif >= 0 ? '#3b82f6' : '#ef4444' }}>
+                                    {dif > 0 ? `+${dif}` : dif}
+                                </td>
+                                <td style={{ textAlign: 'center', fontWeight: 900, color }}>{eq.puntos || 0}</td>
+                            </tr>
+                        );
+                    }) : (
+                        <tr>
+                            <td colSpan={5} style={{ textAlign: 'center', padding: 10, color: '#94a3b8', fontStyle: 'italic' }}>
+                                Registrando equipos...
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
         </div>
     </div>
-);
+));
 
 // ─────────────────────────────────────────────
-// COMPONENTE: Toast de feedback visual
+// APP PRINCIPAL
 // ─────────────────────────────────────────────
-const Toast: React.FC<{ msg: string; color: string }> = ({ msg, color }) => (
-    <div style={{
-        position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)',
-        background: color, color: 'white', padding: '10px 22px',
-        borderRadius: 30, fontWeight: 900, fontSize: '0.85rem',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 8000,
-        animation: 'toastIn 0.2s ease',
-        whiteSpace: 'nowrap',
-    }}>
-        {msg}
-    </div>
-);
+function App() {
+    const [user, setUser]                           = useState<any>(null);
+    const [categoriaActiva, setCategoriaActiva]     = useState('LIBRE');
+    const [equiposA, setEquiposA]                   = useState<any[]>([]);
+    const [equiposB, setEquiposB]                   = useState<any[]>([]);
+    const [noticias, setNoticias]                   = useState<any[]>([]);
+    const [entrevistas, setEntrevistas]             = useState<any[]>([]);
+    const [videoSeleccionado, setVideoSeleccionado] = useState<any>(null);
+    const [proximosJuegos, setProximosJuegos]       = useState<any[]>([]);
+    const [resultadosRecientes, setResultadosRecientes] = useState<any[]>([]);
+    const [teamLogos, setTeamLogos]                 = useState<Record<string, string>>({});
+    const [allMatchesGlobal, setAllMatchesGlobal]   = useState<any[]>([]);
+    const [loading, setLoading]                     = useState(true);
+    const [activeView, setActiveView]               = useState('dashboard');
+    const [showReset, setShowReset]                 = useState(false);
+    const [liveGameId, setLiveGameId]               = useState<string | null>(null);
+    const [showLiveSelector, setShowLiveSelector]   = useState(false);
+    const [hasLiveGame, setHasLiveGame]             = useState(false);
+    const [liveMatchName, setLiveMatchName]         = useState('');
 
-// ─────────────────────────────────────────────
-// COMPONENTE: Fila de jugador con botones grandes
-// ─────────────────────────────────────────────
-const PlayerRow = memo(({
-    player, team, stats, onStat, onSub, flashing,
-}: {
-    player: Player; team: Team; stats: StatMap;
-    onStat: (player: Player, team: Team, accion: string, val: number) => void;
-    onSub: (id: string) => void;
-    flashing: string | null;
-}) => {
-    const s = stats ?? {};
-    const teamColor = team === 'local' ? '#3b82f6' : '#ef4444';
+    const [noticiaIndex, setNoticiaIndex]   = useState(0);
+    const [juegoIndex, setJuegoIndex]       = useState(0);
+    const [tablaIndex, setTablaIndex]       = useState(0);
+    const [leaderIndex, setLeaderIndex]     = useState(0);
+    const [leadersList, setLeadersList]     = useState<any[]>([]);
 
-    const StatBtn = ({ accion, label, count, bg }: { accion: string; label: string; count: number; bg: string }) => {
-        const isFlash = flashing === accion;
-        return (
-            <button onClick={() => onStat(player, team, accion, 1)} style={{
-                flex: 1,
-                background: isFlash ? 'white' : bg,
-                color: isFlash ? bg : 'white',
-                border: 'none', borderRadius: 5,
-                fontWeight: 900, cursor: 'pointer',
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
-                transform: isFlash ? 'scale(0.92)' : 'scale(1)',
-                transition: 'transform 0.1s',
-                minWidth: 0, minHeight: 0,
-            }}>
-                <span style={{ fontSize: '0.58rem', lineHeight: 1 }}>{label}</span>
-                <span style={{ fontSize: '0.95rem', fontWeight: 900, lineHeight: 1.2 }}>{count}</span>
-            </button>
-        );
+    // Ref para cancelar fetchData si cambia categoría antes de terminar
+    const fetchAbort = useRef<{ cancelled: boolean }>({ cancelled: false });
+
+    // ── Registrar token FCM para notificaciones push ──
+    useNotifications(user?.uid);
+
+    const getGroupLabel = (grupo: string, cat: string) => {
+        const g = (grupo || '').toUpperCase();
+        const c = (cat  || '').toUpperCase();
+        if (c === 'LIBRE') {
+            if (g === 'A') return 'CONF. ESTE';
+            if (g === 'B') return 'CONF. OESTE';
+        }
+        return `GRUPO ${g}`;
     };
 
-    return (
-        <div style={{
-            display: 'flex', flexDirection: 'column',
-            flex: 1, minHeight: 0,
-            padding: '2px 3px',
-            borderBottom: '1px solid #111',
-        }}>
-            {/* Línea: número + nombre + cambio */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2, flexShrink: 0 }}>
-                <span style={{
-                    background: teamColor, color: 'white',
-                    padding: '2px 7px', borderRadius: 5,
-                    fontWeight: 900, fontSize: '0.85rem',
-                    minWidth: 30, textAlign: 'center', flexShrink: 0,
-                }}>{player.numero ?? '??'}</span>
-                <span style={{
-                    fontWeight: 800, color: 'white', fontSize: '0.75rem',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
-                }}>{player.nombre}</span>
-                <button onClick={() => onSub(player.id)} style={{
-                    background: '#334155', color: '#60a5fa', border: 'none',
-                    borderRadius: 5, padding: '2px 8px',
-                    fontSize: '0.6rem', cursor: 'pointer', fontWeight: 700, flexShrink: 0,
-                }}>🔄</button>
-            </div>
-            {/* Botones estadísticas — usan todo el espacio restante */}
-            <div style={{ display: 'flex', gap: 3, flex: 1, minHeight: 0 }}>
-                <StatBtn accion="tirosLibres" label="+1"  count={s.tirosLibres ?? 0} bg="#475569" />
-                <StatBtn accion="dobles"      label="+2"  count={s.dobles ?? 0}      bg="#1e40af" />
-                <StatBtn accion="triples"     label="+3"  count={s.triples ?? 0}     bg="#7c3aed" />
-                <StatBtn accion="rebotes"     label="REB" count={s.rebotes ?? 0}     bg="#047857" />
-                <StatBtn accion="robos"       label="ROB" count={s.robos ?? 0}       bg="#b45309" />
-                <StatBtn accion="bloqueos"    label="BLQ" count={s.bloqueos ?? 0}    bg="#991b1b" />
-            </div>
-        </div>
-    );
-});
-
-const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ categoria, onClose }) => {
-    const [matches, setMatches] = useState<any[]>([]);
-    const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
-    const [matchData, setMatchData] = useState<any | null>(null);
-    const [logos, setLogos] = useState({ local: '', visitante: '' });
-
-    const [playersLocal, setPlayersLocal] = useState<Player[]>([]);
-    const [playersVisitante, setPlayersVisitante] = useState<Player[]>([]);
-
-    const [presentLocal, setPresentLocal] = useState<string[]>([]);
-    const [presentVisitante, setPresentVisitante] = useState<string[]>([]);
-    const [checkInDone, setCheckInDone] = useState(false);
-    const [startersDone, setStartersDone] = useState(false);
-
-    const [onCourtLocal, setOnCourtLocal] = useState<string[]>([]);
-    const [onCourtVisitante, setOnCourtVisitante] = useState<string[]>([]);
-
-    const [subModal, setSubModal] = useState<{ team: Team; replacingId: string | null; isOpen: boolean }>({
-        team: 'local', replacingId: null, isOpen: false,
-    });
-
-    const [confirmModal, setConfirmModal] = useState<{ msg: string; onConfirm: () => void } | null>(null);
-    const [forfaitModal, setForfaitModal] = useState<any | null>(null);
-    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-    const [statsCache, setStatsCache] = useState<Record<string, StatMap>>({});
-    const [recentPlays, setRecentPlays] = useState<Jugada[]>([]);
-
-    // Toast
-    const [toast, setToast] = useState<{ msg: string; color: string } | null>(null);
-    const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    // Flash por jugador+accion para el feedback visual del botón
-    const [flashMap, setFlashMap] = useState<Record<string, string | null>>({});
-
-    // null = verificando Firestore | false = sin estado guardado | true = estado restaurado
-    const [estadoRestaurado, setEstadoRestaurado] = useState<boolean | null>(null);
-    const [cuartoActual, setCuartoActual] = useState<string>('Q1');
-
-    const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/166/166344.png';
-
-    const colCal = getColName('calendario', categoria);
-    const colPlayers = getColName('jugadores', categoria);
-    const colTeams = getColName('equipos', categoria);
-
-    // Persiste el estado de la mesa en mesa_estado/{matchId}
-    const saveEstado = useCallback(async (payload: Partial<{
-        presentLocal: string[];
-        presentVisitante: string[];
-        onCourtLocal: string[];
-        onCourtVisitante: string[];
-        checkInDone: boolean;
-        startersDone: boolean;
-        cuartoActual: string;
-    }>) => {
-        if (!selectedMatchId) return;
-        try {
-            await setDoc(
-                doc(db, 'mesa_estado', selectedMatchId),
-                { ...payload, updatedAt: Date.now() },
-                { merge: true },
-            );
-        } catch (e) {
-            console.error('Error guardando estado mesa:', e);
-        }
-    }, [selectedMatchId]);
-
-    const showToast = useCallback((msg: string, color = '#10b981') => {
-        if (toastTimer.current) clearTimeout(toastTimer.current);
-        setToast({ msg, color });
-        toastTimer.current = setTimeout(() => setToast(null), 1800);
+    // ── Detectar partidos EN VIVO en todas las categorías ──
+    useEffect(() => {
+        const categorias = ['LIBRE','INTERINDUSTRIAL','U16_FEMENINO','U16M','MASTER40'];
+        const unsubs: (() => void)[] = [];
+        const counts: Record<string, number> = {};
+        categorias.forEach(cat => {
+            const colCal = cat === 'MASTER40' ? 'calendario' : `calendario_${cat}`;
+            const q2 = query(collection(db, colCal), where('enVivo', '==', true));
+            const unsub = onSnapshot(q2, snap => {
+                counts[cat] = snap.docs.length;
+                const total = Object.values(counts).reduce((a, b) => a + b, 0);
+                setHasLiveGame(total > 0);
+                if (total > 0 && snap.docs.length > 0) {
+                    // Set the first live game found
+                    const match = snap.docs[0];
+                    // Store categoria too for the viewer
+                    (window as any).__liveCategoria = cat;
+                    (window as any).__livePartidoId = match.id;
+                    const d = match.data();
+                    const local = (d.equipoLocalNombre || '').split(' ')[0];
+                    const visit = (d.equipoVisitanteNombre || '').split(' ')[0];
+                    setLiveMatchName(`${local} vs ${visit}`);
+                }
+            });
+            unsubs.push(unsub);
+        });
+        return () => unsubs.forEach(u => u());
     }, []);
 
-    const showConfirm = (msg: string, onConfirm: () => void) => {
-        setConfirmModal({ msg, onConfirm });
-    };
-
-    // ── FORFAIT / W.O. ──
-    const executeForfait = async (match: any, faltante: 'local' | 'visitante') => {
-        try {
-            const batch = writeBatch(db);
-            const lRef = doc(db, colTeams, match.equipoLocalId);
-            const vRef = doc(db, colTeams, match.equipoVisitanteId);
-            const calRef = doc(db, colCal, match.id);
-            if (faltante === 'visitante') {
-                batch.update(calRef, { estatus: 'finalizado', marcadorLocal: 20, marcadorVisitante: 0, esForfait: true });
-                batch.update(lRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(20) });
-                batch.update(vRef, { derrotas: increment(1), puntos_contra: increment(20) });
-            } else {
-                batch.update(calRef, { estatus: 'finalizado', marcadorLocal: 0, marcadorVisitante: 20, esForfait: true });
-                batch.update(vRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(20) });
-                batch.update(lRef, { derrotas: increment(1), puntos_contra: increment(20) });
-            }
-            await batch.commit();
-            showToast('✅ W.O. APLICADO', '#10b981');
-            setForfaitModal(null);
-        } catch (e) {
-            showToast('Error al aplicar W.O.', '#ef4444');
-            console.error(e);
-        }
-    };
-
-    // ── Carga de partidos del día ──
+    // ── Auth — sin activeView en las dependencias ──
     useEffect(() => {
-        const now = new Date();
-        const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-            .toISOString().split('T')[0];
-        const q = query(
-            collection(db, colCal),
-            where('fechaAsignada', '==', localDate),
-            where('estatus', '==', 'programado'),
-        );
-        return onSnapshot(q, snap =>
-            setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-        );
-    }, [categoria]);
-
-    // ── Restaurar estado guardado al seleccionar un partido ──
-    useEffect(() => {
-        if (!selectedMatchId) return;
-        setEstadoRestaurado(null); // volvemos a "verificando"
-        const fetchEstado = async () => {
-            try {
-                const snap = await getDoc(doc(db, 'mesa_estado', selectedMatchId));
-                if (snap.exists()) {
-                    const d = snap.data();
-                    if (d.cuartoActual) setCuartoActual(d.cuartoActual);
-                    // Solo restauramos si el partido no terminó
-                    if (d.startersDone) {
-                        if (d.presentLocal)     setPresentLocal(d.presentLocal);
-                        if (d.presentVisitante) setPresentVisitante(d.presentVisitante);
-                        if (d.onCourtLocal)     setOnCourtLocal(d.onCourtLocal);
-                        if (d.onCourtVisitante) setOnCourtVisitante(d.onCourtVisitante);
-                        setCheckInDone(true);
-                        setStartersDone(true);
-                        setEstadoRestaurado(true);
-                        return;
-                    }
-                    if (d.checkInDone) {
-                        if (d.presentLocal)     setPresentLocal(d.presentLocal);
-                        if (d.presentVisitante) setPresentVisitante(d.presentVisitante);
-                        setCheckInDone(true);
-                        setEstadoRestaurado(false);
-                        return;
-                    }
-                }
-                setEstadoRestaurado(false);
-            } catch (e) {
-                console.error('Error restaurando estado:', e);
-                setEstadoRestaurado(false);
-            }
-        };
-        fetchEstado();
-    }, [selectedMatchId]);
-
-    // ── Carga de datos del partido seleccionado ──
-    useEffect(() => {
-        if (!selectedMatchId) return;
-        const unsubMatch = onSnapshot(doc(db, colCal, selectedMatchId), async snap => {
-            if (!snap.exists()) return;
-            const data = { id: snap.id, ...snap.data() } as any;
-            setMatchData(data);
-            const [lSnap, vSnap] = await Promise.all([
-                getDocs(query(collection(db, colTeams), where('nombre', '==', data.equipoLocalNombre))),
-                getDocs(query(collection(db, colTeams), where('nombre', '==', data.equipoVisitanteNombre))),
-            ]);
-            setLogos({
-                local: lSnap.docs[0]?.data()?.logoUrl || DEFAULT_LOGO,
-                visitante: vSnap.docs[0]?.data()?.logoUrl || DEFAULT_LOGO,
-            });
-        });
-
-        const unsubPlays = onSnapshot(
-            query(collection(db, 'jugadas_partido'), where('partidoId', '==', selectedMatchId), orderBy('timestamp', 'desc'), limit(20)),
-            snap => setRecentPlays(snap.docs.map(d => ({ id: d.id, ...d.data() } as Jugada))),
-        );
-
-        const unsubStats = onSnapshot(
-            query(collection(db, 'stats_partido'), where('partidoId', '==', selectedMatchId)),
-            snap => {
-                const cache: Record<string, StatMap> = {};
-                snap.docs.forEach(d => { cache[d.data().jugadorId] = d.data(); });
-                setStatsCache(cache);
-            },
-        );
-
-        return () => { unsubMatch(); unsubPlays(); unsubStats(); };
-    }, [selectedMatchId, categoria]);
-
-    // ── Carga de rosters ──
-    useEffect(() => {
-        if (!matchData?.equipoLocalId || !matchData?.equipoVisitanteId) return;
-        const fetchRosters = async () => {
-            const [snapL, snapV] = await Promise.all([
-                getDocs(query(collection(db, colPlayers), where('equipoId', '==', matchData.equipoLocalId))),
-                getDocs(query(collection(db, colPlayers), where('equipoId', '==', matchData.equipoVisitanteId))),
-            ]);
-            const sort = (docs: any[]) =>
-                docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (parseInt(a.numero) || 0) - (parseInt(b.numero) || 0));
-            setPlayersLocal(sort(snapL.docs));
-            setPlayersVisitante(sort(snapV.docs));
-        };
-        fetchRosters();
-    }, [matchData?.id, categoria]);
-
-    // ── Registrar stat ──
-    const handleStat = useCallback(async (player: Player, team: Team, accion: string, val: number) => {
-        if (!matchData) return;
-        const pts = puntosDeAccion(accion);
-
-        // Flash visual en el botón
-        setFlashMap(prev => ({ ...prev, [`${player.id}_${accion}`]: accion }));
-        setTimeout(() => setFlashMap(prev => ({ ...prev, [`${player.id}_${accion}`]: null })), 300);
-
-        // Toast de confirmación
-        const labels: Record<string, string> = {
-            tirosLibres: '🎯 +1 TL', dobles: '🏀 +2 PTS', triples: '🔥 +3 PTS',
-            rebotes: '🖐 REBOTE', robos: '🛡 ROBO', bloqueos: '🚫 BLOQUEO',
-        };
-        showToast(`${player.nombre.split(' ')[0]} — ${labels[accion] ?? accion}`,
-            pts > 0 ? '#3b82f6' : '#10b981');
-
-        try {
-            // 1. Jugada en historial
-            await addDoc(collection(db, 'jugadas_partido'), {
-                partidoId: matchData.id,
-                jugadorId: player.id,
-                jugadorNombre: player.nombre,
-                jugadorNumero: player.numero ?? '??',
-                equipo: team,
-                accion,
-                puntos: pts,
-                timestamp: Date.now(),
-                cuarto: cuartoActual,
-            });
-
-            // 2. Marcador
-            if (pts > 0) {
-                const cuartoField = team === 'local'
-                    ? `cuartosLocal.${cuartoActual}`
-                    : `cuartosVisitante.${cuartoActual}`;
-                await updateDoc(doc(db, colCal, matchData.id), {
-                    [team === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(pts),
-                    [cuartoField]: increment(pts),
-                });
-            }
-
-            // 3. Stats acumuladas del jugador en este partido
-            await setDoc(
-                doc(db, 'stats_partido', `${matchData.id}_${player.id}`),
-                {
-                    partidoId: matchData.id,
-                    jugadorId: player.id,
-                    nombre: player.nombre,
-                    numero: player.numero ?? '??',
-                    equipo: team === 'local' ? matchData.equipoLocalNombre : matchData.equipoVisitanteNombre,
-                    [accion]: increment(val),
-                    ...(pts > 0 ? { puntos: increment(pts) } : {}),
-                },
-                { merge: true },
-            );
-        } catch (e) {
-            showToast('Error al guardar ⚠️', '#ef4444');
-            console.error(e);
-        }
-    }, [matchData, colCal, showToast]);
-
-    // ── DESHACER jugada (cualquiera del historial) ──
-    const handleDeleteJugada = useCallback(async (jugada: Jugada) => {
-        if (!matchData) return;
-
-        showConfirm(
-            `¿Borrar "${jugada.accion.toUpperCase()}" de ${jugada.jugadorNombre}?`,
-            async () => {
-                try {
-                    const pts = jugada.puntos ?? 0;
-
-                    // 1. Borrar del historial
-                    await deleteDoc(doc(db, 'jugadas_partido', jugada.id));
-
-                    // 2. Restar del marcador si tenía puntos
-                    if (pts > 0) {
-                        await updateDoc(doc(db, colCal, matchData.id), {
-                            [jugada.equipo === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(-pts),
-                        });
-                    }
-
-                    // 3. Restar de stats_partido
-                    const statRef = doc(db, 'stats_partido', `${matchData.id}_${jugada.jugadorId}`);
-                    const statSnap = await getDoc(statRef);
-                    if (statSnap.exists()) {
-                        const updates: Record<string, any> = { [jugada.accion]: increment(-1) };
-                        if (pts > 0) updates.puntos = increment(-pts);
-                        await updateDoc(statRef, updates);
-                    }
-
-                    showToast('↩️ Jugada borrada', '#f59e0b');
-                } catch (e) {
-                    showToast('Error al borrar ⚠️', '#ef4444');
-                    console.error(e);
-                }
-            }
-        );
-    }, [matchData, colCal, showToast]);
-
-    // Atajo para el botón ↩️ DESHACER (borra la última)
-    const handleUndo = useCallback(() => {
-        const ultima = recentPlays[0];
-        if (!ultima) { showToast('No hay jugadas para deshacer', '#f59e0b'); return; }
-        handleDeleteJugada(ultima);
-    }, [recentPlays, handleDeleteJugada, showToast]);
-
-    // ── Finalizar partido ──
-    const handleFinalize = useCallback(() => {
-        if (!matchData) return;
-        showConfirm('¿FINALIZAR PARTIDO Y ACTUALIZAR TABLAS?', async () => {
-            try {
-                const batch = writeBatch(db);
-                const localGana = matchData.marcadorLocal > matchData.marcadorVisitante;
-                const visitanteGana = matchData.marcadorVisitante > matchData.marcadorLocal;
-
-                const lRef = doc(db, colTeams, matchData.equipoLocalId);
-                const vRef = doc(db, colTeams, matchData.equipoVisitanteId);
-
-                if (localGana) {
-                    batch.update(lRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
-                    batch.update(vRef, { derrotas: increment(1), puntos: increment(1), puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
-                } else if (visitanteGana) {
-                    batch.update(vRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
-                    batch.update(lRef, { derrotas: increment(1), puntos: increment(1), puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
-                } else {
-                    // Empate (no debería pasar en basquetbol pero lo manejamos)
-                    batch.update(lRef, { puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
-                    batch.update(vRef, { puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
-                }
-
-                // Stats por jugador
-                const statsSnap = await getDocs(
-                    query(collection(db, 'stats_partido'), where('partidoId', '==', matchData.id))
-                );
-                statsSnap.forEach(sDoc => {
-                    const s = sDoc.data();
-                    batch.update(doc(db, colPlayers, s.jugadorId), {
-                        puntos: increment(Number(s.puntos) || 0),
-                        triples: increment(Number(s.triples) || 0),
-                        rebotes: increment(Number(s.rebotes) || 0),
-                        robos: increment(Number(s.robos) || 0),
-                        bloqueos: increment(Number(s.bloqueos) || 0),
-                        partidosJugados: increment(1),
+        const unsub = onAuthStateChanged(auth, (u) => {
+            if (u) {
+                onSnapshot(doc(db, 'usuarios', u.uid), (snap) => {
+                    const data = snap.data();
+                    setUser({
+                        uid: u.uid,
+                        email: u.email,
+                        rol: (u.email === 'mdiazsalas7@gmail.com' || data?.rol === 'admin')
+                            ? 'admin' : 'fan',
                     });
                 });
-
-                batch.update(doc(db, colCal, matchData.id), { estatus: 'finalizado', enVivo: false });
-                await batch.commit();
-                // Limpiar estado guardado de la mesa al finalizar
-                try { await deleteDoc(doc(db, 'mesa_estado', matchData.id)); } catch (_) {}
-                showToast('✅ Partido finalizado', '#10b981');
-                setTimeout(() => onClose(), 1200);
-            } catch (e) {
-                showToast('Error al finalizar ⚠️', '#ef4444');
-                console.error(e);
+            } else {
+                setUser(null);
             }
+            setLoading(false);
         });
-    }, [matchData, colCal, colTeams, colPlayers, onClose, showToast]);
+        return () => unsub();
+    }, []); // ← sin activeView: no re-suscribir al auth en cada cambio de pantalla
 
-    // ── Sustitución ──
-    const executeSwap = useCallback((newPlayerId: string) => {
-        const { team, replacingId } = subModal;
-        if (!replacingId) return;
+    // ── Carga de datos principal ──
+    useEffect(() => {
+        // Cancelar fetch anterior si cambia la categoría antes de terminar
+        const abortToken = { cancelled: false };
+        fetchAbort.current = abortToken;
 
-        if (team === 'local') {
-            setOnCourtLocal(prev => {
-                const updated = prev.map(id => id === replacingId ? newPlayerId : id);
-                saveEstado({ onCourtLocal: updated });
-                return updated;
-            });
-        } else {
-            setOnCourtVisitante(prev => {
-                const updated = prev.map(id => id === replacingId ? newPlayerId : id);
-                saveEstado({ onCourtVisitante: updated });
-                return updated;
-            });
-        }
-        setSubModal(s => ({ ...s, isOpen: false, replacingId: null }));
-        showToast('🔄 Cambio realizado', '#8b5cf6');
-    }, [subModal, showToast, saveEstado]);
+        const fetchData = async () => {
+            try {
+                setLoading(true);
+                setLeadersList([]);
 
-    // ─────────────────────────────────────────────
-    // PANTALLA 1: Selección de partido
-    // ─────────────────────────────────────────────
-    if (!selectedMatchId) return (
-        <div style={{ padding: 20, color: 'white', background: '#000', minHeight: '100vh' }}>
-            <h2 style={{ color: '#60a5fa', marginBottom: 20, fontSize: '1.1rem', fontWeight: 900 }}>
-                ⏱️ Mesa Técnica — {categoria}
-            </h2>
-            {/* Modal W.O. */}
-            {forfaitModal && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                    <div style={{ background: '#1e293b', borderRadius: 16, padding: 20, maxWidth: 320, width: '100%', border: '1px solid #334155' }}>
-                        <h3 style={{ color: '#ef4444', textAlign: 'center', margin: '0 0 15px', fontSize: '1rem', fontWeight: 900 }}>🚨 DECLARAR W.O.</h3>
-                        <p style={{ color: 'white', textAlign: 'center', fontSize: '0.85rem', marginBottom: 20 }}>¿Qué equipo <b>NO SE PRESENTÓ</b>?</p>
-                        <button onClick={() => executeForfait(forfaitModal, 'local')} style={{ width: '100%', padding: 12, background: '#1e3a8a', color: 'white', border: 'none', borderRadius: 8, marginBottom: 10, fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
-                            FALTÓ {forfaitModal.equipoLocalNombre} (Local)
-                        </button>
-                        <button onClick={() => executeForfait(forfaitModal, 'visitante')} style={{ width: '100%', padding: 12, background: '#854d0e', color: 'white', border: 'none', borderRadius: 8, marginBottom: 20, fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
-                            FALTÓ {forfaitModal.equipoVisitanteNombre} (Visitante)
-                        </button>
-                        <button onClick={() => setForfaitModal(null)} style={{ width: '100%', padding: 12, background: 'transparent', color: '#94a3b8', border: '1px solid #334155', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>
-                            CANCELAR
-                        </button>
-                    </div>
-                </div>
-            )}
+                // 1. Equipos
+                const colEquipos = getColName('equipos', categoriaActiva);
+                const equiposSnap = await getDocs(collection(db, colEquipos));
+                if (abortToken.cancelled) return;
 
-            {toast && <Toast msg={toast.msg} color={toast.color} />}
+                const logoMap: Record<string, string> = {};
+                const equiposBase: any[] = [];
 
-            {matches.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 40, border: '1px dashed #333', borderRadius: 15 }}>
-                    <p style={{ color: '#666', fontSize: '0.85rem' }}>No hay juegos programados hoy.</p>
-                </div>
-            ) : matches.map(m => (
-                <div key={m.id} style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                    <button onClick={() => setSelectedMatchId(m.id)} style={{
-                        flex: 1, padding: 18, background: '#1a1a1a', border: '1px solid #333',
-                        borderRadius: 10, color: 'white',
-                        textAlign: 'left', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
-                    }}>
-                        🏀 {m.equipoLocalNombre} vs {m.equipoVisitanteNombre}
-                        <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 4 }}>{m.hora} — {m.fechaAsignada}</div>
-                    </button>
-                    <button onClick={() => setForfaitModal(m)} style={{
-                        background: '#7f1d1d', color: 'white', border: 'none', borderRadius: 10,
-                        padding: '0 16px', fontWeight: 900, fontSize: '0.75rem', cursor: 'pointer', flexShrink: 0,
-                    }}>W.O.</button>
-                </div>
-            ))}
-            <button onClick={onClose} style={{ marginTop: 20, padding: 14, width: '100%', background: '#1e293b', color: 'white', border: '1px solid #334155', borderRadius: 10, fontWeight: 700 }}>
-                ← VOLVER
-            </button>
-        </div>
-    );
+                equiposSnap.forEach(d => {
+                    const data = d.data();
+                    const n = data.nombre?.trim().toUpperCase();
+                    if (!n) return;
+                    logoMap[n] = data.logoUrl || DEFAULT_LOGO;
+                    const esCatEspecifica = categoriaActiva !== 'MASTER40';
+                    const pertenece = esCatEspecifica
+                        ? true
+                        : (!data.categoria || data.categoria === 'MASTER40');
+                    if (pertenece) equiposBase.push({ id: d.id, ...data });
+                });
+                setTeamLogos(logoMap);
 
-    // ─────────────────────────────────────────────
-    // PANTALLA 2: Check-in de asistencia
-    // ─────────────────────────────────────────────
-    if (!checkInDone) {
-        const PlayerCheckItem = ({ p, present, setPresent, color }: any) => (
-            <div
-                onClick={() => setPresent((prev: string[]) =>
-                    prev.includes(p.id) ? prev.filter((id: string) => id !== p.id) : [...prev, p.id]
-                )}
-                style={{
-                    padding: '12px 14px', marginBottom: 6, borderRadius: 8, fontSize: '0.82rem',
-                    background: present.includes(p.id) ? color : '#1a1a1a',
-                    border: `1px solid ${present.includes(p.id) ? color : '#2d2d2d'}`,
-                    cursor: 'pointer', fontWeight: 600,
-                    display: 'flex', alignItems: 'center', gap: 10,
-                }}
-            >
-                <span style={{ opacity: present.includes(p.id) ? 1 : 0.4 }}>
-                    {present.includes(p.id) ? '✓' : '○'}
-                </span>
-                #{p.numero} — {p.nombre}
-            </div>
-        );
+                // 2. Calendario completo
+                const colCal = getColName('calendario', categoriaActiva);
+                const calSnap = await getDocs(
+                    query(collection(db, colCal), orderBy('fechaAsignada', 'asc'))
+                );
+                if (abortToken.cancelled) return;
 
-        return (
-            <div style={{ background: '#000', minHeight: '100vh', color: 'white', padding: 15, display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{ textAlign: 'center', color: '#60a5fa', marginBottom: 16, fontWeight: 900 }}>
-                    REGISTRO DE ASISTENCIA
-                </h3>
-                <div style={{ flex: 1, display: 'flex', gap: 10, overflow: 'hidden' }}>
-                    {/* Local */}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <div style={{ background: '#1e3a8a', padding: '6px 10px', fontSize: '0.65rem', fontWeight: 900, textAlign: 'center', borderRadius: 6, marginBottom: 8 }}>
-                            LOCAL ({presentLocal.length})
-                        </div>
-                        <div style={{ overflowY: 'auto', flex: 1 }}>
-                            {playersLocal.map(p => (
-                                <PlayerCheckItem key={p.id} p={p} present={presentLocal} setPresent={setPresentLocal} color="#3b82f6" />
-                            ))}
-                        </div>
-                    </div>
-                    {/* Visitante */}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <div style={{ background: '#854d0e', padding: '6px 10px', fontSize: '0.65rem', fontWeight: 900, textAlign: 'center', borderRadius: 6, marginBottom: 8 }}>
-                            VISITANTE ({presentVisitante.length})
-                        </div>
-                        <div style={{ overflowY: 'auto', flex: 1 }}>
-                            {playersVisitante.map(p => (
-                                <PlayerCheckItem key={p.id} p={p} present={presentVisitante} setPresent={setPresentVisitante} color="#ef4444" />
-                            ))}
-                        </div>
-                    </div>
-                </div>
-                <button
-                    onClick={() => {
-                        setCheckInDone(true);
-                        saveEstado({ presentLocal, presentVisitante, checkInDone: true });
-                    }}
-                    disabled={presentLocal.length < 5 || presentVisitante.length < 5}
-                    style={{
-                        padding: 16, marginTop: 12, borderRadius: 12, border: 'none',
-                        background: presentLocal.length >= 5 && presentVisitante.length >= 5 ? '#10b981' : '#1e293b',
-                        color: 'white', fontWeight: 900, fontSize: '0.85rem', cursor: 'pointer',
-                    }}
-                >
-                    {presentLocal.length >= 5 && presentVisitante.length >= 5
-                        ? 'CONTINUAR → ABRIDORES'
-                        : `Selecciona al menos 5 por equipo (${presentLocal.length}/${presentVisitante.length})`}
-                </button>
-            </div>
-        );
-    }
+                const allMatches: any[] = calSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // ─────────────────────────────────────────────
-    // PANTALLA 3: Selección de 5 abridores
-    // ─────────────────────────────────────────────
-    if (!startersDone) {
-        const StarterItem = ({ p, onCourt, setOnCourt, color }: any) => (
-            <div
-                onClick={() => setOnCourt((prev: string[]) =>
-                    prev.includes(p.id)
-                        ? prev.filter((id: string) => id !== p.id)
-                        : prev.length < 5 ? [...prev, p.id] : prev
-                )}
-                style={{
-                    padding: '12px 14px', marginBottom: 6, borderRadius: 8, fontSize: '0.82rem',
-                    background: onCourt.includes(p.id) ? color : '#1a1a1a',
-                    border: `1px solid ${onCourt.includes(p.id) ? color : '#2d2d2d'}`,
-                    cursor: 'pointer', fontWeight: 600,
-                    display: 'flex', alignItems: 'center', gap: 10,
-                }}
-            >
-                <span style={{ opacity: onCourt.includes(p.id) ? 1 : 0.3 }}>
-                    {onCourt.includes(p.id) ? '✓' : '○'}
-                </span>
-                #{p.numero} — {p.nombre}
-            </div>
-        );
+                // FILTRO MAESTRO: solo fase regular finalizada
+                const regularFinalizados = allMatches.filter(m => {
+                    const fase = (m.fase || '').trim().toUpperCase();
+                    return m.estatus === 'finalizado' && (fase === 'REGULAR' || fase === '');
+                });
+                const validRegularIds = new Set(regularFinalizados.map(m => m.id));
+                setAllMatchesGlobal(allMatches);
+                setResultadosRecientes([...regularFinalizados].reverse().slice(0, 5));
 
-        return (
-            <div style={{ background: '#000', minHeight: '100vh', color: 'white', padding: 15, display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{ textAlign: 'center', color: '#a78bfa', fontWeight: 900, marginBottom: 16 }}>
-                    SELECCIONAR 5 ABRIDORES
-                </h3>
-                <div style={{ flex: 1, display: 'flex', gap: 10, overflow: 'hidden' }}>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <div style={{ background: '#1e3a8a', padding: '6px 10px', fontSize: '0.65rem', fontWeight: 900, textAlign: 'center', borderRadius: 6, marginBottom: 8 }}>
-                            LOCAL {onCourtLocal.length}/5
-                        </div>
-                        <div style={{ overflowY: 'auto', flex: 1 }}>
-                            {playersLocal.filter(p => presentLocal.includes(p.id)).map(p => (
-                                <StarterItem key={p.id} p={p} onCourt={onCourtLocal} setOnCourt={setOnCourtLocal} color="#3b82f6" />
-                            ))}
-                        </div>
-                    </div>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <div style={{ background: '#854d0e', padding: '6px 10px', fontSize: '0.65rem', fontWeight: 900, textAlign: 'center', borderRadius: 6, marginBottom: 8 }}>
-                            VISITANTE {onCourtVisitante.length}/5
-                        </div>
-                        <div style={{ overflowY: 'auto', flex: 1 }}>
-                            {playersVisitante.filter(p => presentVisitante.includes(p.id)).map(p => (
-                                <StarterItem key={p.id} p={p} onCourt={onCourtVisitante} setOnCourt={setOnCourtVisitante} color="#ef4444" />
-                            ))}
-                        </div>
-                    </div>
-                </div>
-                <button
-                    onClick={async () => {
-                        setStartersDone(true);
-                        saveEstado({
-                            presentLocal, presentVisitante,
-                            onCourtLocal, onCourtVisitante,
-                            checkInDone: true, startersDone: true,
-                        });
-                        try { await updateDoc(doc(db, colCal, selectedMatchId!), { enVivo: true }); } catch(_) {}
-                    }}
-                    disabled={onCourtLocal.length !== 5 || onCourtVisitante.length !== 5}
-                    style={{
-                        padding: 16, marginTop: 12, borderRadius: 12, border: 'none',
-                        background: onCourtLocal.length === 5 && onCourtVisitante.length === 5 ? '#7c3aed' : '#1e293b',
-                        color: 'white', fontWeight: 900, fontSize: '0.85rem', cursor: 'pointer',
-                    }}
-                >
-                    {onCourtLocal.length === 5 && onCourtVisitante.length === 5 ? '🏀 INICIAR PARTIDO' : `Selecciona 5 por equipo`}
-                </button>
-            </div>
-        );
-    }
+                // Próximos juegos
+                const proximos = allMatches
+                    .filter(m => m.estatus !== 'finalizado')
+                    .sort((a, b) =>
+                        (a.fechaAsignada || '').localeCompare(b.fechaAsignada || '') ||
+                        (a.hora || '00:00').localeCompare(b.hora || '00:00')
+                    )
+                    .slice(0, 2);
+                setProximosJuegos(proximos);
 
-    // ─────────────────────────────────────────────
-    // Esperando verificación de estado en Firestore
-    // ─────────────────────────────────────────────
-    if (startersDone && estadoRestaurado === null) return (
-        <div style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', gap: 16 }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #334155', borderTop: '3px solid #60a5fa', animation: 'spin 0.8s linear infinite' }} />
-            <p style={{ color: '#475569', fontSize: '0.8rem', letterSpacing: '1px' }}>Restaurando partido...</p>
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
-    );
+                // 3. Recalcular stats de equipos (solo con fase regular)
+                const equiposConStats = equiposBase.map(eq => {
+                    let victorias = 0, derrotas = 0, pf = 0, pc = 0, puntos = 0;
+                    regularFinalizados.forEach(m => {
+                        if (m.equipoLocalId === eq.id) {
+                            pf += m.marcadorLocal; pc += m.marcadorVisitante;
+                            if (m.marcadorLocal > m.marcadorVisitante) { victorias++; puntos += 2; }
+                            else { derrotas++; puntos += 1; }
+                        } else if (m.equipoVisitanteId === eq.id) {
+                            pf += m.marcadorVisitante; pc += m.marcadorLocal;
+                            if (m.marcadorVisitante > m.marcadorLocal) { victorias++; puntos += 2; }
+                            else { derrotas++; puntos += 1; }
+                        }
+                    });
+                    return { ...eq, victorias, derrotas, puntos, puntos_favor: pf, puntos_contra: pc };
+                });
 
-    // ─────────────────────────────────────────────
-    // PANTALLA 4: Mesa técnica activa
-    // ─────────────────────────────────────────────
+                // 4. Ordenamiento FIBA correcto (función separada, sin bug)
+                const grupoA = equiposConStats.filter(e =>
+                    e.grupo?.toUpperCase() === 'A' || e.grupo?.toUpperCase() === 'ÚNICO'
+                );
+                const grupoB = equiposConStats.filter(e => e.grupo?.toUpperCase() === 'B');
+
+                setEquiposA(resolverEmpate(grupoA, regularFinalizados));
+                setEquiposB(resolverEmpate(grupoB, regularFinalizados));
+
+                // 5. Líderes del dashboard
+                const teamGamesCount: Record<string, number> = {};
+                regularFinalizados.forEach(g => {
+                    const loc = g.equipoLocalNombre?.trim().toUpperCase();
+                    const vis = g.equipoVisitanteNombre?.trim().toUpperCase();
+                    if (loc) teamGamesCount[loc] = (teamGamesCount[loc] || 0) + 1;
+                    if (vis) teamGamesCount[vis] = (teamGamesCount[vis] || 0) + 1;
+                });
+
+                // Fotos de jugadores para el card del líder
+                const colJugadores = getColName('jugadores', categoriaActiva);
+                const jugSnap = await getDocs(collection(db, colJugadores));
+                if (abortToken.cancelled) return;
+                const fotoMap: Record<string, string> = {};
+                jugSnap.forEach(d => { if (d.data().fotoUrl) fotoMap[d.id] = d.data().fotoUrl; });
+
+                const statsSnap = await getDocs(collection(db, 'stats_partido'));
+                if (abortToken.cancelled) return;
+
+                const aggregated: Record<string, any> = {};
+                statsSnap.forEach(d => {
+                    const stat = d.data();
+                    const jId = stat.partidoId || stat.juegoId;
+                    if (!jId || !validRegularIds.has(jId) || !stat.jugadorId) return;
+
+                    const plyId = stat.jugadorId;
+                    const eqKey = (stat.equipo || '').trim().toUpperCase();
+                    if (!aggregated[plyId]) {
+                        aggregated[plyId] = {
+                            nombre: stat.nombre, equipo: eqKey,
+                            pts: 0, reb: 0, rob: 0, tri: 0, blq: 0, pj: 0,
+                            fotoUrl: fotoMap[plyId] || '',
+                        };
+                    }
+                    const acc = aggregated[plyId];
+                    acc.pts += (Number(stat.tirosLibres) || 0)
+                        + (Number(stat.dobles) || 0) * 2
+                        + (Number(stat.triples) || 0) * 3;
+                    acc.reb += (Number(stat.rebotes)  || 0);
+                    acc.rob += (Number(stat.robos)    || 0);
+                    acc.tri += (Number(stat.triples)  || 0);
+                    acc.blq += (Number(stat.bloqueos) || 0);
+                    acc.pj  += 1;
+                });
+
+                const playerList = Object.values(aggregated).map((p: any) => {
+                    const den = teamGamesCount[p.equipo] || p.pj || 1;
+                    return {
+                        ...p,
+                        ppg:  parseFloat((p.pts / den).toFixed(1)),
+                        rpg:  parseFloat((p.reb / den).toFixed(1)),
+                        spg:  parseFloat((p.rob / den).toFixed(1)),
+                        tpg:  parseFloat((p.tri / den).toFixed(1)),
+                        bpg:  parseFloat((p.blq / den).toFixed(1)),
+                    };
+                });
+
+                // Construir un líder por cada categoría estadística
+                if (playerList.length > 0) {
+                    const top = (key: string) => [...playerList].sort((a: any, b: any) => b[key] - a[key])[0];
+                    const cats = [
+                        { key: 'ppg',  label: 'PUNTOS',   unit: 'PPG', icon: '🔥', color: '#ef4444' },
+                        { key: 'rpg',  label: 'REBOTES',  unit: 'RPG', icon: '🖐️', color: '#10b981' },
+                        { key: 'spg',  label: 'ROBOS',    unit: 'RPG', icon: '🛡️', color: '#6366f1' },
+                        { key: 'tpg',  label: 'TRIPLES',  unit: '3PG', icon: '🏹', color: '#8b5cf6' },
+                        { key: 'bpg',  label: 'BLOQUEOS', unit: 'BPG', icon: '🚫', color: '#f43f5e' },
+                    ];
+                    const nuevosLideres: any[] = [];
+                    cats.forEach(cat => {
+                        const lider = top(cat.key);
+                        if (lider && (lider[cat.key] as number) > 0) {
+                            nuevosLideres.push({
+                                label: cat.label, unit: cat.unit,
+                                icon: cat.icon, color: cat.color,
+                                p: lider, val: lider[cat.key],
+                            });
+                        }
+                    });
+                    setLeadersList(nuevosLideres);
+                }
+
+                // 6. Noticias y entrevistas
+                const [newsSnap, interviewsSnap] = await Promise.all([
+                    getDocs(query(collection(db, 'noticias'),    orderBy('fecha', 'desc'), limit(5))),
+                    getDocs(query(collection(db, 'entrevistas'), orderBy('fecha', 'desc'), limit(5))),
+                ]);
+                if (abortToken.cancelled) return;
+
+                setNoticias(newsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                setEntrevistas(interviewsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+                setLoading(false);
+            } catch (e) {
+                if (!abortToken.cancelled) {
+                    console.error(e);
+                    setLoading(false);
+                }
+            }
+        };
+
+        fetchData();
+        return () => { abortToken.cancelled = true; };
+    }, [categoriaActiva]); // ← solo categoría, no activeView
+
+    // ── Carrusel automático ──
+    useEffect(() => {
+        const itv = setInterval(() => {
+            setNoticiaIndex(p => (p + 1) % (noticias.length   || 1));
+            setJuegoIndex  (p => (p + 1) % (resultadosRecientes.length || 1));
+            setTablaIndex  (p => (p + 1) % 2);
+            setLeaderIndex (p => (p + 1) % (leadersList.length || 1));
+        }, 6000);
+        return () => clearInterval(itv);
+    }, [noticias.length, resultadosRecientes.length, leadersList.length]);
+
+    const isAdmin = user?.rol === 'admin';
+
     return (
-        <div style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', color: 'white', overflow: 'hidden', fontFamily: "'Inter','Segoe UI',sans-serif" }}>
-            <style>{`@keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(-8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`}</style>
+        <div style={{ minHeight: '100vh', backgroundColor: '#ffffff', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: 110 }}>
 
-            {toast && <Toast msg={toast.msg} color={toast.color} />}
-            {confirmModal && <ConfirmModal mensaje={confirmModal.msg} onConfirm={() => { confirmModal.onConfirm(); setConfirmModal(null); }} onCancel={() => setConfirmModal(null)} />}
+            {/* ── Header — oculto en mesa ── */}
+            {activeView !== 'mesa' && <div style={{ position: 'sticky', top: 0, zIndex: 1000 }}>
+            <header style={{
+                background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 60%, #1d4ed8 100%)',
+                padding: '14px 15px 0',
+                boxShadow: '0 4px 20px rgba(30,58,138,0.4)',
+            }}>
+                {/* Fila superior: logo + título + botones */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
 
-            {/* ══════════════════════════════════════════
-                SCOREBOARD — toda la info arriba
-            ══════════════════════════════════════════ */}
-            <div style={{ background: '#0a0f1e', borderBottom: '2px solid #1e293b', flexShrink: 0, padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-
-                {/* Fila 1: Logos + Nombres + Marcador */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-
-                    {/* LOCAL */}
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', overflow: 'hidden' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.9)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>
-                            {matchData?.equipoLocalNombre}
-                        </span>
-                        <img src={logos.local} alt="L" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #3b82f6', flexShrink: 0 }}
-                            onError={e => { (e.target as HTMLImageElement).src = DEFAULT_LOGO; }} />
+                    {/* Logo */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{
+                            width: 48, height: 48, borderRadius: '50%',
+                            border: '2px solid rgba(255,255,255,0.3)',
+                            overflow: 'hidden', background: 'white',
+                            boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+                            cursor: 'pointer',
+                        }} onClick={() => setActiveView('dashboard')}>
+                            <img
+                                src="https://i.postimg.cc/hhF5fTPn/image.png"
+                                alt="Logo"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                        </div>
+                        <div
+                            onClick={() => setActiveView('login')}
+                            style={{ fontSize: '0.7rem', opacity: 0.08, marginTop: 2, cursor: 'pointer', color: 'white' }}
+                        >🔑</div>
                     </div>
 
-                    {/* MARCADOR CENTRAL */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: '6px 18px', flexShrink: 0 }}>
-                        <span style={{ fontSize: '2.2rem', fontWeight: 900, lineHeight: 1, minWidth: 36, textAlign: 'center' }}>{matchData?.marcadorLocal ?? 0}</span>
-                        <span style={{ fontSize: '0.7rem', color: '#475569', fontWeight: 700 }}>—</span>
-                        <span style={{ fontSize: '2.2rem', fontWeight: 900, lineHeight: 1, minWidth: 36, textAlign: 'center' }}>{matchData?.marcadorVisitante ?? 0}</span>
+                    {/* Título */}
+                    <div style={{ textAlign: 'center', flex: 1, padding: '0 8px' }}>
+                        <h1 style={{ fontSize: '0.9rem', fontWeight: 900, color: 'white', margin: 0, textTransform: 'uppercase', letterSpacing: '1px', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
+                            Liga Metropolitana
+                        </h1>
+                        <p style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.65)', margin: '2px 0 0', fontWeight: 700, letterSpacing: '2px' }}>
+                            EJE ESTE • 2026
+                        </p>
                     </div>
 
-                    {/* VISITANTE */}
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', overflow: 'hidden' }}>
-                        <img src={logos.visitante} alt="V" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #ef4444', flexShrink: 0 }}
-                            onError={e => { (e.target as HTMLImageElement).src = DEFAULT_LOGO; }} />
-                        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.9)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>
-                            {matchData?.equipoVisitanteNombre}
-                        </span>
+                    {/* Botones árbitro + reglamento */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                        {/* Árbitro Virtual */}
+                        <button
+                            onClick={() => window.open('https://zona-fiba-app-2026.vercel.app/', '_blank')}
+                            style={{
+                                background: 'rgba(255,255,255,0.12)',
+                                border: '1px solid rgba(255,255,255,0.25)',
+                                borderRadius: 12, padding: '6px 8px',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                                cursor: 'pointer', transition: 'background 0.2s',
+                                minWidth: 52,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.22)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+                        >
+                            <div style={{
+                                width: 32, height: 32, borderRadius: '50%',
+                                overflow: 'hidden', border: '2px solid rgba(255,255,255,0.4)',
+                                background: 'rgba(255,255,255,0.1)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                <img
+                                    src="/icon/arbitro-icon.png"
+                                    alt="Árbitro"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    onError={e => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        (e.target as HTMLImageElement).parentElement!.innerHTML = '<span style="font-size:1.1rem">👕</span>';
+                                    }}
+                                />
+                            </div>
+                            <span style={{ fontSize: '0.38rem', fontWeight: 900, color: 'white', letterSpacing: '0.8px', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>ÁRBITRO</span>
+                        </button>
+
+                        {/* Reglamento */}
+                        <button
+                            onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento%20Interno%20Baloncesto%202026.pdf?alt=media&token=ee680a1c-b93d-4159-ae99-0aef67cb4703', '_blank')}
+                            style={{
+                                background: 'rgba(255,255,255,0.12)',
+                                border: '1px solid rgba(255,255,255,0.25)',
+                                borderRadius: 12, padding: '6px 8px',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                                cursor: 'pointer', transition: 'background 0.2s',
+                                minWidth: 52,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.22)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+                        >
+                            <div style={{
+                                width: 32, height: 32, borderRadius: '50%',
+                                background: 'rgba(255,255,255,0.15)',
+                                border: '2px solid rgba(255,255,255,0.4)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '1.1rem',
+                            }}>📜</div>
+                            <span style={{ fontSize: '0.38rem', fontWeight: 900, color: 'white', letterSpacing: '0.8px', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>REGLAMENTO</span>
+                        </button>
                     </div>
                 </div>
 
-                {/* Fila 2: Cuartos + Acciones */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#0f172a', borderRadius: 8, padding: '4px 6px' }}>
-                    {['Q1','Q2','Q3','Q4','TE'].map(q => (
-                        <button key={q} onClick={() => { setCuartoActual(q); saveEstado({ cuartoActual: q }); }} style={{
-                            padding: '5px 11px', borderRadius: 6, border: 'none',
-                            background: cuartoActual === q ? '#3b82f6' : '#1e293b',
-                            color: cuartoActual === q ? 'white' : '#64748b',
-                            fontWeight: 900, cursor: 'pointer', fontSize: '0.72rem', flexShrink: 0,
-                        }}>{q}</button>
+                {/* Selector de categorías */}
+                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 12 }} className="no-scrollbar">
+                    {CATEGORIAS_DISPONIBLES.map(cat => (
+                        <button
+                            key={cat.id}
+                            onClick={() => setCategoriaActiva(cat.id)}
+                            style={{
+                                padding: '6px 14px', borderRadius: 20, border: 'none',
+                                whiteSpace: 'nowrap', flexShrink: 0,
+                                background: categoriaActiva === cat.id
+                                    ? 'white'
+                                    : 'rgba(255,255,255,0.12)',
+                                color: categoriaActiva === cat.id ? '#1e3a8a' : 'rgba(255,255,255,0.8)',
+                                fontSize: '0.62rem', fontWeight: 900, cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: categoriaActiva === cat.id ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
+                            }}
+                        >
+                            {cat.label}
+                        </button>
                     ))}
-                    <div style={{ flex: 1 }} />
-                    <button onClick={async () => {
-                        try { if (matchData) await updateDoc(doc(db, colCal, matchData.id), { enVivo: false }); } catch(_) {}
-                        setSelectedMatchId(null);
-                    }} style={actionBtnStyle('#334155')}>SALIR</button>
-                    <button onClick={handleUndo} style={actionBtnStyle('#92400e')}>↩️</button>
-                    <button onClick={() => setIsHistoryOpen(true)} style={actionBtnStyle('#334155')}>📜</button>
-                    <button onClick={handleFinalize} style={{ ...actionBtnStyle('#065f46'), fontWeight: 900 }}>✅ FINAL</button>
                 </div>
-            </div>
+            </header>
 
-            {/* ══════════════════════════════════════════
-                JUGADORES — 2 columnas, sin scroll
-            ══════════════════════════════════════════ */}
-            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            {/* ── METRO NEWS TICKER ── */}
+            <MetroTicker />
+            </div>}{/* end sticky wrapper */}
 
-                {/* LOCAL */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '4px 4px 4px 4px', overflow: 'hidden' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 4, background: '#1e3a8a', padding: '3px 0', borderRadius: 6, fontSize: '0.6rem', fontWeight: 900, letterSpacing: '1px', flexShrink: 0 }}>
-                        LOCAL
+            {/* ── Contenido principal ── */}
+            <main style={{ padding: activeView === 'mesa' ? 0 : 15, maxWidth: activeView === 'mesa' ? '100%' : 500, margin: '0 auto' }}>
+                {activeView === 'login' ? (
+                    <div className="fade-in">
+                        <Login />
+                        <button
+                            onClick={() => setActiveView('dashboard')}
+                            style={{ width: '100%', marginTop: 20, background: 'none', border: 'none', color: '#94a3b8', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.7rem' }}
+                        >
+                            ← VOLVER
+                        </button>
                     </div>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-around', gap: 3, overflow: 'hidden' }}>
-                        {playersLocal.filter(p => onCourtLocal.includes(p.id)).map(p => (
-                            <PlayerRow key={p.id} player={p} team="local"
-                                stats={statsCache[p.id] ?? {}} onStat={handleStat}
-                                onSub={id => setSubModal({ team: 'local', replacingId: id, isOpen: true })}
-                                flashing={flashMap[`${p.id}_${Object.keys(flashMap).find(k => k.startsWith(p.id+'_') && flashMap[k])?.split('_')[1] ?? ''}`] ?? null}
-                            />
-                        ))}
-                    </div>
-                </div>
+                ) : activeView === 'dashboard' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 25 }}>
 
-                {/* Divisor */}
-                <div style={{ width: 1, background: '#1e293b', flexShrink: 0 }} />
-
-                {/* VISITANTE */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '4px 4px 4px 4px', overflow: 'hidden' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 4, background: '#7f1d1d', padding: '3px 0', borderRadius: 6, fontSize: '0.6rem', fontWeight: 900, letterSpacing: '1px', flexShrink: 0 }}>
-                        VISITANTE
-                    </div>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-around', gap: 3, overflow: 'hidden' }}>
-                        {playersVisitante.filter(p => onCourtVisitante.includes(p.id)).map(p => (
-                            <PlayerRow key={p.id} player={p} team="visitante"
-                                stats={statsCache[p.id] ?? {}} onStat={handleStat}
-                                onSub={id => setSubModal({ team: 'visitante', replacingId: id, isOpen: true })}
-                                flashing={flashMap[`${p.id}_${Object.keys(flashMap).find(k => k.startsWith(p.id+'_') && flashMap[k])?.split('_')[1] ?? ''}`] ?? null}
-                            />
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            {/* Modal sustitución */}
-            {subModal.isOpen && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.93)', zIndex: 4000, padding: 20, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div style={{ background: '#1e293b', width: '100%', maxWidth: 380, borderRadius: 16, overflow: 'hidden', border: '1px solid #334155' }}>
-                        <div style={{ padding: '16px 20px', background: '#0f172a', textAlign: 'center', fontWeight: 900, fontSize: '0.85rem', color: '#60a5fa' }}>
-                            ¿QUIÉN ENTRA POR EL #{(subModal.team === 'local' ? playersLocal : playersVisitante).find(p => p.id === subModal.replacingId)?.numero ?? '??'}?
-                        </div>
-                        <div style={{ maxHeight: 340, overflowY: 'auto', padding: 10 }}>
-                            {(subModal.team === 'local' ? playersLocal : playersVisitante)
-                                .filter(p => (subModal.team === 'local' ? presentLocal : presentVisitante).includes(p.id) && !(subModal.team === 'local' ? onCourtLocal : onCourtVisitante).includes(p.id))
-                                .map(p => (
-                                    <div key={p.id} onClick={() => executeSwap(p.id)} style={{ padding: '14px 16px', borderBottom: '1px solid #0f172a', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', color: 'white', fontWeight: 700, fontSize: '0.85rem', borderRadius: 8, marginBottom: 4, background: '#0f172a' }}>
-                                        <span>#{p.numero} — {p.nombre}</span>
-                                        <span style={{ color: '#10b981' }}>ENTRAR ➔</span>
-                                    </div>
-                                ))}
-                        </div>
-                        <button onClick={() => setSubModal(s => ({ ...s, isOpen: false }))} style={{ width: '100%', padding: 14, background: '#334155', color: '#94a3b8', border: 'none', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}>CANCELAR</button>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal historial */}
-            {isHistoryOpen && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.93)', zIndex: 4000, padding: 20, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div style={{ background: '#1e293b', width: '100%', maxWidth: 400, borderRadius: 16, overflow: 'hidden', maxHeight: '80vh', display: 'flex', flexDirection: 'column', border: '1px solid #334155' }}>
-                        <div style={{ padding: '14px 20px', background: '#0f172a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 900, fontSize: '0.85rem' }}>
-                            <span>📜 HISTORIAL</span>
-                            <button onClick={() => setIsHistoryOpen(false)} style={{ background: '#334155', border: 'none', color: 'white', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
-                        </div>
-                        <div style={{ overflowY: 'auto', flex: 1, padding: 10 }}>
-                            {recentPlays.length === 0 && <p style={{ textAlign: 'center', color: '#475569', padding: 20, fontSize: '0.8rem' }}>Sin jugadas</p>}
-                            {recentPlays.map((play, i) => (
-                                <div key={play.id} style={{ padding: '10px 14px', marginBottom: 4, borderRadius: 8, background: i === 0 ? '#0f2d1f' : '#0f172a', border: `1px solid ${i === 0 ? '#10b981' : '#1e293b'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flex: 1, minWidth: 0 }}>
-                                        <span style={{ background: play.equipo === 'local' ? '#1e3a8a' : '#7f1d1d', color: 'white', padding: '2px 7px', borderRadius: 4, fontWeight: 900, fontSize: '0.72rem', flexShrink: 0 }}>#{play.jugadorNumero}</span>
-                                        <div style={{ minWidth: 0 }}>
-                                            <div style={{ fontWeight: 700, fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{play.jugadorNombre}</div>
-                                            <div style={{ fontSize: '0.55rem', color: i === 0 ? '#10b981' : '#475569' }}>{i === 0 ? '← última' : `#${i+1}`}</div>
+                        {/* Resultados recientes */}
+                        <section>
+                            <h2 style={{ fontSize: '0.7rem', fontWeight: 900, color: '#1e3a8a', marginBottom: 10, textTransform: 'uppercase' }}>
+                                🏀 Resultados Fase Regular {categoriaActiva}
+                            </h2>
+                            <div style={{ position: 'relative', height: 180, borderRadius: 24, overflow: 'hidden', boxShadow: '0 10px 30px rgba(30,58,138,0.12)' }}>
+                                {resultadosRecientes.length > 0 ? (
+                                    <div key={juegoIndex} className="fade-in" style={{ height: '100%', background: 'linear-gradient(135deg, #1e3a8a, #1e40af)', color: 'white', padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                                            {/* Local */}
+                                            <div style={{ textAlign: 'center', flex: 1 }}>
+                                                <img src={teamLogos[resultadosRecientes[juegoIndex].equipoLocalNombre?.trim().toUpperCase()] || DEFAULT_LOGO} onError={(e) => { e.currentTarget.src = DEFAULT_LOGO; }} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: '50%', background: 'white' }} alt="" />
+                                                <p style={{ fontSize: '0.55rem', fontWeight: 900, marginTop: 5 }}>{resultadosRecientes[juegoIndex].equipoLocalNombre}</p>
+                                            </div>
+                                            {/* Marcador */}
+                                            <div style={{ textAlign: 'center', flex: 1 }}>
+                                                <p style={{ fontSize: '1.8rem', fontWeight: 900, margin: 0 }}>
+                                                    {resultadosRecientes[juegoIndex].marcadorLocal} - {resultadosRecientes[juegoIndex].marcadorVisitante}
+                                                </p>
+                                            </div>
+                                            {/* Visitante */}
+                                            <div style={{ textAlign: 'center', flex: 1 }}>
+                                                <img src={teamLogos[resultadosRecientes[juegoIndex].equipoVisitanteNombre?.trim().toUpperCase()] || DEFAULT_LOGO} onError={(e) => { e.currentTarget.src = DEFAULT_LOGO; }} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: '50%', background: 'white' }} alt="" />
+                                                <p style={{ fontSize: '0.55rem', fontWeight: 900, marginTop: 5 }}>{resultadosRecientes[juegoIndex].equipoVisitanteNombre}</p>
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); window.open('https://www.youtube.com/@ligametropolitanadelejeeste', '_blank'); }}
+                                                style={{ flex: 1, padding: '8px 6px', borderRadius: 12, border: 'none', background: '#ff0000', color: 'white', fontWeight: 900, fontSize: '0.55rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                                            >
+                                                <img src="https://i.postimg.cc/XJ6rWrrL/image.png" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
+                                                LIGA OFICIAL
+                                            </button>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); window.open('https://www.tiktok.com/@barbakanzler', '_blank'); }}
+                                                style={{ flex: 1, padding: '8px 6px', borderRadius: 12, border: 'none', background: '#010101', color: 'white', fontWeight: 900, fontSize: '0.55rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                                            >
+                                                <img src="https://i.postimg.cc/RZ9XnGD5/channels4_profile.jpg" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
+                                                @BARBAKANZLER
+                                            </button>
                                         </div>
                                     </div>
-                                    <span style={{ fontWeight: 900, flexShrink: 0, color: play.puntos > 0 ? '#10b981' : '#f59e0b', fontSize: '0.72rem' }}>{play.accion.toUpperCase()}{play.puntos > 0 && ` +${play.puntos}`}</span>
-                                    <button onClick={() => handleDeleteJugada(play)} style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: 6, width: 28, height: 28, flexShrink: 0, cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🗑️</button>
+                                ) : (
+                                    <div style={{ height: '100%', background: '#f8fafc', borderRadius: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: '#94a3b8' }}>
+                                        No hay resultados de fase regular aún
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+
+                        {/* Noticias + Líder */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15 }}>
+                            {/* Noticias */}
+                            <div onClick={() => setActiveView('noticias')} style={{ height: 220, background: 'white', borderRadius: 24, border: '2.5px solid #1e3a8a', cursor: 'pointer', overflow: 'hidden', boxShadow: '0 8px 25px rgba(30,58,138,0.1)' }}>
+                                <div style={{ background: '#1e3a8a', padding: '6px 12px' }}>
+                                    <p style={{ fontSize: '0.6rem', fontWeight: 900, color: 'white', margin: 0, textAlign: 'center' }}>📢 PRENSA LIGA</p>
                                 </div>
-                            ))}
+                                <div style={{ height: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', padding: 5 }}>
+                                    {noticias.length > 0 && (
+                                        <img key={noticiaIndex} src={noticias[noticiaIndex].imageUrl} className="fade-in" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} alt="" />
+                                    )}
+                                </div>
+                                <p style={{ fontSize: '0.6rem', fontWeight: 800, padding: '8px 12px', textAlign: 'center', color: '#1e293b' }}>
+                                    {noticias[noticiaIndex]?.titulo?.toUpperCase()}
+                                </p>
+                            </div>
+
+                            {/* Líder */}
+                            <div onClick={() => setActiveView('stats')} style={{ height: 220, background: '#ffffff', borderRadius: 24, border: `2.5px solid ${leadersList[leaderIndex]?.color || '#eee'}`, cursor: 'pointer', textAlign: 'center', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden', boxShadow: `0 8px 25px ${leadersList[leaderIndex]?.color || '#eee'}20` }}>
+                                {leadersList.length > 0 ? (() => {
+                                    const ldr = leadersList[leaderIndex];
+                                    const fotoUrl = ldr.p?.fotoUrl || '';
+                                    const logoUrl = teamLogos[ldr.p?.equipo?.toUpperCase()] || DEFAULT_LOGO;
+                                    const inicial = (ldr.p?.nombre || '?').charAt(0).toUpperCase();
+                                    return (
+                                        <div key={leaderIndex} className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                                            {/* Header coloreado */}
+                                            <div style={{ background: ldr.color, padding: '6px 10px', color: 'white', fontSize: '0.58rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                                {ldr.icon} LÍDER {ldr.label}
+                                            </div>
+
+                                            {/* Cuerpo */}
+                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '8px 10px', gap: 5 }}>
+                                                {/* Foto del jugador */}
+                                                <div style={{ width: 58, height: 58, borderRadius: '50%', overflow: 'hidden', border: `2.5px solid ${ldr.color}`, background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    {fotoUrl ? (
+                                                        <img src={fotoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt=""
+                                                            onError={e => { e.currentTarget.style.display='none'; (e.currentTarget.nextSibling as any).style.display='flex'; }}
+                                                        />
+                                                    ) : null}
+                                                    <div style={{ display: fotoUrl ? 'none' : 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', background: ldr.color, color: 'white', fontSize: '1.4rem', fontWeight: 900 }}>
+                                                        {inicial}
+                                                    </div>
+                                                </div>
+
+                                                {/* Nombre del jugador */}
+                                                <div style={{ fontSize: '0.72rem', fontWeight: 900, color: '#1e293b', lineHeight: 1.1, textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                                                    {ldr.p?.nombre}
+                                                </div>
+
+                                                {/* Logo + nombre del equipo */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                    <img src={logoUrl} style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: '50%', background: '#f1f5f9', border: '1px solid #e2e8f0' }} alt="" onError={e => { e.currentTarget.src = DEFAULT_LOGO; }} />
+                                                    <span style={{ fontSize: '0.5rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
+                                                        {ldr.p?.equipo}
+                                                    </span>
+                                                </div>
+
+                                                {/* Estadística */}
+                                                <div style={{ fontSize: '1.9rem', fontWeight: 900, color: ldr.color, lineHeight: 1 }}>
+                                                    {ldr.val}
+                                                    <span style={{ fontSize: '0.6rem', color: '#94a3b8', marginLeft: 2 }}>{ldr.unit}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })() : (
+                                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', color: '#94a3b8', padding: 20 }}>
+                                        Cargando líderes...
+                                    </div>
+                                )}
+                            </div>
                         </div>
+
+                        {/* Tabla regular */}
+                        <section>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                <h2 style={{ fontSize: '0.75rem', fontWeight: 900, color: '#1e3a8a', margin: 0 }}>
+                                    🏆 Tabla Regular {categoriaActiva}
+                                </h2>
+                                <span style={{ fontSize: '0.55rem', fontWeight: 900, color: '#94a3b8', background: '#f1f5f9', padding: '3px 10px', borderRadius: 12, textTransform: 'uppercase' }}>
+                                    {getGroupLabel(tablaIndex === 0 ? 'A' : 'B', categoriaActiva)}
+                                </span>
+                            </div>
+                            <div onClick={() => setActiveView('tabla')} style={{ cursor: 'pointer' }}>
+                                <RenderTableSummary
+                                    title="TABLA OFICIAL"
+                                    data={tablaIndex === 0 ? equiposA : equiposB}
+                                    color={tablaIndex === 0 ? '#1e3a8a' : '#d97706'}
+                                />
+                            </div>
+                        </section>
+
+                        {/* Próximos juegos */}
+                        <section>
+                            <div style={{ background: 'white', borderRadius: 24, border: '2.5px solid #1e3a8a', overflow: 'hidden', boxShadow: '0 10px 30px rgba(30,58,138,0.1)' }}>
+                                <div style={{ background: '#1e3a8a', padding: '10px 15px' }}>
+                                    <h2 style={{ fontSize: '0.75rem', fontWeight: 900, color: 'white', margin: 0, textTransform: 'uppercase' }}>
+                                        📅 Próxima Jornada {categoriaActiva}
+                                    </h2>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', padding: 10, gap: 10 }}>
+                                    {proximosJuegos.length > 0 ? proximosJuegos.map(j => (
+                                        <div key={j.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, background: '#f8fafc', borderRadius: 18, border: '1px solid #e2e8f0' }}>
+                                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                                                <span style={{ fontSize: '0.65rem', fontWeight: 900, textAlign: 'right', lineHeight: 1.1 }}>{j.equipoLocalNombre.toUpperCase()}</span>
+                                                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'white', border: '1px solid #eee', overflow: 'hidden', flexShrink: 0 }}>
+                                                    <img src={teamLogos[j.equipoLocalNombre?.trim().toUpperCase()]} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="" />
+                                                </div>
+                                            </div>
+                                            <div style={{ flex: 0.8, textAlign: 'center', margin: '0 5px' }}>
+                                                <span style={{ background: '#1e3a8a', color: 'white', padding: '3px 10px', borderRadius: 10, fontSize: '0.55rem', fontWeight: 900 }}>
+                                                    {j.hora || 'VS'}
+                                                </span>
+                                                <p style={{ fontSize: '0.45rem', color: '#94a3b8', marginTop: 3, fontWeight: 'bold' }}>{j.fechaAsignada}</p>
+                                            </div>
+                                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8 }}>
+                                                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'white', border: '1px solid #eee', overflow: 'hidden', flexShrink: 0 }}>
+                                                    <img src={teamLogos[j.equipoVisitanteNombre?.trim().toUpperCase()]} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="" />
+                                                </div>
+                                                <span style={{ fontSize: '0.65rem', fontWeight: 900, lineHeight: 1.1 }}>{j.equipoVisitanteNombre.toUpperCase()}</span>
+                                            </div>
+                                        </div>
+                                    )) : (
+                                        <div style={{ textAlign: 'center', padding: 20, fontSize: '0.7rem', color: '#94a3b8' }}>
+                                            Sin juegos programados
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Entrevistas */}
+                        <section>
+                            <h2 style={{ fontSize: '0.75rem', fontWeight: 900, color: '#1e3a8a', marginBottom: 10, textTransform: 'uppercase' }}>
+                                🎙️ Zona de Entrevistas
+                            </h2>
+                            <div style={{ display: 'flex', overflowX: 'auto', gap: 12, paddingBottom: 10, scrollSnapType: 'x mandatory' }} className="no-scrollbar">
+                                {entrevistas.length > 0 ? entrevistas.map(video => (
+                                    <div key={video.id} onClick={() => setVideoSeleccionado(video)} style={{ minWidth: 100, cursor: 'pointer', scrollSnapAlign: 'start', textAlign: 'center', flexShrink: 0 }}>
+                                        <div style={{ width: 100, height: 140, borderRadius: 15, overflow: 'hidden', border: '2px solid #1e3a8a', position: 'relative', background: '#000' }}>
+                                            <video src={`${video.videoUrl}#t=0.1`} muted preload="metadata" playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <span style={{ fontSize: '1.5rem', color: 'white', background: 'rgba(255,255,255,0.2)', borderRadius: '50%', width: 35, height: 35, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid white' }}>▶</span>
+                                            </div>
+                                        </div>
+                                        <p style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#1e293b', marginTop: 6, lineHeight: 1.1, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 100 }}>
+                                            {video.titulo}
+                                        </p>
+                                    </div>
+                                )) : (
+                                    <p style={{ textAlign: 'center', fontSize: '0.6rem', color: '#94a3b8', width: '100%' }}>Cargando entrevistas...</p>
+                                )}
+                            </div>
+                        </section>
+
+                        {/* Modal de video */}
+                        {videoSeleccionado && (
+                            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 5000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                <button onClick={() => setVideoSeleccionado(null)} style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', borderRadius: '50%', width: 40, height: 40, fontSize: '1.2rem', fontWeight: 'bold', cursor: 'pointer', zIndex: 5001 }}>✕</button>
+                                <div style={{ width: '100%', maxWidth: 500, height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <video src={videoSeleccionado.videoUrl} controls autoPlay playsInline style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 10, boxShadow: '0 0 30px rgba(0,0,0,0.5)' }} />
+                                </div>
+                                <div style={{ color: 'white', textAlign: 'center', padding: 10 }}>
+                                    <h3 style={{ margin: 0, fontSize: '1rem' }}>{videoSeleccionado.titulo}</h3>
+                                    <p style={{ margin: '5px 0 0', fontSize: '0.7rem', color: '#ccc' }}>{videoSeleccionado.fecha}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Panel admin */}
+                        {isAdmin && (
+                            <div style={{ padding: 15, background: '#1e3a8a', borderRadius: 24, color: 'white', textAlign: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                    <button onClick={() => setActiveView('mesa')}   style={adminBtnStyle}>⏱ MESA</button>
+                                    <button onClick={() => setActiveView('equipos')} style={adminBtnStyle}>🛡 EQUIPOS</button>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+                                    <button onClick={() => setActiveView('adminVideos')} style={adminBtnStyle}>🎥 VIDEOS</button>
+                                    <button onClick={() => setShowReset(true)} style={{ ...adminBtnStyle, background: 'rgba(239,68,68,0.25)', border: '1px solid #ef4444', color: '#fca5a5' }}>☢️ RESET</button>
+                                </div>
+                                <button onClick={() => signOut(auth)} style={{ marginTop: 10, background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: '0.5rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                                    SALIR ADMIN
+                                </button>
+                            </div>
+                        )}
                     </div>
+                ) : (
+                    <>
+                        {activeView === 'noticias'    && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
+                        {activeView === 'stats'       && <StatsViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'playoff'     && <PlayoffViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'tabla'       && <StandingsViewer equipos={[...equiposA, ...equiposB]} partidos={allMatchesGlobal} categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'calendario'  && <CalendarViewer categoria={categoriaActiva} rol={user?.rol} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'mesa'        && isAdmin && <MesaTecnica categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'equipos_pub'  && <TeamsPublicViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'equipos'     && isAdmin && <AdminEquipos categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'adminVideos' && isAdmin && <AdminVideos onClose={() => setActiveView('dashboard')} />}
+                    </>
+                )}
+            </main>
+
+            {/* ── Barra de navegación — oculta en mesa ── */}
+            {activeView !== 'mesa' && <nav style={{
+                position: 'fixed', bottom: 20, left: 20, right: 20,
+                background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(10px)',
+                height: 75, display: 'flex', justifyContent: 'flex-start',
+                alignItems: 'center', overflowX: 'auto',
+                borderRadius: 35, boxShadow: '0 15px 40px rgba(0,0,0,0.12)',
+                border: '1.5px solid #f1f5f9', zIndex: 1000,
+                padding: '0 10px', gap: 2,
+                scrollbarWidth: 'none',
+            }}
+                className="no-scrollbar"
+            >
+                {[
+                    { v: 'calendario',  i: '📅', l: 'Juegos'   },
+                    { v: 'tabla',       i: '🏆', l: 'Tablas'   },
+                    { v: 'dashboard',   i: '🏠', l: 'Inicio'   },
+                    { v: 'playoff',     i: '🔥', l: 'Playoff'  },
+                    { v: 'stats',       i: '📊', l: 'Líderes'  },
+                    { v: 'equipos_pub', i: '🛡️', l: 'Equipos'  },
+                    { v: 'noticias',    i: '📰', l: 'Noticias' },
+                ].map(item => (
+                    <button
+                        key={item.v}
+                        onClick={() => setActiveView(item.v)}
+                        style={{
+                            background: 'none', border: 'none',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                            color: activeView === item.v ? '#1e3a8a' : '#94a3b8',
+                            cursor: 'pointer', transition: '0.3s',
+                            flex: '1 0 auto', minWidth: 52, padding: '0 4px',
+                        }}
+                    >
+                        <span style={{ fontSize: '1.3rem', transform: activeView === item.v ? 'scale(1.25)' : 'scale(1)', transition: '0.3s' }}>{item.i}</span>
+                        <span style={{ fontSize: '0.55rem', fontWeight: 900, textTransform: 'uppercase' }}>{item.l}</span>
+                    </button>
+                ))}
+            </nav>}
+
+            {/* ── Botón EN VIVO flotante ── */}
+            {hasLiveGame && activeView !== 'mesa' && !liveGameId && (
+                <button
+                    onClick={() => {
+                        // If only one live game, go directly
+                        const id = (window as any).__livePartidoId;
+                        const cat = (window as any).__liveCategoria;
+                        if (id && cat) {
+                            setLiveGameId(id);
+                        } else {
+                            setShowLiveSelector(true);
+                        }
+                    }}
+                    style={{
+                        position: 'fixed', bottom: 104, right: 16, zIndex: 1100,
+                        background: '#ef4444', color: 'white', border: 'none',
+                        borderRadius: 30, padding: '10px 16px',
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        fontWeight: 900, fontSize: '0.72rem', cursor: 'pointer',
+                        boxShadow: '0 4px 20px rgba(239,68,68,0.5)',
+                    }}
+                >
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white', flexShrink: 0 }} />
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.2 }}>
+                        <span style={{ fontSize: '0.58rem', fontWeight: 900, letterSpacing: '1px' }}>🔴 EN VIVO</span>
+                        {liveMatchName && <span style={{ fontSize: '0.52rem', fontWeight: 600, opacity: 0.85 }}>{liveMatchName}</span>}
+                    </div>
+                </button>
+            )}
+            {liveGameId && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 4500, overflowY: 'auto' }}>
+                    <LiveGameViewer
+                        partidoId={liveGameId}
+                        categoria={(window as any).__liveCategoria || categoriaActiva}
+                        onClose={() => setLiveGameId(null)}
+                    />
                 </div>
             )}
+            {showLiveSelector && (
+                <LiveGameSelector
+                    categoria={categoriaActiva}
+                    onSelect={id => { setLiveGameId(id); setShowLiveSelector(false); }}
+                    onClose={() => setShowLiveSelector(false)}
+                />
+            )}
+
+            {showReset && <ResetTemporada categoria={categoriaActiva} onClose={() => setShowReset(false)} />}
+
+            <style>{`
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+                .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                .fade-in { animation: fadeIn 0.4s ease; }
+            `}</style>
         </div>
     );
-};
-const actionBtnStyle = (bg: string): React.CSSProperties => ({
-    padding: '6px 10px', background: bg, color: 'white',
-    border: 'none', borderRadius: 8, fontWeight: 700,
-    fontSize: '0.72rem', cursor: 'pointer', flexShrink: 0,
-});
+}
 
-export default MesaTecnica;
+const adminBtnStyle: React.CSSProperties = {
+    background: 'rgba(255,255,255,0.1)', color: 'white',
+    border: '1px solid white', padding: 10,
+    borderRadius: 15, fontSize: '0.6rem', fontWeight: 'bold', cursor: 'pointer',
+};
+
+export default App;
