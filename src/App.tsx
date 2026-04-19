@@ -471,9 +471,8 @@ function App() {
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#ffffff', color: '#1e293b', fontFamily: 'sans-serif', paddingBottom: 110 }}>
 
-            {/* ── Header ── */}
-            {/* ── Sticky wrapper: header + ticker siempre visibles ── */}
-            <div style={{ position: 'sticky', top: 0, zIndex: 1000 }}>
+            {/* ── Header — oculto en mesa ── */}
+            {activeView !== 'mesa' && <div style={{ position: 'sticky', top: 0, zIndex: 1000 }}>
             <header style={{
                 background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 60%, #1d4ed8 100%)',
                 padding: '14px 15px 0',
@@ -600,7 +599,7 @@ function App() {
 
             {/* ── METRO NEWS TICKER ── */}
             <MetroTicker />
-            </div>{/* end sticky wrapper */}
+            </div>}{/* end sticky wrapper */}
 
             {/* ── Contenido principal ── */}
             <main style={{ padding: 15, maxWidth: 500, margin: '0 auto' }}>

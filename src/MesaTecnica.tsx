@@ -107,9 +107,7 @@ const Toast: React.FC<{ msg: string; color: string }> = ({ msg, color }) => (
 const PlayerRow = memo(({
     player, team, stats, onStat, onSub, flashing,
 }: {
-    player: Player;
-    team: Team;
-    stats: StatMap;
+    player: Player; team: Team; stats: StatMap;
     onStat: (player: Player, team: Team, accion: string, val: number) => void;
     onSub: (id: string) => void;
     flashing: string | null;
@@ -120,61 +118,36 @@ const PlayerRow = memo(({
     const StatBtn = ({ accion, label, count, bg }: { accion: string; label: string; count: number; bg: string }) => {
         const isFlash = flashing === accion;
         return (
-            <button
-                onClick={() => onStat(player, team, accion, 1)}
-                style={{
-                    flex: 1, height: 36,
-                    background: isFlash ? 'white' : bg,
-                    color: isFlash ? bg : 'white',
-                    border: 'none', borderRadius: 6,
-                    fontWeight: 900, fontSize: '0.65rem',
-                    cursor: 'pointer', lineHeight: 1.2,
-                    transform: isFlash ? 'scale(0.92)' : 'scale(1)',
-                    transition: 'transform 0.12s',
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center',
-                }}
-            >
-                <span style={{ fontSize: '0.6rem' }}>{label}</span>
-                <span style={{ fontSize: '0.85rem', fontWeight: 900 }}>{count}</span>
+            <button onClick={() => onStat(player, team, accion, 1)} style={{
+                flex: 1, background: isFlash ? 'white' : bg,
+                color: isFlash ? bg : 'white', border: 'none', borderRadius: 6,
+                fontWeight: 900, cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                transform: isFlash ? 'scale(0.92)' : 'scale(1)', transition: 'transform 0.1s',
+                minWidth: 0, padding: '4px 0',
+            }}>
+                <span style={{ fontSize: '0.6rem', lineHeight: 1 }}>{label}</span>
+                <span style={{ fontSize: '0.88rem', fontWeight: 900, lineHeight: 1.2 }}>{count}</span>
             </button>
         );
     };
 
     return (
-        <div style={{
-            marginBottom: 5, padding: '6px 6px 5px',
-            borderRadius: 10, background: '#1a1a1a',
-            border: '1px solid #2d2d2d',
-        }}>
-            {/* Fila superior: número + nombre + cambio */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                    <span style={{
-                        background: teamColor, color: 'white',
-                        padding: '2px 7px', borderRadius: 5,
-                        fontWeight: 900, fontSize: '0.82rem',
-                        minWidth: 26, textAlign: 'center', flexShrink: 0,
-                    }}>
-                        {player.numero ?? '??'}
-                    </span>
-                    <span style={{
-                        fontWeight: 800, color: 'white', fontSize: '0.78rem',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                        {player.nombre}
-                    </span>
-                </div>
-                <button onClick={() => onSub(player.id)} style={{
-                    background: '#334155', color: '#60a5fa',
-                    border: 'none', borderRadius: 5,
-                    padding: '3px 8px', fontSize: '0.6rem',
-                    cursor: 'pointer', fontWeight: 700, flexShrink: 0,
-                }}>🔄</button>
+        <div style={{ display: 'flex', flexDirection: 'column', padding: '3px 2px', borderBottom: '1px solid #111', flex: 1 }}>
+            {/* Fila: número + nombre + cambio */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3, minWidth: 0 }}>
+                <span style={{ background: teamColor, color: 'white', padding: '2px 6px', borderRadius: 5, fontWeight: 900, fontSize: '0.82rem', minWidth: 28, textAlign: 'center', flexShrink: 0 }}>
+                    {player.numero ?? '??'}
+                </span>
+                <span style={{ fontWeight: 800, color: 'white', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {player.nombre}
+                </span>
+                <button onClick={() => onSub(player.id)} style={{ background: '#334155', color: '#60a5fa', border: 'none', borderRadius: 5, padding: '3px 8px', fontSize: '0.58rem', cursor: 'pointer', fontWeight: 700, flexShrink: 0 }}>
+                    🔄
+                </button>
             </div>
-
-            {/* Fila de botones 3+3 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3 }}>
+            {/* Botones de stats en fila */}
+            <div style={{ display: 'flex', gap: 3, flex: 1 }}>
                 <StatBtn accion="tirosLibres" label="+1"  count={s.tirosLibres ?? 0} bg="#475569" />
                 <StatBtn accion="dobles"      label="+2"  count={s.dobles ?? 0}      bg="#1e40af" />
                 <StatBtn accion="triples"     label="+3"  count={s.triples ?? 0}     bg="#7c3aed" />
@@ -791,127 +764,109 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     // PANTALLA 4: Mesa técnica activa
     // ─────────────────────────────────────────────
     return (
-        <div style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', color: 'white', overflow: 'hidden' }}>
-            <style>{`
-                @keyframes toastIn {
-                    from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
-                    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-                }
-            `}</style>
+        <div style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', color: 'white', overflow: 'hidden', fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+            <style>{`@keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(-8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`}</style>
 
-            {/* Banner de estado restaurado */}
-            {estadoRestaurado === true && (
-                <div style={{
-                    background: '#065f46', color: '#6ee7b7',
-                    fontSize: '0.65rem', fontWeight: 700,
-                    textAlign: 'center', padding: '6px 16px',
-                    letterSpacing: '0.5px',
-                }}>
-                    ♻️ PARTIDO RESTAURADO — los titulares y estadísticas fueron recuperados
-                </div>
-            )}
-
-            {/* Toast de feedback */}
             {toast && <Toast msg={toast.msg} color={toast.color} />}
+            {confirmModal && <ConfirmModal mensaje={confirmModal.msg} onConfirm={() => { confirmModal.onConfirm(); setConfirmModal(null); }} onCancel={() => setConfirmModal(null)} />}
 
-            {/* Modales */}
-            {confirmModal && (
-                <ConfirmModal
-                    mensaje={confirmModal.msg}
-                    onConfirm={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
-                    onCancel={() => setConfirmModal(null)}
-                />
-            )}
+            {/* ══════════════════════════════════════════
+                SCOREBOARD — toda la info arriba
+            ══════════════════════════════════════════ */}
+            <div style={{ background: '#0a0f1e', borderBottom: '2px solid #1e293b', flexShrink: 0, padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
 
-            {/* ── Scoreboard + Cuartos + Acciones ── */}
-            <div style={{ background: '#0a0f1e', borderBottom: '2px solid #1e293b' }}>
+                {/* Fila 1: Logos + Nombres + Marcador */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
 
-                {/* Fila 1: marcador */}
-                <div style={{ display: 'flex', alignItems: 'center', padding: '3px 8px', gap: 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'flex-end', overflow: 'hidden' }}>
-                        <span style={{ fontWeight: 700, fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {/* LOCAL */}
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', overflow: 'hidden' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.9)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>
                             {matchData?.equipoLocalNombre}
                         </span>
-                        <img src={logos.local} alt="L" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #3b82f6', flexShrink: 0 }} />
+                        <img src={logos.local} alt="L" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #3b82f6', flexShrink: 0 }}
+                            onError={e => { (e.target as HTMLImageElement).src = DEFAULT_LOGO; }} />
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1e293b', padding: '4px 14px', borderRadius: 10, border: '1px solid #334155', flexShrink: 0 }}>
-                        <span style={{ fontSize: '1.5rem', fontWeight: 900 }}>{matchData?.marcadorLocal ?? 0}</span>
-                        <span style={{ fontSize: '0.6rem', color: '#475569' }}>—</span>
-                        <span style={{ fontSize: '1.5rem', fontWeight: 900 }}>{matchData?.marcadorVisitante ?? 0}</span>
+                    {/* MARCADOR CENTRAL */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: '6px 18px', flexShrink: 0 }}>
+                        <span style={{ fontSize: '2.2rem', fontWeight: 900, lineHeight: 1, minWidth: 36, textAlign: 'center' }}>{matchData?.marcadorLocal ?? 0}</span>
+                        <span style={{ fontSize: '0.7rem', color: '#475569', fontWeight: 700 }}>—</span>
+                        <span style={{ fontSize: '2.2rem', fontWeight: 900, lineHeight: 1, minWidth: 36, textAlign: 'center' }}>{matchData?.marcadorVisitante ?? 0}</span>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'flex-start', overflow: 'hidden' }}>
-                        <img src={logos.visitante} alt="V" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #ef4444', flexShrink: 0 }} />
-                        <span style={{ fontWeight: 700, fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {/* VISITANTE */}
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', overflow: 'hidden' }}>
+                        <img src={logos.visitante} alt="V" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '2px solid #ef4444', flexShrink: 0 }}
+                            onError={e => { (e.target as HTMLImageElement).src = DEFAULT_LOGO; }} />
+                        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.9)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>
                             {matchData?.equipoVisitanteNombre}
                         </span>
                     </div>
                 </div>
 
-                {/* Fila 2: cuartos + acciones en la misma barra */}
-                <div style={{ display: 'flex', alignItems: 'center', padding: '4px 6px', gap: 4, background: '#0f172a' }}>
+                {/* Fila 2: Cuartos + Acciones */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#0f172a', borderRadius: 8, padding: '4px 6px' }}>
                     {['Q1','Q2','Q3','Q4','TE'].map(q => (
                         <button key={q} onClick={() => { setCuartoActual(q); saveEstado({ cuartoActual: q }); }} style={{
-                            padding: '4px 8px', borderRadius: 6, border: 'none',
+                            padding: '5px 11px', borderRadius: 6, border: 'none',
                             background: cuartoActual === q ? '#3b82f6' : '#1e293b',
                             color: cuartoActual === q ? 'white' : '#64748b',
-                            fontWeight: 900, cursor: 'pointer', fontSize: '0.7rem', flexShrink: 0,
+                            fontWeight: 900, cursor: 'pointer', fontSize: '0.72rem', flexShrink: 0,
                         }}>{q}</button>
                     ))}
                     <div style={{ flex: 1 }} />
                     <button onClick={async () => {
                         try { if (matchData) await updateDoc(doc(db, colCal, matchData.id), { enVivo: false }); } catch(_) {}
                         setSelectedMatchId(null);
-                    }} style={actionBtnStyle('#1e293b')}>SALIR</button>
+                    }} style={actionBtnStyle('#334155')}>SALIR</button>
                     <button onClick={handleUndo} style={actionBtnStyle('#92400e')}>↩️</button>
                     <button onClick={() => setIsHistoryOpen(true)} style={actionBtnStyle('#334155')}>📜</button>
-                    <button onClick={handleFinalize} style={{ ...actionBtnStyle('#065f46'), fontWeight: 900, paddingLeft: 10, paddingRight: 10 }}>✅ FINAL</button>
+                    <button onClick={handleFinalize} style={{ ...actionBtnStyle('#065f46'), fontWeight: 900 }}>✅ FINAL</button>
                 </div>
-
             </div>
 
-            {/* ── Jugadores en cancha ── */}
+            {/* ══════════════════════════════════════════
+                JUGADORES — 2 columnas, sin scroll
+            ══════════════════════════════════════════ */}
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+
                 {/* LOCAL */}
-                <div style={{ flex: 1, padding: '4px 4px', borderRight: '1px solid #1e293b', overflowY: 'hidden' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 6, background: '#1e3a8a', padding: '3px 0', borderRadius: 6, fontSize: '0.58rem', fontWeight: 900 }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '4px 4px 4px 4px', overflow: 'hidden' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 4, background: '#1e3a8a', padding: '3px 0', borderRadius: 6, fontSize: '0.6rem', fontWeight: 900, letterSpacing: '1px', flexShrink: 0 }}>
                         LOCAL
                     </div>
-                    {playersLocal.filter(p => onCourtLocal.includes(p.id)).map(p => (
-                        <PlayerRow
-                            key={p.id}
-                            player={p}
-                            team="local"
-                            stats={statsCache[p.id] ?? {}}
-                            onStat={handleStat}
-                            onSub={id => setSubModal({ team: 'local', replacingId: id, isOpen: true })}
-                            flashing={flashMap[`${p.id}_`] ?? null}
-                        />
-                    ))}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-around', gap: 3, overflow: 'hidden' }}>
+                        {playersLocal.filter(p => onCourtLocal.includes(p.id)).map(p => (
+                            <PlayerRow key={p.id} player={p} team="local"
+                                stats={statsCache[p.id] ?? {}} onStat={handleStat}
+                                onSub={id => setSubModal({ team: 'local', replacingId: id, isOpen: true })}
+                                flashing={flashMap[`${p.id}_${Object.keys(flashMap).find(k => k.startsWith(p.id+'_') && flashMap[k])?.split('_')[1] ?? ''}`] ?? null}
+                            />
+                        ))}
+                    </div>
                 </div>
 
+                {/* Divisor */}
+                <div style={{ width: 1, background: '#1e293b', flexShrink: 0 }} />
+
                 {/* VISITANTE */}
-                <div style={{ flex: 1, padding: '4px 4px', overflowY: 'hidden' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 6, background: '#7f1d1d', padding: '3px 0', borderRadius: 6, fontSize: '0.58rem', fontWeight: 900 }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '4px 4px 4px 4px', overflow: 'hidden' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 4, background: '#7f1d1d', padding: '3px 0', borderRadius: 6, fontSize: '0.6rem', fontWeight: 900, letterSpacing: '1px', flexShrink: 0 }}>
                         VISITANTE
                     </div>
-                    {playersVisitante.filter(p => onCourtVisitante.includes(p.id)).map(p => (
-                        <PlayerRow
-                            key={p.id}
-                            player={p}
-                            team="visitante"
-                            stats={statsCache[p.id] ?? {}}
-                            onStat={handleStat}
-                            onSub={id => setSubModal({ team: 'visitante', replacingId: id, isOpen: true })}
-                            flashing={flashMap[`${p.id}_`] ?? null}
-                        />
-                    ))}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-around', gap: 3, overflow: 'hidden' }}>
+                        {playersVisitante.filter(p => onCourtVisitante.includes(p.id)).map(p => (
+                            <PlayerRow key={p.id} player={p} team="visitante"
+                                stats={statsCache[p.id] ?? {}} onStat={handleStat}
+                                onSub={id => setSubModal({ team: 'visitante', replacingId: id, isOpen: true })}
+                                flashing={flashMap[`${p.id}_${Object.keys(flashMap).find(k => k.startsWith(p.id+'_') && flashMap[k])?.split('_')[1] ?? ''}`] ?? null}
+                            />
+                        ))}
+                    </div>
                 </div>
             </div>
 
-
-            {/* ── Modal de sustitución ── */}
+            {/* Modal sustitución */}
             {subModal.isOpen && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.93)', zIndex: 4000, padding: 20, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <div style={{ background: '#1e293b', width: '100%', maxWidth: 380, borderRadius: 16, overflow: 'hidden', border: '1px solid #334155' }}>
@@ -920,94 +875,40 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                         </div>
                         <div style={{ maxHeight: 340, overflowY: 'auto', padding: 10 }}>
                             {(subModal.team === 'local' ? playersLocal : playersVisitante)
-                                .filter(p =>
-                                    (subModal.team === 'local' ? presentLocal : presentVisitante).includes(p.id) &&
-                                    !(subModal.team === 'local' ? onCourtLocal : onCourtVisitante).includes(p.id)
-                                )
+                                .filter(p => (subModal.team === 'local' ? presentLocal : presentVisitante).includes(p.id) && !(subModal.team === 'local' ? onCourtLocal : onCourtVisitante).includes(p.id))
                                 .map(p => (
-                                    <div key={p.id} onClick={() => executeSwap(p.id)} style={{
-                                        padding: '14px 16px', borderBottom: '1px solid #0f172a',
-                                        cursor: 'pointer', display: 'flex', justifyContent: 'space-between',
-                                        color: 'white', fontWeight: 700, fontSize: '0.85rem',
-                                        borderRadius: 8, marginBottom: 4,
-                                        background: '#0f172a',
-                                    }}>
+                                    <div key={p.id} onClick={() => executeSwap(p.id)} style={{ padding: '14px 16px', borderBottom: '1px solid #0f172a', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', color: 'white', fontWeight: 700, fontSize: '0.85rem', borderRadius: 8, marginBottom: 4, background: '#0f172a' }}>
                                         <span>#{p.numero} — {p.nombre}</span>
                                         <span style={{ color: '#10b981' }}>ENTRAR ➔</span>
                                     </div>
                                 ))}
                         </div>
-                        <button onClick={() => setSubModal(s => ({ ...s, isOpen: false }))} style={{ width: '100%', padding: 14, background: '#334155', color: '#94a3b8', border: 'none', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}>
-                            CANCELAR
-                        </button>
+                        <button onClick={() => setSubModal(s => ({ ...s, isOpen: false }))} style={{ width: '100%', padding: 14, background: '#334155', color: '#94a3b8', border: 'none', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}>CANCELAR</button>
                     </div>
                 </div>
             )}
 
-            {/* ── Modal historial ── */}
+            {/* Modal historial */}
             {isHistoryOpen && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.93)', zIndex: 4000, padding: 20, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <div style={{ background: '#1e293b', width: '100%', maxWidth: 400, borderRadius: 16, overflow: 'hidden', maxHeight: '80vh', display: 'flex', flexDirection: 'column', border: '1px solid #334155' }}>
                         <div style={{ padding: '14px 20px', background: '#0f172a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 900, fontSize: '0.85rem' }}>
-                            <span>📜 HISTORIAL DE JUGADAS</span>
+                            <span>📜 HISTORIAL</span>
                             <button onClick={() => setIsHistoryOpen(false)} style={{ background: '#334155', border: 'none', color: 'white', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
                         </div>
                         <div style={{ overflowY: 'auto', flex: 1, padding: 10 }}>
-                            {recentPlays.length === 0 && (
-                                <p style={{ textAlign: 'center', color: '#475569', padding: 20, fontSize: '0.8rem' }}>Sin jugadas registradas</p>
-                            )}
+                            {recentPlays.length === 0 && <p style={{ textAlign: 'center', color: '#475569', padding: 20, fontSize: '0.8rem' }}>Sin jugadas</p>}
                             {recentPlays.map((play, i) => (
-                                <div key={play.id} style={{
-                                    padding: '10px 14px', marginBottom: 4, borderRadius: 8,
-                                    background: i === 0 ? '#0f2d1f' : '#0f172a',
-                                    border: `1px solid ${i === 0 ? '#10b981' : '#1e293b'}`,
-                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                    gap: 8,
-                                }}>
-                                    {/* Info de la jugada */}
+                                <div key={play.id} style={{ padding: '10px 14px', marginBottom: 4, borderRadius: 8, background: i === 0 ? '#0f2d1f' : '#0f172a', border: `1px solid ${i === 0 ? '#10b981' : '#1e293b'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                                     <div style={{ display: 'flex', gap: 10, alignItems: 'center', flex: 1, minWidth: 0 }}>
-                                        <span style={{
-                                            background: play.equipo === 'local' ? '#1e3a8a' : '#7f1d1d',
-                                            color: 'white', padding: '2px 7px', borderRadius: 4,
-                                            fontWeight: 900, fontSize: '0.72rem', flexShrink: 0,
-                                        }}>
-                                            #{play.jugadorNumero}
-                                        </span>
+                                        <span style={{ background: play.equipo === 'local' ? '#1e3a8a' : '#7f1d1d', color: 'white', padding: '2px 7px', borderRadius: 4, fontWeight: 900, fontSize: '0.72rem', flexShrink: 0 }}>#{play.jugadorNumero}</span>
                                         <div style={{ minWidth: 0 }}>
-                                            <div style={{ fontWeight: 700, fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {play.jugadorNombre}
-                                            </div>
-                                            <div style={{ fontSize: '0.55rem', color: i === 0 ? '#10b981' : '#475569' }}>
-                                                {i === 0 ? '← última' : `#${i + 1}`}
-                                            </div>
+                                            <div style={{ fontWeight: 700, fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{play.jugadorNombre}</div>
+                                            <div style={{ fontSize: '0.55rem', color: i === 0 ? '#10b981' : '#475569' }}>{i === 0 ? '← última' : `#${i+1}`}</div>
                                         </div>
                                     </div>
-
-                                    {/* Acción */}
-                                    <span style={{
-                                        fontWeight: 900, flexShrink: 0,
-                                        color: play.puntos > 0 ? '#10b981' : '#f59e0b',
-                                        fontSize: '0.72rem',
-                                    }}>
-                                        {play.accion.toUpperCase()}
-                                        {play.puntos > 0 && ` +${play.puntos}`}
-                                    </span>
-
-                                    {/* Botón borrar esta jugada */}
-                                    <button
-                                        onClick={() => handleDeleteJugada(play)}
-                                        style={{
-                                            background: 'rgba(239,68,68,0.15)',
-                                            border: '1px solid rgba(239,68,68,0.3)',
-                                            color: '#f87171', borderRadius: 6,
-                                            width: 28, height: 28, flexShrink: 0,
-                                            cursor: 'pointer', fontSize: '0.75rem',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        }}
-                                        title="Borrar esta jugada"
-                                    >
-                                        🗑️
-                                    </button>
+                                    <span style={{ fontWeight: 900, flexShrink: 0, color: play.puntos > 0 ? '#10b981' : '#f59e0b', fontSize: '0.72rem' }}>{play.accion.toUpperCase()}{play.puntos > 0 && ` +${play.puntos}`}</span>
+                                    <button onClick={() => handleDeleteJugada(play)} style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: 6, width: 28, height: 28, flexShrink: 0, cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🗑️</button>
                                 </div>
                             ))}
                         </div>
@@ -1017,7 +918,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         </div>
     );
 };
-
 const actionBtnStyle = (bg: string): React.CSSProperties => ({
     padding: '6px 10px', background: bg, color: 'white',
     border: 'none', borderRadius: 8, fontWeight: 700,
