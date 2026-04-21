@@ -20,6 +20,7 @@ import MetroTicker from './MetroTicker';
 import LiveGameViewer, { LiveGameSelector } from './LiveGameViewer';
 import { useNotifications } from './useNotifications';
 import ResetTemporada from './ResetTemporada';
+import ConfigTorneo from './ConfigTorneo';
 
 // ─────────────────────────────────────────────
 // CONSTANTES
@@ -188,6 +189,7 @@ function App() {
     const [loading, setLoading]                     = useState(true);
     const [activeView, setActiveView]               = useState('dashboard');
     const [showReset, setShowReset]                 = useState(false);
+    const [showConfig, setShowConfig]               = useState(false);
     const [liveGameId, setLiveGameId]               = useState<string | null>(null);
     const [showLiveSelector, setShowLiveSelector]   = useState(false);
     const [hasLiveGame, setHasLiveGame]             = useState(false);
@@ -846,6 +848,7 @@ function App() {
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
                                     <button onClick={() => setActiveView('adminVideos')} style={adminBtnStyle}>🎥 VIDEOS</button>
+                                    <button onClick={() => setShowConfig(true)} style={{ ...adminBtnStyle, background: 'rgba(99,102,241,0.25)', border: '1px solid #6366f1', color: '#c7d2fe' }}>⚙️ CONFIG</button>
                                     <button onClick={() => setShowReset(true)} style={{ ...adminBtnStyle, background: 'rgba(239,68,68,0.25)', border: '1px solid #ef4444', color: '#fca5a5' }}>☢️ RESET</button>
                                 </div>
                                 <button onClick={() => signOut(auth)} style={{ marginTop: 10, background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: '0.5rem', fontWeight: 'bold', cursor: 'pointer' }}>
@@ -955,6 +958,11 @@ function App() {
             )}
 
             {showReset && <ResetTemporada categoria={categoriaActiva} onClose={() => setShowReset(false)} />}
+            {showConfig && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 4000, overflowY: 'auto' }}>
+                    <ConfigTorneo onClose={() => setShowConfig(false)} />
+                </div>
+            )}
 
             <style>{`
                 .no-scrollbar::-webkit-scrollbar { display: none; }
