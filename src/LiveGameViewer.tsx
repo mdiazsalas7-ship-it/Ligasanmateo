@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { db } from './firebase';
 import {
     collection, query, where, onSnapshot,
-    orderBy, limit, doc
+    orderBy, limit, doc, getDocs
 } from 'firebase/firestore';
 
 // ─────────────────────────────────────────────
@@ -69,6 +69,27 @@ const LiveGameViewer: React.FC<{
         });
         return unsub;
     }, [partidoId, colCal]);
+
+    // ── Logos de equipos ──
+    const [logos, setLogos] = useState<{ local: string; visitante: string }>({ local: DEFAULT_LOGO, visitante: DEFAULT_LOGO });
+
+    useEffect(() => {
+        if (!partido) return;
+        const colEq = categoria.trim().toUpperCase() === 'MASTER40'
+            ? 'equipos' : `equipos_${categoria.trim().toUpperCase()}`;
+        getDocs(collection(db, colEq)).then(snap => {
+            const map: Record<string, string> = {};
+            snap.docs.forEach(d => {
+                const data = d.data();
+                if (data.nombre) map[data.nombre.trim().toUpperCase()] = data.logoUrl || DEFAULT_LOGO;
+                if (d.id) map[d.id] = data.logoUrl || DEFAULT_LOGO;
+            });
+            setLogos({
+                local: map[partido.equipoLocalId ?? ''] || map[(partido.equipoLocalNombre ?? '').trim().toUpperCase()] || DEFAULT_LOGO,
+                visitante: map[partido.equipoVisitanteId ?? ''] || map[(partido.equipoVisitanteNombre ?? '').trim().toUpperCase()] || DEFAULT_LOGO,
+            });
+        }).catch(() => {});
+    }, [partido?.equipoLocalId, partido?.equipoVisitanteId, categoria]);
 
     // ── Jugadas en tiempo real ──
     useEffect(() => {
@@ -151,7 +172,7 @@ const LiveGameViewer: React.FC<{
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                         {/* LOCAL */}
                         <div style={{ flex: 1, textAlign: 'center' }}>
-                            <img src={partido.logoLocal || DEFAULT_LOGO} alt="L"
+                            <img src={logos.local} alt="L"
                                 style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', background: 'white', border: `2px solid ${localGana ? '#fbbf24' : 'rgba(255,255,255,0.1)'}`, marginBottom: 8 }}
                                 onError={e => { (e.target as HTMLImageElement).src = DEFAULT_LOGO; }} />
                             <div style={{ fontSize: '0.65rem', fontWeight: 800, color: localGana ? '#fbbf24' : 'rgba(255,255,255,0.8)', lineHeight: 1.2 }}>
@@ -171,7 +192,7 @@ const LiveGameViewer: React.FC<{
 
                         {/* VISITANTE */}
                         <div style={{ flex: 1, textAlign: 'center' }}>
-                            <img src={partido.logoVisitante || DEFAULT_LOGO} alt="V"
+                            <img src={logos.visitante} alt="V"
                                 style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', background: 'white', border: `2px solid ${visitGana ? '#fbbf24' : 'rgba(255,255,255,0.1)'}`, marginBottom: 8 }}
                                 onError={e => { (e.target as HTMLImageElement).src = DEFAULT_LOGO; }} />
                             <div style={{ fontSize: '0.65rem', fontWeight: 800, color: visitGana ? '#fbbf24' : 'rgba(255,255,255,0.8)', lineHeight: 1.2 }}>
