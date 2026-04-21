@@ -30,6 +30,8 @@ export const CONFIG_DEFAULT: ConfigCategoria = {
     fasesPlayoff: ['PLAYIN', 'SEMIFINAL', 'FINAL', 'GRAN FINAL'],
 };
 
+const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/166/166344.png';
+
 const CATEGORIAS = [
     { id: 'LIBRE',           label: '🏀 LIBRE'           },
     { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL' },
@@ -360,6 +362,9 @@ const ConfigTorneo: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                                     {grupoMap[eq.id] === 'A' && <span style={{ color: 'white', fontSize: '0.65rem', fontWeight: 900 }}>✓</span>}
                                                 </div>
                                             )}
+                                            <div style={{ width: 28, height: 28, borderRadius: '50%', overflow: 'hidden', border: '1px solid #e2e8f0', background: 'white', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <img src={eq.logoUrl || DEFAULT_LOGO} alt={eq.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={e => { (e.target as HTMLImageElement).src = DEFAULT_LOGO; }} />
+                                            </div>
                                             <span style={{ fontSize: '0.75rem', fontWeight: 700, color: config.numGrupos === 1 ? (grupoMap[eq.id] === 'A' ? '#1e40af' : '#94a3b8') : '#0f172a' }}>
                                                 {eq.nombre}
                                             </span>
