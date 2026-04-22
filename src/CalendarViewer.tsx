@@ -1013,7 +1013,7 @@ const MatchCard = memo(({
     const compartirPartido = async () => {
         setSharing(true);
         try {
-            const W = 600, H = 340;
+            const W = 720, H = 900;
             const canvas = document.createElement('canvas');
             canvas.width = W; canvas.height = H;
             const ctx = canvas.getContext('2d')!;
@@ -1038,136 +1038,264 @@ const MatchCard = memo(({
                     } catch { resolve(null); }
                 });
 
-            // ── Fondo ──
-            const bg = ctx.createLinearGradient(0, 0, W, H);
-            bg.addColorStop(0, '#020c1b');
-            bg.addColorStop(0.5, '#0d1f4a');
-            bg.addColorStop(1, '#020c1b');
-            ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+            const localGana = isFinished && (m.marcadorLocal??0) > (m.marcadorVisitante??0);
+            const visitGana = isFinished && (m.marcadorVisitante??0) > (m.marcadorLocal??0);
 
-            // Puntos decorativos
-            ctx.fillStyle = 'rgba(255,255,255,0.025)';
-            for (let x = 0; x < W; x += 22) for (let y = 0; y < H; y += 22) ctx.fillRect(x, y, 2, 2);
+            // ═══════════════════════════════════════════════════════
+            // FONDO: imagen solo para juegos programados (VS)
+            // ═══════════════════════════════════════════════════════
+            if (!isFinished) {
+                const BG_URL = 'https://i.postimg.cc/X7mqjhbF/DIA-D-28.jpg';
+                const bgImg = await loadImg(BG_URL);
+                if (bgImg) {
+                    const ratio = Math.max(W / bgImg.width, H / bgImg.height);
+                    const nw = bgImg.width * ratio, nh = bgImg.height * ratio;
+                    ctx.drawImage(bgImg, (W - nw) / 2, (H - nh) / 2, nw, nh);
+                } else {
+                    const bg = ctx.createLinearGradient(0, 0, 0, H);
+                    bg.addColorStop(0, '#0a0f1e'); bg.addColorStop(1, '#1e3a8a');
+                    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+                }
 
-            // Línea superior naranja
-            const lineGrad = ctx.createLinearGradient(0, 0, W, 0);
-            lineGrad.addColorStop(0, 'transparent');
-            lineGrad.addColorStop(0.3, '#f97316');
-            lineGrad.addColorStop(0.7, '#f97316');
-            lineGrad.addColorStop(1, 'transparent');
-            ctx.strokeStyle = lineGrad; ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.moveTo(0, 3); ctx.lineTo(W, 3); ctx.stroke();
+                // Overlay oscuro superior (para header)
+                const topOverlay = ctx.createLinearGradient(0, 0, 0, 280);
+                topOverlay.addColorStop(0, 'rgba(0,0,0,0.75)');
+                topOverlay.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = topOverlay; ctx.fillRect(0, 0, W, 280);
+
+                // Overlay oscuro inferior (zona de equipos/VS/footer)
+                const botOverlay = ctx.createLinearGradient(0, 500, 0, H);
+                botOverlay.addColorStop(0, 'rgba(0,0,0,0)');
+                botOverlay.addColorStop(0.3, 'rgba(0,0,0,0.55)');
+                botOverlay.addColorStop(1, 'rgba(10,15,30,0.95)');
+                ctx.fillStyle = botOverlay; ctx.fillRect(0, 500, W, H - 500);
+            } else {
+                // Juego finalizado: gradiente dramático
+                const bg = ctx.createLinearGradient(0, 0, 0, H);
+                bg.addColorStop(0, '#0a0f1e');
+                bg.addColorStop(0.4, '#0d1f4a');
+                bg.addColorStop(0.7, '#1e3a8a');
+                bg.addColorStop(1, '#0a0f1e');
+                ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+                const glow = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, 420);
+                glow.addColorStop(0, 'rgba(249,115,22,0.22)');
+                glow.addColorStop(1, 'rgba(249,115,22,0)');
+                ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+
+                ctx.fillStyle = 'rgba(255,255,255,0.03)';
+                for (let x = 0; x < W; x += 28) for (let y = 0; y < H; y += 28) ctx.fillRect(x, y, 2, 2);
+            }
+
+            // ── Banda superior naranja ──
+            const topBand = ctx.createLinearGradient(0, 0, W, 0);
+            topBand.addColorStop(0, '#ea580c');
+            topBand.addColorStop(0.5, '#fb923c');
+            topBand.addColorStop(1, '#ea580c');
+            ctx.fillStyle = topBand; ctx.fillRect(0, 0, W, 10);
 
             // ── Logo liga ──
             const LIGA_LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
             const ligaImg = await loadImg(LIGA_LOGO);
-            const lr = 26;
+            const lr = 52, lcy = 82;
             if (ligaImg) {
                 ctx.save();
-                ctx.beginPath(); ctx.arc(W/2, 38, lr, 0, Math.PI*2);
-                ctx.fillStyle = '#fff'; ctx.fill(); ctx.clip();
-                ctx.drawImage(ligaImg, W/2-lr, 38-lr, lr*2, lr*2);
+                ctx.shadowColor = 'rgba(249,115,22,0.7)';
+                ctx.shadowBlur = 24;
+                ctx.beginPath(); ctx.arc(W/2, lcy, lr, 0, Math.PI*2);
+                ctx.fillStyle = '#fff'; ctx.fill();
                 ctx.restore();
-                ctx.beginPath(); ctx.arc(W/2, 38, lr, 0, Math.PI*2);
-                ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2; ctx.stroke();
+
+                ctx.save();
+                ctx.beginPath(); ctx.arc(W/2, lcy, lr, 0, Math.PI*2); ctx.clip();
+                ctx.drawImage(ligaImg, W/2-lr, lcy-lr, lr*2, lr*2);
+                ctx.restore();
+
+                ctx.beginPath(); ctx.arc(W/2, lcy, lr, 0, Math.PI*2);
+                ctx.strokeStyle = '#f97316'; ctx.lineWidth = 3; ctx.stroke();
             }
 
             // ── Encabezado ──
             ctx.textAlign = 'center';
-            ctx.font = 'bold 11px system-ui'; ctx.fillStyle = '#94a3b8';
-            ctx.fillText('LIGA METROPOLITANA EJE ESTE', W/2, 80);
+            ctx.font = 'bold 18px system-ui';
+            ctx.fillStyle = '#fff';
+            ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 8;
+            ctx.fillText('LIGA METROPOLITANA EJE ESTE', W/2, 170);
+            ctx.shadowBlur = 0;
 
-            // Categoría y fecha
+            // Chip naranja categoría
+            const catLabel = (m.categoria || '').toUpperCase() + (m.fase && m.fase !== 'REGULAR' ? ' · ' + m.fase.toUpperCase() : '');
+            ctx.font = 'bold 16px system-ui';
+            const catW = ctx.measureText(catLabel).width + 32;
+            const catX = (W - catW) / 2;
+            const catY = 190;
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 12;
+            ctx.fillStyle = '#f97316';
+            ctx.beginPath();
+            const chipR = 16;
+            ctx.moveTo(catX + chipR, catY);
+            ctx.arcTo(catX + catW, catY, catX + catW, catY + 32, chipR);
+            ctx.arcTo(catX + catW, catY + 32, catX, catY + 32, chipR);
+            ctx.arcTo(catX, catY + 32, catX, catY, chipR);
+            ctx.arcTo(catX, catY, catX + catW, catY, chipR);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+            ctx.fillStyle = '#fff';
+            ctx.fillText(catLabel, W/2, catY + 22);
+
+            // Fecha
             const fechaFmt = (() => {
                 try {
                     const [y, mo, d] = (m.fechaAsignada || '').split('-').map(Number);
                     return new Date(y, mo-1, d).toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' });
                 } catch { return m.fechaAsignada || ''; }
             })();
-            ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#f97316';
-            ctx.fillText((m.categoria || '').toUpperCase() + (m.fase && m.fase !== 'REGULAR' ? ' · ' + m.fase.toUpperCase() : ''), W/2, 100);
-            ctx.font = '12px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.55)';
-            ctx.fillText(fechaFmt.toUpperCase() + (m.hora ? ' · ' + m.hora : ''), W/2, 118);
+            ctx.font = 'bold 15px system-ui';
+            ctx.fillStyle = '#fff';
+            ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 8;
+            ctx.fillText(fechaFmt.toUpperCase(), W/2, 252);
+            ctx.shadowBlur = 0;
 
-            // Línea divisoria
-            ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(60, 130); ctx.lineTo(W-60, 130); ctx.stroke();
+            // ═══════════════════════════════════════════════════════
+            // ZONA DE EQUIPOS
+            //  - Programado: abajo (cY=640) para no tapar al jugador
+            //  - Finalizado: centro (cY=440)
+            // ═══════════════════════════════════════════════════════
+            const cY = isFinished ? 440 : 640;
+            const R = isFinished ? 92 : 72;
 
-            // ── Logos y nombres de equipos ──
             const drawTeam = async (name: string, id: string|undefined, cx: number, isWinner: boolean) => {
                 const logoUrl = getLogo(id, name);
-                const R = 48;
                 const img = logoUrl ? await loadImg(logoUrl) : null;
 
                 ctx.save();
-                ctx.beginPath(); ctx.arc(cx, 190, R, 0, Math.PI*2);
+                ctx.shadowColor = isWinner ? 'rgba(251,191,36,0.8)' : 'rgba(0,0,0,0.8)';
+                ctx.shadowBlur = isWinner ? 30 : 22;
+                ctx.beginPath(); ctx.arc(cx, cY, R, 0, Math.PI*2);
+                ctx.fillStyle = '#fff'; ctx.fill();
+                ctx.restore();
+
+                ctx.save();
+                ctx.beginPath(); ctx.arc(cx, cY, R, 0, Math.PI*2); ctx.clip();
                 if (img) {
-                    ctx.fillStyle = '#fff'; ctx.fill(); ctx.clip();
-                    ctx.drawImage(img, cx-R, 190-R, R*2, R*2);
+                    ctx.drawImage(img, cx-R, cY-R, R*2, R*2);
                 } else {
-                    ctx.fillStyle = '#1e3a8a'; ctx.fill(); ctx.clip();
-                    ctx.font = `bold ${R*0.7}px system-ui`;
-                    ctx.fillStyle = 'white'; ctx.textAlign = 'center';
-                    ctx.fillText(name.charAt(0).toUpperCase(), cx, 190 + R*0.25);
+                    ctx.fillStyle = '#1e3a8a'; ctx.fillRect(cx-R, cY-R, R*2, R*2);
+                    ctx.font = `bold ${R*0.9}px system-ui`;
+                    ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+                    ctx.fillText((name || '?').charAt(0).toUpperCase(), cx, cY + R*0.3);
                 }
                 ctx.restore();
 
-                // Borde
-                ctx.beginPath(); ctx.arc(cx, 190, R, 0, Math.PI*2);
-                ctx.strokeStyle = isWinner ? '#fbbf24' : 'rgba(255,255,255,0.15)';
-                ctx.lineWidth = isWinner ? 3 : 1.5; ctx.stroke();
+                ctx.beginPath(); ctx.arc(cx, cY, R, 0, Math.PI*2);
+                ctx.strokeStyle = isWinner ? '#fbbf24' : '#f97316';
+                ctx.lineWidth = isWinner ? 5 : 3;
+                ctx.stroke();
 
-                // Nombre del equipo
+                // Nombre con sombra
                 ctx.textAlign = 'center';
-                ctx.font = `${isWinner ? 'bold' : ''} 13px system-ui`;
-                ctx.fillStyle = isWinner ? '#fbbf24' : 'rgba(255,255,255,0.85)';
-                const maxW = 200;
+                ctx.font = 'bold 20px system-ui';
+                ctx.fillStyle = isWinner ? '#fbbf24' : '#fff';
+                ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 10;
                 const upper = name.toUpperCase();
+                const maxW = 240;
                 if (ctx.measureText(upper).width <= maxW) {
-                    ctx.fillText(upper, cx, 254);
+                    ctx.fillText(upper, cx, cY + R + 34);
                 } else {
                     const words = upper.split(' ');
                     let l1 = '', l2 = '';
                     for (const w of words) ctx.measureText(l1+' '+w).width <= maxW ? l1=(l1+' '+w).trim() : l2=(l2+' '+w).trim();
-                    ctx.fillText(l1, cx, 250); if (l2) ctx.fillText(l2, cx, 266);
+                    ctx.fillText(l1, cx, cY + R + 28);
+                    if (l2) ctx.fillText(l2, cx, cY + R + 52);
                 }
+                ctx.shadowBlur = 0;
             };
 
-            const localGana = isFinished && (m.marcadorLocal??0) > (m.marcadorVisitante??0);
-            const visitGana = isFinished && (m.marcadorVisitante??0) > (m.marcadorLocal??0);
+            const teamX = isFinished ? 170 : 150;
+            await drawTeam(m.equipoLocalNombre, m.equipoLocalId, teamX, localGana);
+            await drawTeam(m.equipoVisitanteNombre, m.equipoVisitanteId, W - teamX, visitGana);
 
-            await drawTeam(m.equipoLocalNombre, m.equipoLocalId, 130, localGana);
-            await drawTeam(m.equipoVisitanteNombre, m.equipoVisitanteId, W-130, visitGana);
-
-            // ── Centro: marcador o VS ──
+            // ═══════════════════════════════════════════════════════
+            // CENTRO: marcador o VS
+            // ═══════════════════════════════════════════════════════
             if (isFinished) {
                 ctx.textAlign = 'center';
-                ctx.font = 'bold 62px system-ui';
-                ctx.fillStyle = localGana ? '#fbbf24' : 'white';
-                ctx.fillText(String(m.marcadorLocal ?? 0), W/2 - 44, 202);
-                ctx.font = 'bold 28px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.4)';
-                ctx.fillText('-', W/2, 196);
-                ctx.font = 'bold 62px system-ui';
-                ctx.fillStyle = visitGana ? '#fbbf24' : 'white';
-                ctx.fillText(String(m.marcadorVisitante ?? 0), W/2 + 44, 202);
-                ctx.font = 'bold 11px system-ui'; ctx.fillStyle = '#10b981';
-                ctx.fillText('✓  RESULTADO FINAL', W/2, 222);
+                ctx.font = 'bold 96px system-ui';
+                ctx.fillStyle = localGana ? '#fbbf24' : '#fff';
+                ctx.fillText(String(m.marcadorLocal ?? 0), 170, cY + 30);
+                ctx.font = 'bold 44px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.fillText('—', W/2, cY + 18);
+                ctx.font = 'bold 96px system-ui';
+                ctx.fillStyle = visitGana ? '#fbbf24' : '#fff';
+                ctx.fillText(String(m.marcadorVisitante ?? 0), W-170, cY + 30);
+
+                // Badge FINAL
+                const badgeW = 180, badgeH = 36;
+                const bx = (W-badgeW)/2, by = cY + 90;
+                ctx.fillStyle = '#10b981';
+                ctx.beginPath();
+                ctx.moveTo(bx + 18, by);
+                ctx.arcTo(bx + badgeW, by, bx + badgeW, by + badgeH, 18);
+                ctx.arcTo(bx + badgeW, by + badgeH, bx, by + badgeH, 18);
+                ctx.arcTo(bx, by + badgeH, bx, by, 18);
+                ctx.arcTo(bx, by, bx + badgeW, by, 18);
+                ctx.closePath(); ctx.fill();
+                ctx.font = 'bold 15px system-ui'; ctx.fillStyle = '#fff';
+                ctx.fillText('✓  FINALIZADO', W/2, by + 24);
             } else {
-                // VS animado
-                const vsGrad = ctx.createRadialGradient(W/2, 185, 0, W/2, 185, 38);
-                vsGrad.addColorStop(0, 'rgba(249,115,22,0.25)');
+                // VS entre logos (círculo pequeño naranja)
+                const vsGrad = ctx.createRadialGradient(W/2, cY, 0, W/2, cY, 72);
+                vsGrad.addColorStop(0, 'rgba(249,115,22,0.65)');
                 vsGrad.addColorStop(1, 'rgba(249,115,22,0)');
                 ctx.fillStyle = vsGrad;
-                ctx.beginPath(); ctx.arc(W/2, 185, 38, 0, Math.PI*2); ctx.fill();
-                ctx.font = 'bold 36px system-ui'; ctx.fillStyle = '#f97316'; ctx.textAlign = 'center';
-                ctx.fillText('VS', W/2, 197);
-                ctx.font = 'bold 15px system-ui'; ctx.fillStyle = '#fbbf24';
-                ctx.fillText(m.hora ? '🕐 ' + m.hora : 'PRÓXIMO', W/2, 230);
+                ctx.beginPath(); ctx.arc(W/2, cY, 72, 0, Math.PI*2); ctx.fill();
+
+                ctx.save();
+                ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 16;
+                ctx.beginPath(); ctx.arc(W/2, cY, 42, 0, Math.PI*2);
+                ctx.fillStyle = '#f97316'; ctx.fill();
+                ctx.restore();
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.arc(W/2, cY, 42, 0, Math.PI*2); ctx.stroke();
+
+                ctx.font = 'bold 28px system-ui';
+                ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+                ctx.fillText('VS', W/2, cY + 10);
+
+                // Hora ARRIBA del bloque de equipos (no encima del jugador)
+                const horaText = m.hora ? '🕐  ' + m.hora : 'PRÓXIMAMENTE';
+                ctx.font = 'bold 28px system-ui';
+                ctx.fillStyle = '#fbbf24';
+                ctx.shadowColor = 'rgba(0,0,0,0.95)'; ctx.shadowBlur = 14;
+                ctx.fillText(horaText, W/2, cY - R - 30);
+                ctx.shadowBlur = 0;
             }
 
-            // ── Footer ──
-            ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
-            ctx.fillText('Liga Metropolitana Eje Este  ·  San Mateo, Aragua', W/2, H - 14);
+            // ── Panel inferior oscuro + CTA ──
+            const panelY = H - 130;
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(0, panelY, W, 130);
+
+            const divider = ctx.createLinearGradient(0, panelY, W, panelY);
+            divider.addColorStop(0, 'transparent');
+            divider.addColorStop(0.5, '#f97316');
+            divider.addColorStop(1, 'transparent');
+            ctx.strokeStyle = divider; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(0, panelY); ctx.lineTo(W, panelY); ctx.stroke();
+
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 22px system-ui'; ctx.fillStyle = '#fff';
+            ctx.fillText(isFinished ? '🏀  SIGUE TODOS LOS PARTIDOS' : '🏀  NO TE LO PIERDAS', W/2, panelY + 40);
+
+            ctx.font = '15px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.75)';
+            ctx.fillText('Descarga la app oficial de la Liga', W/2, panelY + 64);
+
+            ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#fb923c';
+            ctx.fillText('LIGA METROPOLITANA EJE ESTE', W/2, panelY + 92);
+            ctx.font = '12px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.65)';
+            ctx.fillText('San Mateo · Aragua · Venezuela', W/2, panelY + 112);
 
             // ── Compartir ──
             canvas.toBlob(async blob => {
