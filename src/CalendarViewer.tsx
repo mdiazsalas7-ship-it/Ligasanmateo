@@ -1045,7 +1045,7 @@ const MatchCard = memo(({
             // FONDO: imagen solo para juegos programados (VS)
             // ═══════════════════════════════════════════════════════
             if (!isFinished) {
-                const BG_URL = 'https://i.postimg.cc/X7mqjhbF/DIA-D-28.jpg';
+                const BG_URL = 'https://i.postimg.cc/HxYTX8D5/DIA-D-30.jpg';
                 const bgImg = await loadImg(BG_URL);
                 if (bgImg) {
                     const ratio = Math.max(W / bgImg.width, H / bgImg.height);
@@ -1094,56 +1094,62 @@ const MatchCard = memo(({
             topBand.addColorStop(1, '#ea580c');
             ctx.fillStyle = topBand; ctx.fillRect(0, 0, W, 10);
 
-            // ── Logo liga ──
-            const LIGA_LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
-            const ligaImg = await loadImg(LIGA_LOGO);
-            const lr = 52, lcy = 82;
-            if (ligaImg) {
-                ctx.save();
-                ctx.shadowColor = 'rgba(249,115,22,0.7)';
-                ctx.shadowBlur = 24;
-                ctx.beginPath(); ctx.arc(W/2, lcy, lr, 0, Math.PI*2);
-                ctx.fillStyle = '#fff'; ctx.fill();
-                ctx.restore();
+            // ── Logo liga: solo en juegos finalizados (el programado lo tiene en su imagen) ──
+            if (isFinished) {
+                const LIGA_LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+                const ligaImg = await loadImg(LIGA_LOGO);
+                const lr = 52, lcy = 82;
+                if (ligaImg) {
+                    ctx.save();
+                    ctx.shadowColor = 'rgba(249,115,22,0.7)';
+                    ctx.shadowBlur = 24;
+                    ctx.beginPath(); ctx.arc(W/2, lcy, lr, 0, Math.PI*2);
+                    ctx.fillStyle = '#fff'; ctx.fill();
+                    ctx.restore();
 
-                ctx.save();
-                ctx.beginPath(); ctx.arc(W/2, lcy, lr, 0, Math.PI*2); ctx.clip();
-                ctx.drawImage(ligaImg, W/2-lr, lcy-lr, lr*2, lr*2);
-                ctx.restore();
+                    ctx.save();
+                    ctx.beginPath(); ctx.arc(W/2, lcy, lr, 0, Math.PI*2); ctx.clip();
+                    ctx.drawImage(ligaImg, W/2-lr, lcy-lr, lr*2, lr*2);
+                    ctx.restore();
 
-                ctx.beginPath(); ctx.arc(W/2, lcy, lr, 0, Math.PI*2);
-                ctx.strokeStyle = '#f97316'; ctx.lineWidth = 3; ctx.stroke();
+                    ctx.beginPath(); ctx.arc(W/2, lcy, lr, 0, Math.PI*2);
+                    ctx.strokeStyle = '#f97316'; ctx.lineWidth = 3; ctx.stroke();
+                }
             }
+
+            // Y del header: debajo del logo (finalizado) o más abajo (programado, debajo de colaboradores)
+            const headerY = isFinished ? 170 : 230;
 
             // ── Encabezado ──
             ctx.textAlign = 'center';
-            ctx.font = 'bold 18px system-ui';
+            ctx.font = 'bold 26px system-ui';
             ctx.fillStyle = '#fff';
-            ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 8;
-            ctx.fillText('LIGA METROPOLITANA EJE ESTE', W/2, 170);
+            ctx.shadowColor = 'rgba(0,0,0,0.95)'; ctx.shadowBlur = 12;
+            ctx.fillText('LIGA METROPOLITANA EJE ESTE', W/2, headerY);
             ctx.shadowBlur = 0;
 
             // Chip naranja categoría
             const catLabel = (m.categoria || '').toUpperCase() + (m.fase && m.fase !== 'REGULAR' ? ' · ' + m.fase.toUpperCase() : '');
-            ctx.font = 'bold 16px system-ui';
-            const catW = ctx.measureText(catLabel).width + 32;
+            ctx.font = 'bold 22px system-ui';
+            const catW = ctx.measureText(catLabel).width + 40;
             const catX = (W - catW) / 2;
-            const catY = 190;
+            const catY = headerY + 24;
+            const chipH = 44;
             ctx.save();
-            ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 12;
+            ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 14;
             ctx.fillStyle = '#f97316';
             ctx.beginPath();
-            const chipR = 16;
+            const chipR = 22;
             ctx.moveTo(catX + chipR, catY);
-            ctx.arcTo(catX + catW, catY, catX + catW, catY + 32, chipR);
-            ctx.arcTo(catX + catW, catY + 32, catX, catY + 32, chipR);
-            ctx.arcTo(catX, catY + 32, catX, catY, chipR);
+            ctx.arcTo(catX + catW, catY, catX + catW, catY + chipH, chipR);
+            ctx.arcTo(catX + catW, catY + chipH, catX, catY + chipH, chipR);
+            ctx.arcTo(catX, catY + chipH, catX, catY, chipR);
             ctx.arcTo(catX, catY, catX + catW, catY, chipR);
             ctx.closePath();
             ctx.fill();
             ctx.restore();
             ctx.fillStyle = '#fff';
-            ctx.fillText(catLabel, W/2, catY + 22);
+            ctx.fillText(catLabel, W/2, catY + 30);
 
             // Fecha
             const fechaFmt = (() => {
@@ -1152,10 +1158,10 @@ const MatchCard = memo(({
                     return new Date(y, mo-1, d).toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' });
                 } catch { return m.fechaAsignada || ''; }
             })();
-            ctx.font = 'bold 15px system-ui';
+            ctx.font = 'bold 20px system-ui';
             ctx.fillStyle = '#fff';
-            ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 8;
-            ctx.fillText(fechaFmt.toUpperCase(), W/2, 252);
+            ctx.shadowColor = 'rgba(0,0,0,0.95)'; ctx.shadowBlur = 12;
+            ctx.fillText(fechaFmt.toUpperCase(), W/2, catY + chipH + 32);
             ctx.shadowBlur = 0;
 
             // ═══════════════════════════════════════════════════════
@@ -1163,8 +1169,8 @@ const MatchCard = memo(({
             //  - Programado: abajo (cY=640) para no tapar al jugador
             //  - Finalizado: centro (cY=440)
             // ═══════════════════════════════════════════════════════
-            const cY = isFinished ? 440 : 640;
-            const R = isFinished ? 92 : 72;
+            const cY = isFinished ? 440 : 540;
+            const R = isFinished ? 78 : 72;
 
             const drawTeam = async (name: string, id: string|undefined, cx: number, isWinner: boolean) => {
                 const logoUrl = getLogo(id, name);
@@ -1222,28 +1228,41 @@ const MatchCard = memo(({
             // ═══════════════════════════════════════════════════════
             if (isFinished) {
                 ctx.textAlign = 'center';
-                ctx.font = 'bold 96px system-ui';
-                ctx.fillStyle = localGana ? '#fbbf24' : '#fff';
-                ctx.fillText(String(m.marcadorLocal ?? 0), 170, cY + 30);
-                ctx.font = 'bold 44px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.3)';
-                ctx.fillText('—', W/2, cY + 18);
-                ctx.font = 'bold 96px system-ui';
-                ctx.fillStyle = visitGana ? '#fbbf24' : '#fff';
-                ctx.fillText(String(m.marcadorVisitante ?? 0), W-170, cY + 30);
 
-                // Badge FINAL
-                const badgeW = 180, badgeH = 36;
-                const bx = (W-badgeW)/2, by = cY + 90;
+                // Marcador grande JUSTO en el centro horizontal entre los dos logos
+                // teamX=170 → logo derecho del local: 170+92=262
+                // teamX=W-170=550 → logo izquierdo del visitante: 550-92=458
+                // Hueco entre logos: 262 a 458 (196px de ancho)
+                // Score local lo pongo en X=300, score visitante en X=420, y guion en W/2=360
+                ctx.font = 'bold 84px system-ui';
+                ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 12;
+                ctx.fillStyle = localGana ? '#fbbf24' : '#fff';
+                ctx.fillText(String(m.marcadorLocal ?? 0), 305, cY + 28);
+
+                ctx.font = 'bold 50px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
+                ctx.fillText('-', W/2, cY + 18);
+
+                ctx.font = 'bold 84px system-ui';
+                ctx.fillStyle = visitGana ? '#fbbf24' : '#fff';
+                ctx.fillText(String(m.marcadorVisitante ?? 0), W - 305, cY + 28);
+                ctx.shadowBlur = 0;
+
+                // Badge FINALIZADO debajo de los nombres de equipos
+                const badgeW = 220, badgeH = 44;
+                const bx = (W-badgeW)/2, by = cY + R + 110;
+                ctx.save();
+                ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 16;
                 ctx.fillStyle = '#10b981';
                 ctx.beginPath();
-                ctx.moveTo(bx + 18, by);
-                ctx.arcTo(bx + badgeW, by, bx + badgeW, by + badgeH, 18);
-                ctx.arcTo(bx + badgeW, by + badgeH, bx, by + badgeH, 18);
-                ctx.arcTo(bx, by + badgeH, bx, by, 18);
-                ctx.arcTo(bx, by, bx + badgeW, by, 18);
+                ctx.moveTo(bx + 22, by);
+                ctx.arcTo(bx + badgeW, by, bx + badgeW, by + badgeH, 22);
+                ctx.arcTo(bx + badgeW, by + badgeH, bx, by + badgeH, 22);
+                ctx.arcTo(bx, by + badgeH, bx, by, 22);
+                ctx.arcTo(bx, by, bx + badgeW, by, 22);
                 ctx.closePath(); ctx.fill();
-                ctx.font = 'bold 15px system-ui'; ctx.fillStyle = '#fff';
-                ctx.fillText('✓  FINALIZADO', W/2, by + 24);
+                ctx.restore();
+                ctx.font = 'bold 20px system-ui'; ctx.fillStyle = '#fff';
+                ctx.fillText('✓  FINALIZADO', W/2, by + 30);
             } else {
                 // VS entre logos (círculo pequeño naranja)
                 const vsGrad = ctx.createRadialGradient(W/2, cY, 0, W/2, cY, 72);
@@ -1264,23 +1283,36 @@ const MatchCard = memo(({
                 ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
                 ctx.fillText('VS', W/2, cY + 10);
 
-                // Hora ARRIBA del bloque de equipos (no encima del jugador)
+                // Hora ABAJO del bloque de equipos (debajo de los nombres)
                 const horaText = m.hora ? '🕐  ' + m.hora : 'PRÓXIMAMENTE';
-                ctx.font = 'bold 28px system-ui';
+                ctx.font = 'bold 42px system-ui';
                 ctx.fillStyle = '#fbbf24';
-                ctx.shadowColor = 'rgba(0,0,0,0.95)'; ctx.shadowBlur = 14;
-                ctx.fillText(horaText, W/2, cY - R - 30);
+                ctx.shadowColor = 'rgba(0,0,0,0.95)'; ctx.shadowBlur = 16;
+                ctx.fillText(horaText, W/2, cY + R + 110);
                 ctx.shadowBlur = 0;
             }
 
-            // ── Panel inferior oscuro + CTA ──
+            // ── Panel inferior: oscuro solo en el CENTRO (donde está la tipografia)
+            //    los laterales quedan transparentes para no tapar los logos de colaboradores
             const panelY = H - 130;
-            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+
+            // Gradiente horizontal: transparente -> oscuro -> transparente
+            const panelGrad = ctx.createLinearGradient(0, 0, W, 0);
+            panelGrad.addColorStop(0, 'rgba(0,0,0,0)');
+            panelGrad.addColorStop(0.18, 'rgba(0,0,0,0)');
+            panelGrad.addColorStop(0.32, 'rgba(0,0,0,0.85)');
+            panelGrad.addColorStop(0.68, 'rgba(0,0,0,0.85)');
+            panelGrad.addColorStop(0.82, 'rgba(0,0,0,0)');
+            panelGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = panelGrad;
             ctx.fillRect(0, panelY, W, 130);
 
+            // Línea divisora naranja (también centrada)
             const divider = ctx.createLinearGradient(0, panelY, W, panelY);
             divider.addColorStop(0, 'transparent');
+            divider.addColorStop(0.32, 'transparent');
             divider.addColorStop(0.5, '#f97316');
+            divider.addColorStop(0.68, 'transparent');
             divider.addColorStop(1, 'transparent');
             ctx.strokeStyle = divider; ctx.lineWidth = 2;
             ctx.beginPath(); ctx.moveTo(0, panelY); ctx.lineTo(W, panelY); ctx.stroke();
