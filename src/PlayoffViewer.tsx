@@ -87,18 +87,18 @@ const BracketCard: React.FC<{ partido: Partido; highlight?: boolean; cardW: numb
     );
 };
 
-// ── PlayIn Card (más visual) ────────────────────────────────────────────
-const PlayInCard: React.FC<{ partido: Partido; label: string }> = ({ partido: m, label }) => {
+// ── GameCard — tarjeta visual para cualquier fase ────────────────────────
+const GameCard: React.FC<{ partido: Partido; label: string; icon: string; badgeColor: string; showAvanza?: boolean }> = ({ partido: m, label, icon, badgeColor, showAvanza = false }) => {
     const { editMode, editScores, setEditScore, handleSaveScore, categoria } = useEditCtx();
     const fin = m.estatus === 'finalizado';
     const lG  = fin && (m.marcadorLocal ?? -1) > (m.marcadorVisitante ?? -1);
     const vG  = fin && (m.marcadorVisitante ?? -1) > (m.marcadorLocal ?? -1);
 
     return (
-        <div style={{ background: 'rgba(30,41,59,0.95)', borderRadius: 10, border: '1.5px solid rgba(99,102,241,0.35)', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.4)', position: 'relative' }}>
+        <div style={{ background: 'rgba(30,41,59,0.95)', borderRadius: 10, border: `1.5px solid ${badgeColor}55`, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.4)', position: 'relative' }}>
             {/* Badge */}
-            <div style={{ background: 'rgba(99,102,241,0.2)', padding: '4px 10px', borderBottom: '1px solid rgba(99,102,241,0.25)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.48rem', fontWeight: 900, color: '#818cf8', letterSpacing: '1.5px', textTransform: 'uppercase' }}>⚡ PLAY-IN · {label}</span>
+            <div style={{ background: `${badgeColor}22`, padding: '4px 10px', borderBottom: `1px solid ${badgeColor}33`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.48rem', fontWeight: 900, color: badgeColor, letterSpacing: '1.5px', textTransform: 'uppercase' }}>{icon} {label}</span>
                 {fin && <span style={{ fontSize: '0.45rem', color: '#10b981', fontWeight: 700 }}>✓ FINALIZADO</span>}
             </div>
             {/* Local */}
@@ -106,7 +106,7 @@ const PlayInCard: React.FC<{ partido: Partido; label: string }> = ({ partido: m,
                 <TeamLogo teamName={m.equipoLocalNombre ?? ''} categoria={categoria} size={24} />
                 <span style={{ flex: 1, fontSize: '0.68rem', fontWeight: lG ? 900 : 600, color: lG ? '#fbbf24' : 'rgba(255,255,255,0.9)' }}>{m.equipoLocalNombre ?? 'TBD'}</span>
                 {editMode
-                    ? <input type="number" defaultValue={m.marcadorLocal ?? 0} onChange={e => setEditScore(m.id, 'l', Number(e.target.value))} style={{ width: 32, textAlign: 'center', background: '#0f172a', color: 'white', border: '1px solid #6366f1', borderRadius: 4, fontSize: '0.7rem' }} />
+                    ? <input type="number" defaultValue={m.marcadorLocal ?? 0} onChange={e => setEditScore(m.id, 'l', Number(e.target.value))} style={{ width: 32, textAlign: 'center', background: '#0f172a', color: 'white', border: `1px solid ${badgeColor}`, borderRadius: 4, fontSize: '0.7rem' }} />
                     : <span style={{ fontSize: '1rem', fontWeight: 900, color: lG ? '#fbbf24' : !fin ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.6)', minWidth: 24, textAlign: 'right' }}>{!fin ? '—' : m.marcadorLocal}</span>
                 }
             </div>
@@ -115,11 +115,11 @@ const PlayInCard: React.FC<{ partido: Partido; label: string }> = ({ partido: m,
                 <TeamLogo teamName={m.equipoVisitanteNombre ?? ''} categoria={categoria} size={24} />
                 <span style={{ flex: 1, fontSize: '0.68rem', fontWeight: vG ? 900 : 600, color: vG ? '#fbbf24' : 'rgba(255,255,255,0.9)' }}>{m.equipoVisitanteNombre ?? 'TBD'}</span>
                 {editMode
-                    ? <input type="number" defaultValue={m.marcadorVisitante ?? 0} onChange={e => setEditScore(m.id, 'v', Number(e.target.value))} style={{ width: 32, textAlign: 'center', background: '#0f172a', color: 'white', border: '1px solid #6366f1', borderRadius: 4, fontSize: '0.7rem' }} />
+                    ? <input type="number" defaultValue={m.marcadorVisitante ?? 0} onChange={e => setEditScore(m.id, 'v', Number(e.target.value))} style={{ width: 32, textAlign: 'center', background: '#0f172a', color: 'white', border: `1px solid ${badgeColor}`, borderRadius: 4, fontSize: '0.7rem' }} />
                     : <span style={{ fontSize: '1rem', fontWeight: 900, color: vG ? '#fbbf24' : !fin ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.6)', minWidth: 24, textAlign: 'right' }}>{!fin ? '—' : m.marcadorVisitante}</span>
                 }
             </div>
-            {fin && (
+            {showAvanza && fin && (
                 <div style={{ padding: '4px 10px', background: 'rgba(16,185,129,0.1)', borderTop: '1px solid rgba(16,185,129,0.2)', fontSize: '0.5rem', color: '#6ee7b7', fontWeight: 700 }}>
                     🏆 Avanza: {lG ? m.equipoLocalNombre : m.equipoVisitanteNombre}
                 </div>
@@ -129,37 +129,14 @@ const PlayInCard: React.FC<{ partido: Partido; label: string }> = ({ partido: m,
     );
 };
 
-// ── SimpleBracket (Semis → Final) ────────────────────────────────────────
+// Alias for backward compat
+const PlayInCard: React.FC<{ partido: Partido; label: string }> = ({ partido, label }) => (
+    <GameCard partido={partido} label={`PLAY-IN · ${label}`} icon="⚡" badgeColor="#818cf8" showAvanza />
+);
+
+// ── SimpleBracket (Semis → Final) — ahora usa GameCard ────────────────
 const SimpleBracket: React.FC<{ semis: Partido[]; final: Partido[]; tercero: Partido[]; title: string; accentColor: string }> = ({ semis, final, tercero, title, accentColor }) => {
-    const CW = 148; const CH = 72; const CONN = 24; const PG = 10;
-
-    const rounds: { matches: Partido[]; label: string }[] = [];
-    if (semis.length > 0) rounds.push({ matches: semis, label: 'SEMIS' });
-    if (final.length > 0) rounds.push({ matches: final, label: 'FINAL' });
-
-    if (rounds.length === 0) return null;
-
-    const getYs = (n: number, ri: number): number[] => {
-        if (ri === 0) {
-            const ys: number[] = [];
-            for (let i = 0; i < n; i++) {
-                const pair = Math.floor(i / 2);
-                const pos  = i % 2;
-                ys.push(pair * (2 * CH + PG + 20) + pos * (CH + PG));
-            }
-            return ys;
-        }
-        const prev = getYs(rounds[ri - 1].matches.length, ri - 1);
-        return Array.from({ length: n }, (_, i) => {
-            const y1 = prev[i * 2] ?? prev[0] ?? 0;
-            const y2 = prev[i * 2 + 1] ?? y1;
-            return (y1 + y2) / 2;
-        });
-    };
-
-    const allYs = rounds.map((r, ri) => getYs(r.matches.length, ri));
-    const firstYs = allYs[0] ?? [];
-    const totalH = firstYs.length > 0 ? firstYs[firstYs.length - 1] + CH + 20 : CH + 40;
+    if (semis.length === 0 && final.length === 0) return null;
 
     return (
         <div style={{ marginBottom: 24 }}>
@@ -170,64 +147,38 @@ const SimpleBracket: React.FC<{ semis: Partido[]; final: Partido[]; tercero: Par
                 <div style={{ flex: 1, height: 1, background: `${accentColor}40` }} />
             </div>
 
-            {/* Round headers */}
-            <div style={{ display: 'flex', marginBottom: 6 }}>
-                {rounds.map((r, ri) => (
-                    <React.Fragment key={ri}>
-                        <div style={{ width: CW, textAlign: 'center', flexShrink: 0 }}>
-                            <span style={{ fontSize: '0.42rem', fontWeight: 900, letterSpacing: '1.5px', color: r.label === 'FINAL' ? '#fbbf24' : '#475569', textTransform: 'uppercase' }}>
-                                {r.label === 'FINAL' ? '👑 FINAL' : r.label}
-                            </span>
+            {/* SEMIS */}
+            {semis.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: semis.length >= 2 ? '1fr 1fr' : '1fr', gap: 10 }}>
+                        {semis.map((m, i) => (
+                            <GameCard key={m.id} partido={m} label={`SEMIFINAL ${i + 1}`} icon="🏅" badgeColor={accentColor} showAvanza />
+                        ))}
+                    </div>
+                    {final.length > 0 && (
+                        <div style={{ textAlign: 'center', margin: '8px 0', fontSize: '0.5rem', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                            <span style={{ color: accentColor }}>↓ ganadores van a la Final</span>
+                            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
                         </div>
-                        {ri < rounds.length - 1 && <div style={{ width: CONN, flexShrink: 0 }} />}
-                    </React.Fragment>
-                ))}
-            </div>
+                    )}
+                </div>
+            )}
 
-            {/* Bracket */}
-            <div style={{ display: 'flex', position: 'relative', height: totalH }}>
-                {rounds.map((r, ri) => (
-                    <React.Fragment key={ri}>
-                        <div style={{ position: 'relative', width: CW, flexShrink: 0, height: totalH }}>
-                            {r.matches.map((m, mi) => (
-                                <div key={m.id} style={{ position: 'absolute', top: allYs[ri]?.[mi] ?? 0, left: 0, width: CW }}>
-                                    <BracketCard partido={m} highlight={r.label === 'FINAL'} cardW={CW} cardH={CH} />
-                                </div>
-                            ))}
-                        </div>
-                        {ri < rounds.length - 1 && (
-                            <div style={{ position: 'relative', width: CONN, flexShrink: 0, height: totalH }}>
-                                {allYs[ri + 1]?.map((toY, ti) => {
-                                    const fromYs = allYs[ri] ?? [];
-                                    const y1 = (fromYs[ti * 2] ?? 0) + CH / 2;
-                                    const y2 = fromYs[ti * 2 + 1] !== undefined ? (fromYs[ti * 2 + 1] + CH / 2) : y1;
-                                    const yTo = toY + CH / 2;
-                                    const hasPair = fromYs[ti * 2 + 1] !== undefined;
-                                    const half = CONN / 2;
-                                    const bc = ri === rounds.length - 2 ? 'rgba(251,191,36,0.6)' : 'rgba(100,116,139,0.5)';
-                                    if (!hasPair) return <div key={ti} style={{ position: 'absolute', top: y1 - 1, left: 0, right: 0, height: 2, background: bc }} />;
-                                    const top = Math.min(y1, y2); const bot = Math.max(y1, y2);
-                                    return (
-                                        <div key={ti} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-                                            <div style={{ position: 'absolute', top: y1 - 1, left: 0, width: half, height: 2, background: bc }} />
-                                            <div style={{ position: 'absolute', top: y2 - 1, left: 0, width: half, height: 2, background: bc }} />
-                                            <div style={{ position: 'absolute', top: top - 1, left: half - 1, width: 2, height: bot - top + 2, background: bc }} />
-                                            <div style={{ position: 'absolute', top: yTo - 1, left: half, right: 0, height: 2, background: bc }} />
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </React.Fragment>
-                ))}
-            </div>
+            {/* FINAL */}
+            {final.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                    {final.map(m => (
+                        <GameCard key={m.id} partido={m} label="👑 FINAL DE CONFERENCIA" icon="" badgeColor="#fbbf24" />
+                    ))}
+                </div>
+            )}
 
             {/* Tercer lugar */}
             {tercero.length > 0 && (
-                <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                    <div style={{ fontSize: '0.42rem', fontWeight: 900, color: '#78716c', letterSpacing: '1.5px', textAlign: 'center', marginBottom: 6 }}>🥉 TERCER LUGAR</div>
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                     {tercero.map(m => (
-                        <BracketCard key={m.id} partido={m} cardW={CW} cardH={CH} />
+                        <GameCard key={m.id} partido={m} label="🥉 TERCER LUGAR" icon="" badgeColor="#78716c" />
                     ))}
                 </div>
             )}
@@ -465,7 +416,7 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                                     <div style={{ flex: 1, height: 1, background: 'rgba(251,191,36,0.4)' }} />
                                 </div>
                                 {grandFinal.map(m => (
-                                    <BracketCard key={m.id} partido={m} highlight cardW={300} cardH={80} />
+                                    <GameCard key={m.id} partido={m} label="👑 GRAN FINAL" icon="" badgeColor="#fbbf24" />
                                 ))}
                             </div>
                         )}

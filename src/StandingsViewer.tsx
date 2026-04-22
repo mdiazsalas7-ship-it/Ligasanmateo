@@ -1,4 +1,6 @@
-import React, { useMemo, memo, useState, useCallback } from 'react';
+import React, { useMemo, memo, useState, useCallback, useEffect } from 'react';
+import { db } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface Equipo {
     id: string;
@@ -312,17 +314,51 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
         });
     }, [equipos, partidosRegular]);
 
-    const PLAYOFF_SPOTS = 4;
+    // Cargar config del torneo para saber cuántos equipos clasifican
+    const [tourneyConfig, setTourneyConfig] = useState<{ numGrupos: number; usaPlayIn: boolean; fasesPlayoff: string[] } | null>(null);
+
+    useEffect(() => {
+        const cat = (categoria ?? '').trim().toUpperCase();
+        if (!cat) return;
+        getDoc(doc(db, 'config_torneo', cat)).then(snap => {
+            if (snap.exists()) {
+                const d = snap.data();
+                setTourneyConfig({
+                    numGrupos: d.numGrupos ?? 2,
+                    usaPlayIn: d.usaPlayIn ?? false,
+                    fasesPlayoff: d.fasesPlayoff ?? [],
+                });
+            } else {
+                setTourneyConfig({ numGrupos: 2, usaPlayIn: true, fasesPlayoff: ['PLAYIN','SEMIFINAL','FINAL','GRAN FINAL'] });
+            }
+        }).catch(() => setTourneyConfig({ numGrupos: 2, usaPlayIn: true, fasesPlayoff: ['PLAYIN','SEMIFINAL','FINAL','GRAN FINAL'] }));
+    }, [categoria]);
+
+    // Equipos que clasifican a playoff, según config:
+    //  - Play-In activo → 6 equipos clasifican por grupo/conferencia
+    //  - Semis con 1 grupo → 4 (1vs4, 2vs3)
+    //  - Semis con 2 grupos → 2 por grupo (cruces A1-B2, B1-A2)
+    //  - Solo final → 1 por grupo (cara a cara)
+    const getPlayoffSpots = (): number => {
+        if (!tourneyConfig) return 4;
+        const fases = tourneyConfig.fasesPlayoff.map(f => f.toUpperCase());
+        if (fases.includes('PLAYIN') && tourneyConfig.usaPlayIn) return 6;
+        if (fases.includes('SEMIFINAL')) return tourneyConfig.numGrupos === 1 ? 4 : 2;
+        if (fases.includes('FINAL')) return 1;
+        return 4;
+    };
 
     const grupoA = useMemo(() => {
         const eq = equiposConStats.filter(e => e.grupo?.toUpperCase() === 'A' || e.grupo?.toUpperCase() === 'ÚNICO');
-        return sortFIBA(eq, partidosRegular).map((e, i) => ({ ...e, playoffZone: i < PLAYOFF_SPOTS }));
-    }, [equiposConStats, partidosRegular]);
+        const spots = getPlayoffSpots();
+        return sortFIBA(eq, partidosRegular).map((e, i) => ({ ...e, playoffZone: i < spots }));
+    }, [equiposConStats, partidosRegular, tourneyConfig]);
 
     const grupoB = useMemo(() => {
         const eq = equiposConStats.filter(e => e.grupo?.toUpperCase() === 'B');
-        return sortFIBA(eq, partidosRegular).map((e, i) => ({ ...e, playoffZone: i < PLAYOFF_SPOTS }));
-    }, [equiposConStats, partidosRegular]);
+        const spots = getPlayoffSpots();
+        return sortFIBA(eq, partidosRegular).map((e, i) => ({ ...e, playoffZone: i < spots }));
+    }, [equiposConStats, partidosRegular, tourneyConfig]);
 
     const getGroupLabel = (groupCode: 'A' | 'B') => {
         const cat = (categoria ?? '').trim().toUpperCase();
