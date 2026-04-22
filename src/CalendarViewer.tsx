@@ -29,6 +29,7 @@ interface Equipo {
     id: string;
     nombre: string;
     logoUrl?: string;
+    grupo?: string;
 }
 
 interface Stat {
@@ -153,31 +154,18 @@ const MatchForm: React.FC<{
                     yaEnfrentados.add(p.equipoLocalId);
             });
 
-        // Obtener el grupo del equipo local buscando en los partidos existentes
-        // (el equipo local tiene el mismo grupo que sus partidos anteriores)
-        let grupoLocal = grupo; // usa el grupo seleccionado en el form si existe
-        if (!grupoLocal) {
-            // Intentar inferir el grupo del equipo local desde partidos anteriores
-            const partidoDelLocal = partidos.find(p =>
-                p.fase?.toUpperCase() === 'REGULAR' && p.grupo &&
-                (p.equipoLocalId === localId || p.equipoVisitanteId === localId)
-            );
-            grupoLocal = partidoDelLocal?.grupo ?? '';
-        }
+        // Grupo del equipo local: tomarlo directamente del documento del equipo
+        const equipoLocal = equipos.find(e => e.id === localId);
+        const grupoLocal = (grupo || equipoLocal?.grupo || '').toUpperCase();
 
         return equipos.filter(e => {
             if (e.id === localId) return false;           // no contra sí mismo
             if (yaEnfrentados.has(e.id)) return false;   // ya se enfrentaron
 
-            // Si sabemos el grupo, filtrar por mismo grupo
+            // Si el local tiene grupo asignado, solo mostrar rivales del MISMO grupo
             if (grupoLocal) {
-                // Buscar en qué grupo juega este equipo rival
-                const partidoDelRival = partidos.find(p =>
-                    p.fase?.toUpperCase() === 'REGULAR' && p.grupo &&
-                    (p.equipoLocalId === e.id || p.equipoVisitanteId === e.id)
-                );
-                const grupoRival = partidoDelRival?.grupo ?? '';
-                if (grupoRival && grupoRival !== grupoLocal) return false;
+                const grupoRival = (e.grupo || '').toUpperCase();
+                if (grupoRival !== grupoLocal) return false;
             }
 
             return true;
