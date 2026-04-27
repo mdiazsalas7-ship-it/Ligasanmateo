@@ -241,7 +241,7 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
                 equipoId:     selectedTeam!.id,
                 equipoNombre: selectedTeam!.nombre,
                 categoria,
-                grupo:        selectedTeam!.grupo,
+                grupo:        selectedTeam!.grupo || '',
                 puntos: 0, triples: 0, dobles: 0, tirosLibres: 0,
                 rebotes: 0, robos: 0, bloqueos: 0,
                 asistencias: 0, faltas: 0, partidosJugados: 0,
@@ -251,7 +251,10 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
             const newList = [...players, { id: docRef.id, ...playerDoc }];
             setPlayers(newList.sort((a, b) => (a.numero || 0) - (b.numero || 0)));
             setNewPlayerName(''); setNewPlayerCedula(''); setNewPlayerNumber('');
-        } catch { alert('Error al registrar'); }
+        } catch (err: any) {
+            console.error('[AdminEquipos] handleAddPlayer error:', err);
+            alert('Error al registrar: ' + (err?.message || 'desconocido'));
+        }
     };
 
     const handleDeletePlayer = async (playerId: string) => {
