@@ -31,9 +31,9 @@ const APP_SHELL = [
     '/',
     '/offline.html',
     '/manifest.json',
-    '/icons/icon-192.png',
-    '/icons/icon-512.png',
-    '/icons/apple-touch-icon.png',
+    '/icon/icon-192.png',
+    '/icon/icon-512.png',
+    '/icon/apple-touch-icon.png',
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -42,7 +42,16 @@ const APP_SHELL = [
 self.addEventListener('install', event => {
     self.skipWaiting();
     event.waitUntil(
-        caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))
+        caches.open(CACHE_NAME).then(cache =>
+            // Cachear cada asset individualmente: si uno falla, el SW igual instala
+            Promise.all(
+                APP_SHELL.map(url =>
+                    cache.add(url).catch(err =>
+                        console.warn('[SW] No se pudo cachear', url, err)
+                    )
+                )
+            )
+        )
     );
 });
 

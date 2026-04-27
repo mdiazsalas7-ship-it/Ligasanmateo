@@ -1,3 +1,4 @@
+import InstallPrompt from './InstallPrompt';
 import { useEffect, useState, useRef, memo } from 'react';
 import './App.css';
 import { db, auth } from './firebase';

@@ -214,3 +214,39 @@ CALENDARIO_COLS.forEach(colName => {
             );
         });
 });
+
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 5: Partido EN VIVO (inicio de juego)
+// Dispara cuando enVivo pasa de false/undefined → true
+// ─────────────────────────────────────────────────────────────
+CALENDARIO_COLS.forEach(colName => {
+    const fnName = 'onPartidoEnVivo_' + colName.replace('calendario', 'cal');
+
+    exports[fnName] = functions
+        .region('us-central1')
+        .firestore
+        .document(`${colName}/{partidoId}`)
+        .onUpdate(async (change) => {
+            const before = change.before.data();
+            const after  = change.after.data();
+
+            // Solo cuando enVivo pasa de false/undefined a true
+            if (before.enVivo === true || after.enVivo !== true) return;
+
+            // Defensa: si ya está finalizado, no notificar
+            if (after.estatus === 'finalizado') return;
+
+            const local     = after.equipoLocalNombre     || 'Local';
+            const visitante = after.equipoVisitanteNombre || 'Visitante';
+
+            const categoria = colName === 'calendario'
+                ? 'MASTER40'
+                : colName.split('_').slice(1).join('_') || '';
+
+            await sendPush(
+                `🔴 EN VIVO · ${categoria}`,
+                `${local} vs ${visitante} — ¡Comenzó el juego!`,
+                { type: 'partido_envivo', id: change.after.id, categoria }
+            );
+        });
+});
