@@ -394,7 +394,6 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('mvp');
     const [viewMode, setViewMode] = useState<ViewMode>('promedio');
-    const [conferencia, setConferencia] = useState<'A' | 'B' | 'ALL'>('A');
 
     useEffect(() => {
         let unsubscribe: (() => void) | undefined;
@@ -549,11 +548,6 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                         <p style={{ margin: '2px 0 0', opacity: 0.8, fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: '#fbbf24' }}>
                             Fase Regular · {categoria}
                         </p>
-                        <div style={{ display: 'flex', gap: 4, marginTop: 7 }}>
-                            {([{val:'A' as const,label:'CONF. ESTE'},{val:'B' as const,label:'CONF. OESTE'},{val:'ALL' as const,label:'TODAS'}]).map(opt => (
-                                <button key={opt.val} onClick={() => setConferencia(opt.val)} style={{ padding: '3px 8px', borderRadius: 10, border: 'none', cursor: 'pointer', background: conferencia === opt.val ? 'white' : 'rgba(255,255,255,0.15)', color: conferencia === opt.val ? '#1e3a8a' : 'rgba(255,255,255,0.8)', fontSize: '0.5rem', fontWeight: 900 }}>{opt.label}</button>
-                            ))}
-                        </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
                         <button
@@ -607,7 +601,7 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                 ) : (
                     <LeaderSection
                         cat={activeCat}
-                        players={conferencia === 'ALL' ? allPlayers : allPlayers.filter(p => p.grupo === conferencia)}
+                        players={allPlayers}
                         viewMode={viewMode}
                         categoria={categoria}
                     />
