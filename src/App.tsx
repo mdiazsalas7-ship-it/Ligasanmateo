@@ -627,6 +627,9 @@ function App() {
             <MetroTicker />
             </div>}{/* end sticky wrapper */}
 
+            {/* ── INSTALL PROMPT (PWA) ── */}
+            <InstallPrompt />
+
             {/* ── Contenido principal ── */}
             <main style={{ padding: activeView === 'mesa' ? 0 : 15, maxWidth: activeView === 'mesa' ? '100%' : 500, margin: '0 auto' }}>
                 {activeView === 'login' ? (
