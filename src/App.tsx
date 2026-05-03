@@ -28,11 +28,11 @@ import ConfigTorneo from './ConfigTorneo';
 // ─────────────────────────────────────────────
 
 const CATEGORIAS_DISPONIBLES = [
-    { id: 'LIBRE',           label: '🏀 LIBRE'           },
     { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL' },
     { id: 'U16_FEMENINO',    label: '👧 U16 FEMENINO'    },
     { id: 'U16M',            label: '👦 U16 MASCULINO'   },
     { id: 'MASTER40',        label: '🍷 MASTER 40'       },
+    { id: 'LIBRE',           label: '🏀 LIBRE'           },
 ];
 
 const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/15568/15568903.png';
@@ -177,7 +177,7 @@ const RenderTableSummary = memo(({ title, data, color }: {
 // ─────────────────────────────────────────────
 function App() {
     const [user, setUser]                           = useState<any>(null);
-    const [categoriaActiva, setCategoriaActiva]     = useState('LIBRE');
+    const [categoriaActiva, setCategoriaActiva]     = useState('INTERINDUSTRIAL');
     const [equiposA, setEquiposA]                   = useState<any[]>([]);
     const [equiposB, setEquiposB]                   = useState<any[]>([]);
     const [noticias, setNoticias]                   = useState<any[]>([]);
