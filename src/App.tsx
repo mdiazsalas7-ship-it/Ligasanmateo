@@ -658,7 +658,7 @@ function App() {
                                 🏀 Resultados Fase Regular {categoriaActiva}
                             </h2>
                             <div style={{ position: 'relative', height: 180, borderRadius: 24, overflow: 'hidden', boxShadow: '0 10px 30px rgba(30,58,138,0.12)' }}>
-                                {resultadosRecientes.length > 0 ? (
+                                {resultadosRecientes[juegoIndex] ? (
                                     <div key={juegoIndex} className="fade-in" style={{ height: '100%', background: 'linear-gradient(135deg, #1e3a8a, #1e40af)', color: 'white', padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
                                             {/* Local */}
