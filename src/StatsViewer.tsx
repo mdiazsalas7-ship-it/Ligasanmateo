@@ -435,6 +435,7 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                 );
                 const teamGamesCount: Record<string, number> = {};
                 const validGameIds = new Set<string>();
+                const teamPoints: Record<string, number> = {};
 
                 calSnap.forEach(d => {
                     const g = d.data();
@@ -445,6 +446,62 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                     const vis = (g.equipoVisitanteNombre || '').trim().toUpperCase();
                     if (loc) teamGamesCount[loc] = (teamGamesCount[loc] || 0) + 1;
                     if (vis) teamGamesCount[vis] = (teamGamesCount[vis] || 0) + 1;
+
+                    // Puntos por equipo (2 victoria, 1 derrota, 0 forfait)
+                    const ml = Number(g.marcadorLocal) || 0;
+                    const mv = Number(g.marcadorVisitante) || 0;
+                    if (loc && !teamPoints[loc]) teamPoints[loc] = 0;
+                    if (vis && !teamPoints[vis]) teamPoints[vis] = 0;
+                    if (ml > mv && loc && vis) {
+                        teamPoints[loc] += 2;
+                        teamPoints[vis] += g.esForfait ? 0 : 1;
+                    } else if (mv > ml && loc && vis) {
+                        teamPoints[vis] += 2;
+                        teamPoints[loc] += g.esForfait ? 0 : 1;
+                    }
+                });
+
+                // ── MVP TORNEO: Posición de cada equipo en su grupo ──
+                const teamPosition: Record<string, number> = {};
+                {
+                    const byGroup: Record<string, Array<{ eq: string; pts: number }>> = {};
+                    Object.keys(teamPoints).forEach(eq => {
+                        const grupo = grupoMap[eq] || 'A';
+                        if (!byGroup[grupo]) byGroup[grupo] = [];
+                        byGroup[grupo].push({ eq, pts: teamPoints[eq] });
+                    });
+                    Object.values(byGroup).forEach(arr => {
+                        arr.sort((a, b) => b.pts - a.pts);
+                        arr.forEach((item, idx) => { teamPosition[item.eq] = idx + 1; });
+                    });
+                }
+
+                // ── MVP TORNEO: Bonus por fase alcanzada en playoffs ──
+                const teamPlayoffBonus: Record<string, number> = {};
+                const setBonusMax = (eq: string, val: number) => {
+                    if (!eq) return;
+                    if (!teamPlayoffBonus[eq] || teamPlayoffBonus[eq] < val) teamPlayoffBonus[eq] = val;
+                };
+                calSnap.forEach(d => {
+                    const g = d.data();
+                    const fase = (g.fase || '').trim().toUpperCase();
+                    if (fase === 'REGULAR' || fase === '') return;
+                    const loc = (g.equipoLocalNombre || '').trim().toUpperCase();
+                    const vis = (g.equipoVisitanteNombre || '').trim().toUpperCase();
+                    const ml = Number(g.marcadorLocal) || 0;
+                    const mv = Number(g.marcadorVisitante) || 0;
+                    const ganador = ml > mv ? loc : (mv > ml ? vis : '');
+
+                    if (fase === 'PLAYIN' || fase === 'PLAY-IN' || fase === 'CUARTOS') {
+                        setBonusMax(loc, 1.05); setBonusMax(vis, 1.05);
+                    } else if (fase === 'SEMIFINAL' || fase === 'SEMIS') {
+                        setBonusMax(loc, 1.10); setBonusMax(vis, 1.10);
+                    } else if (fase === 'FINAL' || fase === 'GRANFINAL' || fase === 'GRAN FINAL' || fase === '3ER LUGAR' || fase === 'TERCER LUGAR') {
+                        setBonusMax(loc, 1.15); setBonusMax(vis, 1.15);
+                        if (fase === 'FINAL' || fase === 'GRANFINAL' || fase === 'GRAN FINAL') {
+                            setBonusMax(ganador, 1.25);
+                        }
+                    }
                 });
 
                 // 3. Listener en stats_partido
@@ -497,6 +554,29 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                         const processed: PlayerStat[] = Object.values(aggregated).map((p: any) => {
                             const eq = (p.equipo || '').trim().toUpperCase();
                             const den = teamGamesCount[eq] || p.partidosJugados || 1;
+
+                            // ── MVP TORNEO: nueva fórmula ponderada ──
+                            // valoración base (estilo PIR): premia más robos/tapones/triples
+                            const valBasePorJuego =
+                                (p.totalPuntos    * 1.0 +
+                                 p.totalRebotes   * 1.0 +
+                                 p.totalRobos     * 1.5 +
+                                 p.totalBloqueos  * 1.5 +
+                                 p.totalTriples   * 0.5) / den;
+
+                            // Multiplicador por posición del equipo en su grupo (fase regular)
+                            const pos = teamPosition[eq];
+                            let multEquipo = 0.80; // Por defecto: fuera de playoff
+                            if (pos === 1)             multEquipo = 1.30;
+                            else if (pos === 2 || pos === 3) multEquipo = 1.15;
+                            else if (pos && pos <= 6)  multEquipo = 1.00;
+
+                            // Bonus por avance en playoffs (1.0 si aún no hay playoff)
+                            const bonusPlayoff = teamPlayoffBonus[eq] || 1.0;
+
+                            const mvpAvg   = valBasePorJuego * multEquipo * bonusPlayoff;
+                            const mvpTotal = mvpAvg * den;
+
                             return {
                                 ...p,
                                 grupo: grupoMap[eq] || p.grupo || '',
@@ -508,7 +588,8 @@ const StatsViewer: React.FC<{ onClose: () => void; categoria: string }> = ({ onC
                                 tpg:   parseFloat((p.totalTriples   / den).toFixed(1)),
                                 dpg:   parseFloat((p.totalDobles    / den).toFixed(1)),
                                 ftpg:  parseFloat((p.totalTirosLibres / den).toFixed(1)),
-                                valpg: parseFloat((p.totalValoracion  / den).toFixed(1)),
+                                valpg: parseFloat(mvpAvg.toFixed(1)),
+                                totalValoracion: parseFloat(mvpTotal.toFixed(1)),
                             };
                         });
 
