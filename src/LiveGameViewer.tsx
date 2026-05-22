@@ -91,18 +91,22 @@ const LiveGameViewer: React.FC<{
         }).catch(() => {});
     }, [partido?.equipoLocalId, partido?.equipoVisitanteId, categoria]);
 
-    // ── Fotos de jugadores (jugadorId → fotoUrl) ──
-    const [playerPhotos, setPlayerPhotos] = useState<Record<string, string>>({});
+    // ── Info de jugadores (jugadorId → {nombre, numero, fotoUrl}) ──
+    const [playerInfo, setPlayerInfo] = useState<Record<string, { nombre: string; numero: string; fotoUrl: string }>>({});
     useEffect(() => {
         const cat = categoria.trim().toUpperCase();
         const colJug = cat === 'MASTER40' ? 'jugadores' : `jugadores_${cat}`;
         getDocs(collection(db, colJug)).then(snap => {
-            const map: Record<string, string> = {};
+            const map: Record<string, { nombre: string; numero: string; fotoUrl: string }> = {};
             snap.docs.forEach(d => {
                 const data = d.data();
-                if (data.fotoUrl) map[d.id] = data.fotoUrl;
+                map[d.id] = {
+                    nombre: data.nombre || '',
+                    numero: String(data.numero ?? ''),
+                    fotoUrl: data.fotoUrl || '',
+                };
             });
-            setPlayerPhotos(map);
+            setPlayerInfo(map);
         }).catch(() => {});
     }, [categoria]);
 
@@ -199,6 +203,7 @@ const LiveGameViewer: React.FC<{
     const topScorer = allBoxRows.length ? allBoxRows.reduce((a, b) => b.pts > a.pts ? b : a) : null;
     const topReb    = allBoxRows.length ? allBoxRows.reduce((a, b) => b.reb > a.reb ? b : a) : null;
     const topRob    = allBoxRows.length ? allBoxRows.reduce((a, b) => b.rob > a.rob ? b : a) : null;
+    const topBlo    = allBoxRows.length ? allBoxRows.reduce((a, b) => b.blo > a.blo ? b : a) : null;
 
     // ── HOT STREAK: ¿hay un jugador con 3+ anotaciones en las últimas 7 jugadas? ──
     interface HotPlayer {
@@ -364,13 +369,14 @@ const LiveGameViewer: React.FC<{
                 {/* ── 🏆 TOP PERFORMERS                              ── */}
                 {/* ────────────────────────────────────────────────── */}
                 {(topScorer && topScorer.pts > 0) && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
                         {[
                             { label: 'GOLEADOR', icon: '🏀', stat: topScorer.pts,  unit: 'PTS', p: topScorer, color: '#fbbf24' },
                             { label: 'REBOTES',  icon: '🖐️', stat: topReb?.reb ?? 0, unit: 'REB', p: topReb,    color: '#10b981' },
                             { label: 'ROBOS',    icon: '🛡️', stat: topRob?.rob ?? 0, unit: 'ROB', p: topRob,    color: '#a855f7' },
+                            { label: 'BLOQUEOS', icon: '🚫', stat: topBlo?.blo ?? 0, unit: 'BLO', p: topBlo,    color: '#f87171' },
                         ].filter(c => c.p && c.stat > 0).map(c => {
-                            const foto = playerPhotos[c.p!.jugadorId] || '';
+                            const foto = playerInfo[c.p!.jugadorId]?.fotoUrl || '';
                             const inicial = (c.p!.nombre || '?').charAt(0).toUpperCase();
                             return (
                                 <div key={c.label} style={{
@@ -430,27 +436,37 @@ const LiveGameViewer: React.FC<{
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'center', gap: 4, flexWrap: 'wrap' }}>
                                         {s.squad.slice(0, 5).map((j: any, idx: number) => {
-                                            const jId = j.id || j.jugadorId || '';
-                                            const foto = playerPhotos[jId] || '';
-                                            const num = j.numero ?? j.dorsal ?? '';
-                                            const nom = (j.nombre || '?').split(' ')[0];
+                                            // Aceptar j como string (ID) o como objeto
+                                            const jId    = typeof j === 'string' ? j : (j?.id || j?.jugadorId || '');
+                                            const fromObj: any = typeof j === 'object' && j !== null ? j : {};
+                                            const fromMap = playerInfo[jId] || { nombre: '', numero: '', fotoUrl: '' };
+
+                                            const foto   = fromObj.fotoUrl || fromMap.fotoUrl || '';
+                                            const num    = String(fromObj.numero ?? fromObj.dorsal ?? fromMap.numero ?? '').trim();
+                                            const nombre = (fromObj.nombre || fromMap.nombre || '').trim();
+
                                             return (
-                                                <div key={jId || idx} title={`${num} ${j.nombre}`} style={{ textAlign: 'center', width: 38 }}>
+                                                <div key={jId || idx} title={`${num ? '#' + num + ' ' : ''}${nombre}`} style={{ textAlign: 'center', width: 40 }}>
                                                     <div style={{
-                                                        width: 32, height: 32, borderRadius: '50%', overflow: 'hidden',
+                                                        width: 34, height: 34, borderRadius: '50%', overflow: 'hidden',
                                                         border: `1.5px solid ${s.color}`, background: '#1e293b',
                                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                         margin: '0 auto',
                                                     }}>
                                                         {foto ? (
-                                                            <img src={foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                            <img src={foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                                         ) : (
-                                                            <span style={{ fontSize: '0.55rem', fontWeight: 900, color: s.color }}>{num || '?'}</span>
+                                                            <span style={{ fontSize: '0.65rem', fontWeight: 900, color: s.color }}>
+                                                                {num || '·'}
+                                                            </span>
                                                         )}
                                                     </div>
-                                                    <div style={{ fontSize: '0.45rem', color: '#94a3b8', fontWeight: 700, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                        #{num}
-                                                    </div>
+                                                    {num && (
+                                                        <div style={{ fontSize: '0.45rem', color: '#94a3b8', fontWeight: 700, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            #{num}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
