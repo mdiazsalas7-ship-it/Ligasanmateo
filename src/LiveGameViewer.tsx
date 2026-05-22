@@ -201,6 +201,7 @@ const LiveGameViewer: React.FC<{
     // ── TOP PERFORMERS ──
     const allBoxRows = Object.values(boxByPlayer);
     const topScorer = allBoxRows.length ? allBoxRows.reduce((a, b) => b.pts > a.pts ? b : a) : null;
+    const topTri    = allBoxRows.length ? allBoxRows.reduce((a, b) => b.triples > a.triples ? b : a) : null;
     const topReb    = allBoxRows.length ? allBoxRows.reduce((a, b) => b.reb > a.reb ? b : a) : null;
     const topRob    = allBoxRows.length ? allBoxRows.reduce((a, b) => b.rob > a.rob ? b : a) : null;
     const topBlo    = allBoxRows.length ? allBoxRows.reduce((a, b) => b.blo > a.blo ? b : a) : null;
@@ -298,21 +299,103 @@ const LiveGameViewer: React.FC<{
                         </div>
                     </div>
 
-                    {/* Puntos por cuarto */}
+                    {/* Puntos por cuarto — mini box score */}
                     {(partido.cuartosLocal || partido.cuartosVisitante) && (() => {
                         const qL = partido.cuartosLocal ?? {};
                         const qV = partido.cuartosVisitante ?? {};
                         const qs = ['Q1','Q2','Q3','Q4','TE'].filter(q => (qL[q] ?? 0) + (qV[q] ?? 0) > 0);
                         if (!qs.length) return null;
+
+                        const totL = qs.reduce((s, q) => s + (qL[q] ?? 0), 0);
+                        const totV = qs.reduce((s, q) => s + (qV[q] ?? 0), 0);
+
+                        // Abreviar nombre del equipo a 3 letras
+                        const abbr = (n?: string) => (n || '').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 3).toUpperCase() || '---';
+
                         return (
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                                {qs.map(q => (
-                                    <div key={q} style={{ textAlign: 'center', minWidth: 32 }}>
-                                        <div style={{ fontSize: '0.42rem', color: '#475569', fontWeight: 700, marginBottom: 2 }}>{q}</div>
-                                        <div style={{ fontSize: '0.72rem', fontWeight: 900, color: q === cuartoActual ? '#60a5fa' : 'rgba(255,255,255,0.7)' }}>{qL[q] ?? 0}</div>
-                                        <div style={{ fontSize: '0.72rem', fontWeight: 900, color: q === cuartoActual ? '#f87171' : 'rgba(255,255,255,0.7)' }}>{qV[q] ?? 0}</div>
+                            <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                                <div style={{
+                                    background: 'rgba(0,0,0,0.35)', borderRadius: 10,
+                                    border: '1px solid rgba(255,255,255,0.06)',
+                                    overflow: 'hidden',
+                                }}>
+                                    {/* Header con los cuartos */}
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: `60px repeat(${qs.length}, 1fr) 1fr`,
+                                        background: 'rgba(255,255,255,0.04)',
+                                        borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                    }}>
+                                        <div style={{ padding: '6px 8px', fontSize: '0.5rem', color: '#64748b', fontWeight: 800, letterSpacing: '1px' }}>
+                                            EQUIPO
+                                        </div>
+                                        {qs.map(q => (
+                                            <div key={q} style={{
+                                                padding: '6px 0', textAlign: 'center',
+                                                fontSize: '0.55rem', fontWeight: 900,
+                                                color: q === cuartoActual ? '#3b82f6' : '#64748b',
+                                                letterSpacing: '0.5px',
+                                                background: q === cuartoActual ? 'rgba(59,130,246,0.1)' : 'transparent',
+                                            }}>
+                                                {q}
+                                            </div>
+                                        ))}
+                                        <div style={{ padding: '6px 0', textAlign: 'center', fontSize: '0.55rem', color: '#fbbf24', fontWeight: 900, letterSpacing: '0.5px' }}>
+                                            TOT
+                                        </div>
                                     </div>
-                                ))}
+
+                                    {/* Fila LOCAL */}
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: `60px repeat(${qs.length}, 1fr) 1fr`,
+                                        alignItems: 'center',
+                                        borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px' }}>
+                                            <img src={logos.local} alt="" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '1px solid rgba(59,130,246,0.5)' }} />
+                                            <span style={{ fontSize: '0.6rem', fontWeight: 900, color: '#3b82f6', letterSpacing: '0.5px' }}>{abbr(partido.equipoLocalNombre)}</span>
+                                        </div>
+                                        {qs.map(q => (
+                                            <div key={q} style={{
+                                                padding: '8px 0', textAlign: 'center',
+                                                fontSize: '0.85rem', fontWeight: 900,
+                                                color: q === cuartoActual ? '#60a5fa' : 'rgba(255,255,255,0.85)',
+                                                background: q === cuartoActual ? 'rgba(59,130,246,0.08)' : 'transparent',
+                                            }}>
+                                                {qL[q] ?? 0}
+                                            </div>
+                                        ))}
+                                        <div style={{ padding: '8px 0', textAlign: 'center', fontSize: '0.95rem', fontWeight: 900, color: totL >= totV ? '#fbbf24' : 'white' }}>
+                                            {totL}
+                                        </div>
+                                    </div>
+
+                                    {/* Fila VISITANTE */}
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: `60px repeat(${qs.length}, 1fr) 1fr`,
+                                        alignItems: 'center',
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px' }}>
+                                            <img src={logos.visitante} alt="" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', background: 'white', border: '1px solid rgba(239,68,68,0.5)' }} />
+                                            <span style={{ fontSize: '0.6rem', fontWeight: 900, color: '#ef4444', letterSpacing: '0.5px' }}>{abbr(partido.equipoVisitanteNombre)}</span>
+                                        </div>
+                                        {qs.map(q => (
+                                            <div key={q} style={{
+                                                padding: '8px 0', textAlign: 'center',
+                                                fontSize: '0.85rem', fontWeight: 900,
+                                                color: q === cuartoActual ? '#f87171' : 'rgba(255,255,255,0.85)',
+                                                background: q === cuartoActual ? 'rgba(239,68,68,0.08)' : 'transparent',
+                                            }}>
+                                                {qV[q] ?? 0}
+                                            </div>
+                                        ))}
+                                        <div style={{ padding: '8px 0', textAlign: 'center', fontSize: '0.95rem', fontWeight: 900, color: totV >= totL ? '#fbbf24' : 'white' }}>
+                                            {totV}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         );
                     })()}
@@ -371,11 +454,12 @@ const LiveGameViewer: React.FC<{
                 {(topScorer && topScorer.pts > 0) && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
                         {[
-                            { label: 'GOLEADOR', icon: '🏀', stat: topScorer.pts,  unit: 'PTS', p: topScorer, color: '#fbbf24' },
-                            { label: 'REBOTES',  icon: '🖐️', stat: topReb?.reb ?? 0, unit: 'REB', p: topReb,    color: '#10b981' },
-                            { label: 'ROBOS',    icon: '🛡️', stat: topRob?.rob ?? 0, unit: 'ROB', p: topRob,    color: '#a855f7' },
-                            { label: 'BLOQUEOS', icon: '🚫', stat: topBlo?.blo ?? 0, unit: 'BLO', p: topBlo,    color: '#f87171' },
-                        ].filter(c => c.p && c.stat > 0).map(c => {
+                            { label: 'GOLEADOR', icon: '🏀', stat: topScorer.pts,      unit: 'PTS', p: topScorer, color: '#fbbf24' },
+                            { label: 'TRIPLES',  icon: '🔥', stat: topTri?.triples ?? 0, unit: '3PT', p: topTri,    color: '#7c3aed' },
+                            { label: 'REBOTES',  icon: '🖐️', stat: topReb?.reb ?? 0,     unit: 'REB', p: topReb,    color: '#10b981' },
+                            { label: 'ROBOS',    icon: '🛡️', stat: topRob?.rob ?? 0,     unit: 'ROB', p: topRob,    color: '#a855f7' },
+                            { label: 'BLOQUEOS', icon: '🚫', stat: topBlo?.blo ?? 0,     unit: 'BLO', p: topBlo,    color: '#f87171' },
+                        ].filter(c => c.p && c.stat > 0).slice(0, 4).map(c => {
                             const foto = playerInfo[c.p!.jugadorId]?.fotoUrl || '';
                             const inicial = (c.p!.nombre || '?').charAt(0).toUpperCase();
                             return (
