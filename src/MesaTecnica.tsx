@@ -446,7 +446,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             showToast('Error al guardar ⚠️', '#ef4444');
             console.error(e);
         }
-    }, [matchData, colCal, showToast]);
+    }, [matchData, colCal, showToast, cuartoActual]);
 
     // ── DESHACER jugada (cualquiera del historial) ──
     const handleDeleteJugada = useCallback(async (jugada: Jugada) => {
