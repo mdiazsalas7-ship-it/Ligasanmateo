@@ -401,24 +401,6 @@ const LiveGameViewer: React.FC<{
                     })()}
                 </div>
 
-                {/* ── STATS RÁPIDAS EN VIVO ── */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-                    {[
-                        { label: '🏀 Dobles', l: statsLocal.dobles ?? 0, v: statsVisita.dobles ?? 0 },
-                        { label: '🔥 Triples', l: statsLocal.triples ?? 0, v: statsVisita.triples ?? 0 },
-                        { label: '🎯 TL', l: statsLocal.tirosLibres ?? 0, v: statsVisita.tirosLibres ?? 0 },
-                        { label: '🖐️ Rebotes', l: statsLocal.rebotes ?? 0, v: statsVisita.rebotes ?? 0 },
-                        { label: '🛡️ Robos', l: statsLocal.robos ?? 0, v: statsVisita.robos ?? 0 },
-                        { label: '🚫 Bloqueos', l: statsLocal.bloqueos ?? 0, v: statsVisita.bloqueos ?? 0 },
-                    ].map(s => (
-                        <div key={s.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '0.62rem', fontWeight: 900, color: '#60a5fa' }}>{s.l}</span>
-                            <span style={{ fontSize: '0.55rem', color: '#475569', fontWeight: 700 }}>{s.label}</span>
-                            <span style={{ fontSize: '0.62rem', fontWeight: 900, color: '#f87171' }}>{s.v}</span>
-                        </div>
-                    ))}
-                </div>
-
                 {/* ────────────────────────────────────────────────── */}
                 {/* ── 🔥 HOT STREAK (NBA Jam style)                  ── */}
                 {/* ────────────────────────────────────────────────── */}
@@ -612,6 +594,29 @@ const LiveGameViewer: React.FC<{
                                             {t.rows.length === 0 && (
                                                 <tr><td colSpan={8} style={{ padding: 14, textAlign: 'center', color: '#475569', fontSize: '0.6rem' }}>Sin jugadas aún</td></tr>
                                             )}
+                                            {t.rows.length > 0 && (() => {
+                                                const sum = t.rows.reduce((acc, r) => ({
+                                                    pts: acc.pts + r.pts,
+                                                    reb: acc.reb + r.reb,
+                                                    rob: acc.rob + r.rob,
+                                                    blo: acc.blo + r.blo,
+                                                    triples: acc.triples + r.triples,
+                                                    dobles: acc.dobles + r.dobles,
+                                                    tl: acc.tl + r.tl,
+                                                }), { pts: 0, reb: 0, rob: 0, blo: 0, triples: 0, dobles: 0, tl: 0 });
+                                                return (
+                                                    <tr style={{ borderTop: `2px solid ${t.color}40`, background: `${t.color}10` }}>
+                                                        <td style={{ padding: '8px', color: t.color, fontWeight: 900, letterSpacing: '1px', fontSize: '0.62rem' }}>TOTAL</td>
+                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: '#fbbf24', fontWeight: 900 }}>{sum.pts}</td>
+                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: 'white', fontWeight: 900 }}>{sum.reb}</td>
+                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: 'white', fontWeight: 900 }}>{sum.rob}</td>
+                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: 'white', fontWeight: 900 }}>{sum.blo}</td>
+                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: 'white', fontWeight: 900 }}>{sum.triples}</td>
+                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: 'white', fontWeight: 900 }}>{sum.dobles}</td>
+                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: 'white', fontWeight: 900 }}>{sum.tl}</td>
+                                                    </tr>
+                                                );
+                                            })()}
                                         </tbody>
                                     </table>
                                 </div>
