@@ -91,13 +91,37 @@ const LiveGameViewer: React.FC<{
         }).catch(() => {});
     }, [partido?.equipoLocalId, partido?.equipoVisitanteId, categoria]);
 
+    // ── Fotos de jugadores (jugadorId → fotoUrl) ──
+    const [playerPhotos, setPlayerPhotos] = useState<Record<string, string>>({});
+    useEffect(() => {
+        const cat = categoria.trim().toUpperCase();
+        const colJug = cat === 'MASTER40' ? 'jugadores' : `jugadores_${cat}`;
+        getDocs(collection(db, colJug)).then(snap => {
+            const map: Record<string, string> = {};
+            snap.docs.forEach(d => {
+                const data = d.data();
+                if (data.fotoUrl) map[d.id] = data.fotoUrl;
+            });
+            setPlayerPhotos(map);
+        }).catch(() => {});
+    }, [categoria]);
+
+    // ── Mesa estado en tiempo real (5 en cancha) ──
+    const [mesaEstado, setMesaEstado] = useState<any>(null);
+    useEffect(() => {
+        const unsub = onSnapshot(doc(db, 'mesa_estado', partidoId), snap => {
+            if (snap.exists()) setMesaEstado(snap.data());
+        });
+        return unsub;
+    }, [partidoId]);
+
     // ── Jugadas en tiempo real ──
     useEffect(() => {
         const q = query(
             collection(db, 'jugadas_partido'),
             where('partidoId', '==', partidoId),
             orderBy('timestamp', 'desc'),
-            limit(50)
+            limit(200)
         );
         const unsub = onSnapshot(q, snap => {
             const plays = snap.docs.map(d => ({ id: d.id, ...d.data() } as Jugada));
@@ -136,6 +160,74 @@ const LiveGameViewer: React.FC<{
     });
     const ptsLocal   = (statsLocal.tirosLibres ?? 0) + (statsLocal.dobles ?? 0) * 2   + (statsLocal.triples ?? 0) * 3;
     const ptsVisita  = (statsVisita.tirosLibres ?? 0) + (statsVisita.dobles ?? 0) * 2 + (statsVisita.triples ?? 0) * 3;
+
+    // ── BOX SCORE: stats acumuladas por jugador ──
+    interface BoxRow {
+        jugadorId: string;
+        nombre: string;
+        numero: string;
+        equipo: 'local' | 'visitante';
+        pts: number; reb: number; rob: number; blo: number;
+        dobles: number; triples: number; tl: number;
+    }
+    const boxByPlayer: Record<string, BoxRow> = {};
+    jugadas.forEach(j => {
+        const key = j.jugadorId || `${j.equipo}_${j.jugadorNombre}_${j.jugadorNumero}`;
+        if (!boxByPlayer[key]) {
+            boxByPlayer[key] = {
+                jugadorId: j.jugadorId || key,
+                nombre: j.jugadorNombre || '?',
+                numero: j.jugadorNumero || '',
+                equipo: j.equipo,
+                pts: 0, reb: 0, rob: 0, blo: 0,
+                dobles: 0, triples: 0, tl: 0,
+            };
+        }
+        const row = boxByPlayer[key];
+        if (j.accion === 'dobles')      { row.dobles++;  row.pts += 2; }
+        else if (j.accion === 'triples'){ row.triples++; row.pts += 3; }
+        else if (j.accion === 'tirosLibres') { row.tl++; row.pts += 1; }
+        else if (j.accion === 'rebotes'){ row.reb++; }
+        else if (j.accion === 'robos')  { row.rob++; }
+        else if (j.accion === 'bloqueos'){ row.blo++; }
+    });
+    const boxLocal    = Object.values(boxByPlayer).filter(r => r.equipo === 'local').sort((a, b) => b.pts - a.pts);
+    const boxVisita   = Object.values(boxByPlayer).filter(r => r.equipo === 'visitante').sort((a, b) => b.pts - a.pts);
+
+    // ── TOP PERFORMERS ──
+    const allBoxRows = Object.values(boxByPlayer);
+    const topScorer = allBoxRows.length ? allBoxRows.reduce((a, b) => b.pts > a.pts ? b : a) : null;
+    const topReb    = allBoxRows.length ? allBoxRows.reduce((a, b) => b.reb > a.reb ? b : a) : null;
+    const topRob    = allBoxRows.length ? allBoxRows.reduce((a, b) => b.rob > a.rob ? b : a) : null;
+
+    // ── HOT STREAK: ¿hay un jugador con 3+ anotaciones en las últimas 7 jugadas? ──
+    interface HotPlayer {
+        jugadorId: string;
+        nombre: string;
+        numero: string;
+        equipo: 'local' | 'visitante';
+        racha: number;
+    }
+    let hotPlayer: HotPlayer | null = null;
+    {
+        const ventana = jugadas.slice(0, 7); // las 7 más recientes (orden desc)
+        const counts: Record<string, HotPlayer> = {};
+        ventana.forEach(j => {
+            if (j.puntos > 0) {
+                const key = j.jugadorId || `${j.equipo}_${j.jugadorNombre}`;
+                if (!counts[key]) counts[key] = {
+                    jugadorId: j.jugadorId || key,
+                    nombre: j.jugadorNombre || '?',
+                    numero: j.jugadorNumero || '',
+                    equipo: j.equipo,
+                    racha: 0,
+                };
+                counts[key].racha++;
+            }
+        });
+        const hot = Object.values(counts).filter(c => c.racha >= 3).sort((a, b) => b.racha - a.racha);
+        hotPlayer = hot[0] || null;
+    }
 
     return (
         <div style={{ minHeight: '100vh', background: '#020617', color: 'white', fontFamily: "'Inter','Segoe UI',sans-serif", paddingBottom: 80 }}>
@@ -238,6 +330,195 @@ const LiveGameViewer: React.FC<{
                         </div>
                     ))}
                 </div>
+
+                {/* ────────────────────────────────────────────────── */}
+                {/* ── 🔥 HOT STREAK (NBA Jam style)                  ── */}
+                {/* ────────────────────────────────────────────────── */}
+                {hotPlayer && (
+                    <div style={{
+                        background: 'linear-gradient(135deg, #7c2d12 0%, #ea580c 50%, #f97316 100%)',
+                        borderRadius: 14, padding: '12px 14px', marginBottom: 14,
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        boxShadow: '0 0 30px rgba(249,115,22,0.5)',
+                        border: '1.5px solid #fb923c',
+                        animation: 'pulse 1.8s infinite',
+                        position: 'relative', overflow: 'hidden',
+                    }}>
+                        <div style={{ fontSize: '2rem', flexShrink: 0, filter: 'drop-shadow(0 0 8px #fef08a)' }}>🔥</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '0.55rem', fontWeight: 900, letterSpacing: '2px', color: '#fef08a', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>
+                                ON FIRE
+                            </div>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 900, color: 'white', textShadow: '0 1px 4px rgba(0,0,0,0.6)', lineHeight: 1.2 }}>
+                                #{hotPlayer.numero} {hotPlayer.nombre}
+                            </div>
+                            <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.95)', fontWeight: 700, marginTop: 2 }}>
+                                {hotPlayer.racha} anotaciones consecutivas · {hotPlayer.equipo === 'local' ? partido.equipoLocalNombre : partido.equipoVisitanteNombre}
+                            </div>
+                        </div>
+                        <div style={{ fontSize: '2rem', flexShrink: 0, filter: 'drop-shadow(0 0 8px #fef08a)' }}>🔥</div>
+                    </div>
+                )}
+
+                {/* ────────────────────────────────────────────────── */}
+                {/* ── 🏆 TOP PERFORMERS                              ── */}
+                {/* ────────────────────────────────────────────────── */}
+                {(topScorer && topScorer.pts > 0) && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+                        {[
+                            { label: 'GOLEADOR', icon: '🏀', stat: topScorer.pts,  unit: 'PTS', p: topScorer, color: '#fbbf24' },
+                            { label: 'REBOTES',  icon: '🖐️', stat: topReb?.reb ?? 0, unit: 'REB', p: topReb,    color: '#10b981' },
+                            { label: 'ROBOS',    icon: '🛡️', stat: topRob?.rob ?? 0, unit: 'ROB', p: topRob,    color: '#a855f7' },
+                        ].filter(c => c.p && c.stat > 0).map(c => {
+                            const foto = playerPhotos[c.p!.jugadorId] || '';
+                            const inicial = (c.p!.nombre || '?').charAt(0).toUpperCase();
+                            return (
+                                <div key={c.label} style={{
+                                    background: 'rgba(255,255,255,0.04)',
+                                    border: `1.5px solid ${c.color}40`,
+                                    borderRadius: 12, padding: '10px 8px', textAlign: 'center',
+                                    boxShadow: `0 4px 14px ${c.color}15`,
+                                }}>
+                                    <div style={{ fontSize: '0.5rem', fontWeight: 900, color: c.color, letterSpacing: '1px', marginBottom: 6 }}>
+                                        {c.icon} {c.label}
+                                    </div>
+                                    {/* Avatar */}
+                                    <div style={{
+                                        width: 42, height: 42, borderRadius: '50%', overflow: 'hidden',
+                                        border: `2px solid ${c.color}`, margin: '0 auto 6px',
+                                        background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    }}>
+                                        {foto ? (
+                                            <img src={foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                        ) : (
+                                            <span style={{ fontSize: '1rem', fontWeight: 900, color: c.color }}>{inicial}</span>
+                                        )}
+                                    </div>
+                                    <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'white', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        #{c.p!.numero} {c.p!.nombre}
+                                    </div>
+                                    <div style={{ marginTop: 4, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 3 }}>
+                                        <span style={{ fontSize: '1.4rem', fontWeight: 900, color: c.color, lineHeight: 1 }}>{c.stat}</span>
+                                        <span style={{ fontSize: '0.5rem', color: '#64748b', fontWeight: 800 }}>{c.unit}</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* ────────────────────────────────────────────────── */}
+                {/* ── 👥 5 EN CANCHA                                 ── */}
+                {/* ────────────────────────────────────────────────── */}
+                {mesaEstado && (mesaEstado.onCourtLocal?.length || mesaEstado.onCourtVisitante?.length) ? (
+                    <div style={{
+                        background: '#0a0f1e', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)',
+                        padding: '10px 14px', marginBottom: 14,
+                    }}>
+                        <div style={{ fontSize: '0.55rem', fontWeight: 900, color: '#94a3b8', letterSpacing: '1.5px', marginBottom: 10, textAlign: 'center' }}>
+                            👥 EN CANCHA AHORA
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            {[
+                                { equipo: 'local',     team: partido.equipoLocalNombre,     squad: mesaEstado.onCourtLocal     || [], color: '#3b82f6' },
+                                { equipo: 'visitante', team: partido.equipoVisitanteNombre, squad: mesaEstado.onCourtVisitante || [], color: '#ef4444' },
+                            ].map(s => (
+                                <div key={s.equipo}>
+                                    <div style={{ fontSize: '0.5rem', fontWeight: 900, color: s.color, letterSpacing: '1px', marginBottom: 6, textAlign: 'center', textTransform: 'uppercase' }}>
+                                        {s.team}
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'center', gap: 4, flexWrap: 'wrap' }}>
+                                        {s.squad.slice(0, 5).map((j: any, idx: number) => {
+                                            const jId = j.id || j.jugadorId || '';
+                                            const foto = playerPhotos[jId] || '';
+                                            const num = j.numero ?? j.dorsal ?? '';
+                                            const nom = (j.nombre || '?').split(' ')[0];
+                                            return (
+                                                <div key={jId || idx} title={`${num} ${j.nombre}`} style={{ textAlign: 'center', width: 38 }}>
+                                                    <div style={{
+                                                        width: 32, height: 32, borderRadius: '50%', overflow: 'hidden',
+                                                        border: `1.5px solid ${s.color}`, background: '#1e293b',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        margin: '0 auto',
+                                                    }}>
+                                                        {foto ? (
+                                                            <img src={foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                        ) : (
+                                                            <span style={{ fontSize: '0.55rem', fontWeight: 900, color: s.color }}>{num || '?'}</span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.45rem', color: '#94a3b8', fontWeight: 700, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        #{num}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
+
+                {/* ────────────────────────────────────────────────── */}
+                {/* ── 📊 BOX SCORE (tabla de jugadores)              ── */}
+                {/* ────────────────────────────────────────────────── */}
+                {(boxLocal.length > 0 || boxVisita.length > 0) && (
+                    <div style={{
+                        background: '#0a0f1e', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)',
+                        marginBottom: 14, overflow: 'hidden',
+                    }}>
+                        <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <span style={{ fontSize: '0.62rem', fontWeight: 900, color: '#94a3b8', letterSpacing: '1.5px' }}>📊 BOX SCORE</span>
+                        </div>
+                        {[
+                            { team: partido.equipoLocalNombre,     rows: boxLocal,    color: '#3b82f6' },
+                            { team: partido.equipoVisitanteNombre, rows: boxVisita,   color: '#ef4444' },
+                        ].map(t => (
+                            <div key={t.team}>
+                                <div style={{ padding: '6px 14px', background: `${t.color}15`, fontSize: '0.55rem', fontWeight: 900, color: t.color, letterSpacing: '1px', textTransform: 'uppercase' }}>
+                                    {t.team}
+                                </div>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.6rem' }}>
+                                        <thead>
+                                            <tr style={{ background: 'rgba(0,0,0,0.3)' }}>
+                                                <th style={{ padding: '6px 8px', textAlign: 'left', color: '#64748b', fontWeight: 800, letterSpacing: '0.5px' }}>JUGADOR</th>
+                                                <th style={{ padding: '6px 4px', color: '#fbbf24', fontWeight: 900 }}>PTS</th>
+                                                <th style={{ padding: '6px 4px', color: '#10b981', fontWeight: 900 }}>REB</th>
+                                                <th style={{ padding: '6px 4px', color: '#a855f7', fontWeight: 900 }}>ROB</th>
+                                                <th style={{ padding: '6px 4px', color: '#f87171', fontWeight: 900 }}>BLO</th>
+                                                <th style={{ padding: '6px 4px', color: '#7c3aed', fontWeight: 900 }}>3P</th>
+                                                <th style={{ padding: '6px 4px', color: '#1e40af', fontWeight: 900 }}>2P</th>
+                                                <th style={{ padding: '6px 4px', color: '#475569', fontWeight: 900 }}>TL</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {t.rows.map(r => (
+                                                <tr key={r.jugadorId} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                                                    <td style={{ padding: '6px 8px', color: 'white', fontWeight: 700, whiteSpace: 'nowrap', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        <span style={{ color: t.color, marginRight: 4 }}>#{r.numero}</span>{r.nombre}
+                                                    </td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: '#fbbf24', fontWeight: 900 }}>{r.pts}</td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.reb}</td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.rob}</td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.blo}</td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.triples}</td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.dobles}</td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.tl}</td>
+                                                </tr>
+                                            ))}
+                                            {t.rows.length === 0 && (
+                                                <tr><td colSpan={8} style={{ padding: 14, textAlign: 'center', color: '#475569', fontSize: '0.6rem' }}>Sin jugadas aún</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 {/* ── ÚLTIMA JUGADA (flash) ── */}
                 {lastJugada && (

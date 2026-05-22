@@ -1,4 +1,4 @@
-// ─────────────────────────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────
 // /public/firebase-messaging-sw.js
 // Service Worker unificado:
 //   - PWA: caché del app shell para funcionar offline
