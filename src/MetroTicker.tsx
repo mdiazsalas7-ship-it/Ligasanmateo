@@ -10,13 +10,14 @@ const LIGA_LOGO   = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at
 const SPEED       = 0.6; // px por frame
 
 interface TickerItem {
-    type: 'noticia' | 'lider' | 'resultado' | 'proximo' | 'tabla';
+    type: 'noticia' | 'lider' | 'resultado' | 'proximo' | 'tabla' | 'envivo';
     text: string;
     icon: string;
 }
 
 const itemColor = (type: TickerItem['type']) => {
     switch (type) {
+        case 'envivo':    return '#ef4444';
         case 'noticia':   return '#60a5fa';
         case 'resultado': return '#34d399';
         case 'proximo':   return '#a78bfa';
@@ -61,28 +62,44 @@ const MetroTicker: React.FC<{ lideres?: LiderTicker[] }> = ({ lideres = [] }) =>
                     );
                 } catch { /* sin noticias */ }
 
-                // ── 2. Detectar categorías activas ──
-                const categoriasActivas: string[] = [];
+                // ── 2. Detectar categorías activas (con partidos programados futuros o EN VIVO) ──
+                // Cacheamos los docs para no repetir queries en el loop siguiente.
+                const categoriasActivas: Array<{ cat: string; docs: any[] }> = [];
                 for (const cat of TODAS_CATS) {
                     const col = getColName('calendario', cat);
                     try {
                         const snap = await getDocs(
-                            query(collection(db, col), limit(1))
+                            query(collection(db, col), orderBy('fechaAsignada', 'desc'), limit(60))
                         );
-                        if (!snap.empty) categoriasActivas.push(cat);
+                        if (snap.empty) continue;
+
+                        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+                        // Activa si tiene al menos UN partido en vivo o programado a futuro
+                        const isActive = docs.some((d: any) => {
+                            if (d.enVivo === true && d.estatus !== 'finalizado') return true;
+                            if (d.estatus === 'programado' && (d.fechaAsignada || '') >= today) return true;
+                            return false;
+                        });
+                        if (isActive) categoriasActivas.push({ cat, docs });
                     } catch { /* col no existe */ }
                 }
 
-                // ── 3. Por cada categoría activa: resultados, próximos, tabla, líder ──
-                for (const cat of categoriasActivas) {
-                    const col      = getColName('calendario', cat);
+                // ── 3. Por cada categoría activa: en vivo, resultados, próximos, tabla ──
+                for (const { cat, docs } of categoriasActivas) {
                     const catLabel = cat === 'MASTER40' ? 'MASTER' : cat.replace('_', ' ');
 
                     try {
-                        const allSnap = await getDocs(
-                            query(collection(db, col), orderBy('fechaAsignada', 'desc'), limit(60))
-                        );
-                        const docs = allSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+                        // ── 🔴 EN VIVO (lo más importante, va primero) ──
+                        const enVivo = docs.filter((p: any) => p.enVivo === true && p.estatus !== 'finalizado');
+                        enVivo.forEach((p: any) => {
+                            const ml = p.marcadorLocal ?? 0;
+                            const mv = p.marcadorVisitante ?? 0;
+                            result.push({
+                                type: 'envivo', icon: '🔴',
+                                text: `EN VIVO · [${catLabel}] ${p.equipoLocalNombre} ${ml} - ${mv} ${p.equipoVisitanteNombre}`,
+                            });
+                        });
 
                         // ── Últimos 4 resultados ──
                         const finalizados = docs
@@ -274,19 +291,42 @@ const MetroTicker: React.FC<{ lideres?: LiderTicker[] }> = ({ lideres = [] }) =>
                 onTouchEnd={() => { setTimeout(() => { pauseRef.current = false; }, 1500); }}
             >
                 <div ref={trackRef} style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', willChange: 'transform' }}>
-                    {allItems.map((item, i) => (
-                        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, paddingRight: 36 }}>
-                            <span style={{ color: '#f97316', fontSize: '0.6rem', marginRight: 4, opacity: 0.4 }}>◆</span>
-                            <span style={{ fontSize: '0.7rem' }}>{item.icon}</span>
-                            <span style={{
-                                fontSize: '0.62rem', fontWeight: 700,
-                                color: itemColor(item.type),
-                                letterSpacing: '0.3px',
+                    {allItems.map((item, i) => {
+                        const isLive = item.type === 'envivo';
+                        return (
+                            <span key={i} style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                paddingRight: 36,
+                                ...(isLive ? {
+                                    background: 'rgba(239,68,68,0.18)',
+                                    padding: '3px 10px 3px 8px',
+                                    marginRight: 36,
+                                    borderRadius: 6,
+                                    border: '1px solid rgba(239,68,68,0.45)',
+                                } : {}),
                             }}>
-                                {item.text}
+                                <span style={{
+                                    color: isLive ? '#ef4444' : '#f97316',
+                                    fontSize: isLive ? '0.5rem' : '0.6rem',
+                                    marginRight: 4,
+                                    opacity: isLive ? 1 : 0.4,
+                                    animation: isLive ? 'pulse 1.4s infinite' : undefined,
+                                }}>
+                                    {isLive ? '●' : '◆'}
+                                </span>
+                                <span style={{ fontSize: '0.7rem' }}>{item.icon}</span>
+                                <span style={{
+                                    fontSize: isLive ? '0.66rem' : '0.62rem',
+                                    fontWeight: isLive ? 900 : 700,
+                                    color: itemColor(item.type),
+                                    letterSpacing: '0.3px',
+                                    textShadow: isLive ? '0 0 8px rgba(239,68,68,0.45)' : undefined,
+                                }}>
+                                    {item.text}
+                                </span>
                             </span>
-                        </span>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         </div>
