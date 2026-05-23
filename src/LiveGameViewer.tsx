@@ -114,6 +114,8 @@ const LiveGameViewer: React.FC<{
     const [mesaEstado, setMesaEstado] = useState<any>(null);
     // Box score colapsable por equipo
     const [collapsedTeams, setCollapsedTeams] = useState<Record<string, boolean>>({});
+    // Play by play colapsable (default colapsado: solo se ve la última jugada flash)
+    const [pbpExpanded, setPbpExpanded] = useState(false);
     useEffect(() => {
         const unsub = onSnapshot(doc(db, 'mesa_estado', partidoId), snap => {
             if (snap.exists()) setMesaEstado(snap.data());
@@ -403,24 +405,6 @@ const LiveGameViewer: React.FC<{
                     })()}
                 </div>
 
-                {/* ── STATS RÁPIDAS EN VIVO ── */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-                    {[
-                        { label: '🏀 Dobles', l: statsLocal.dobles ?? 0, v: statsVisita.dobles ?? 0 },
-                        { label: '🔥 Triples', l: statsLocal.triples ?? 0, v: statsVisita.triples ?? 0 },
-                        { label: '🎯 TL', l: statsLocal.tirosLibres ?? 0, v: statsVisita.tirosLibres ?? 0 },
-                        { label: '🖐️ Rebotes', l: statsLocal.rebotes ?? 0, v: statsVisita.rebotes ?? 0 },
-                        { label: '🛡️ Robos', l: statsLocal.robos ?? 0, v: statsVisita.robos ?? 0 },
-                        { label: '🚫 Bloqueos', l: statsLocal.bloqueos ?? 0, v: statsVisita.bloqueos ?? 0 },
-                    ].map(s => (
-                        <div key={s.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '0.62rem', fontWeight: 900, color: '#60a5fa' }}>{s.l}</span>
-                            <span style={{ fontSize: '0.55rem', color: '#475569', fontWeight: 700 }}>{s.label}</span>
-                            <span style={{ fontSize: '0.62rem', fontWeight: 900, color: '#f87171' }}>{s.v}</span>
-                        </div>
-                    ))}
-                </div>
-
                 {/* ────────────────────────────────────────────────── */}
                 {/* ── 🔥 HOT STREAK (NBA Jam style)                  ── */}
                 {/* ────────────────────────────────────────────────── */}
@@ -476,56 +460,74 @@ const LiveGameViewer: React.FC<{
                     </div>
                 )}
 
-                {/* ── PLAY BY PLAY ── */}
-                <div style={{ background: '#0a0f1e', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                    <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.62rem', fontWeight: 900, color: '#475569', letterSpacing: '1.5px', textTransform: 'uppercase' }}>📋 Play by Play</span>
-                        <span style={{ fontSize: '0.55rem', color: '#334155' }}>{jugadas.length} jugadas</span>
+                {/* ── PLAY BY PLAY (colapsable, default cerrado) ── */}
+                <div style={{ background: '#0a0f1e', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden', marginBottom: 14 }}>
+                    {/* Header clickeable */}
+                    <div onClick={() => setPbpExpanded(e => !e)}
+                        style={{
+                            padding: '10px 14px', background: 'rgba(255,255,255,0.03)',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            cursor: 'pointer', userSelect: 'none',
+                            borderBottom: pbpExpanded ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                        }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{
+                                fontSize: '0.55rem', color: '#64748b', fontWeight: 900,
+                                display: 'inline-block',
+                                transform: pbpExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                                transition: 'transform 0.2s',
+                            }}>▼</span>
+                            <span style={{ fontSize: '0.62rem', fontWeight: 900, color: '#475569', letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+                                📋 Play by Play
+                            </span>
+                        </div>
+                        <span style={{ fontSize: '0.55rem', color: '#334155' }}>
+                            {jugadas.length} {jugadas.length === 1 ? 'jugada' : 'jugadas'}
+                        </span>
                     </div>
 
-                    {jugadas.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '30px 20px', color: '#334155', fontSize: '0.75rem' }}>
-                            Esperando jugadas...
-                        </div>
-                    ) : (
-                        <div style={{ maxHeight: 380, overflowY: 'auto' }}>
-                            {jugadas.map((j, idx) => {
-                                const acc = ACCIONES[j.accion];
-                                const esLocal = j.equipo === 'local';
-                                return (
-                                    <div key={j.id} style={{
-                                        display: 'flex', alignItems: 'center', gap: 10,
-                                        padding: '9px 14px',
-                                        borderBottom: '1px solid rgba(255,255,255,0.04)',
-                                        background: idx === 0 ? 'rgba(59,130,246,0.06)' : 'transparent',
-                                        flexDirection: esLocal ? 'row' : 'row-reverse',
-                                    }}>
-                                        {/* Icono acción */}
-                                        <div style={{ width: 30, height: 30, borderRadius: 8, background: `${acc?.color ?? '#334155'}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', flexShrink: 0 }}>
-                                            {acc?.icon ?? '🏀'}
-                                        </div>
-
-                                        {/* Info */}
-                                        <div style={{ flex: 1, minWidth: 0, textAlign: esLocal ? 'left' : 'right' }}>
-                                            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: idx === 0 ? 'white' : 'rgba(255,255,255,0.75)' }}>
-                                                #{j.jugadorNumero} {j.jugadorNombre}
+                    {/* Contenido: solo si expandido */}
+                    {pbpExpanded && (
+                        jugadas.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '30px 20px', color: '#334155', fontSize: '0.75rem' }}>
+                                Esperando jugadas...
+                            </div>
+                        ) : (
+                            <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+                                {jugadas.map((j, idx) => {
+                                    const acc = ACCIONES[j.accion];
+                                    const esLocal = j.equipo === 'local';
+                                    return (
+                                        <div key={j.id} style={{
+                                            display: 'flex', alignItems: 'center', gap: 10,
+                                            padding: '9px 14px',
+                                            borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                            background: idx === 0 ? 'rgba(59,130,246,0.06)' : 'transparent',
+                                            flexDirection: esLocal ? 'row' : 'row-reverse',
+                                        }}>
+                                            <div style={{ width: 30, height: 30, borderRadius: 8, background: `${acc?.color ?? '#334155'}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', flexShrink: 0 }}>
+                                                {acc?.icon ?? '🏀'}
                                             </div>
-                                            <div style={{ fontSize: '0.55rem', color: '#64748b' }}>
-                                                {acc?.label ?? j.accion}
-                                                {j.puntos > 0 && <span style={{ color: '#10b981', marginLeft: 4, fontWeight: 700 }}>+{j.puntos}</span>}
+                                            <div style={{ flex: 1, minWidth: 0, textAlign: esLocal ? 'left' : 'right' }}>
+                                                <div style={{ fontSize: '0.68rem', fontWeight: 700, color: idx === 0 ? 'white' : 'rgba(255,255,255,0.75)' }}>
+                                                    #{j.jugadorNumero} {j.jugadorNombre}
+                                                </div>
+                                                <div style={{ fontSize: '0.55rem', color: '#64748b' }}>
+                                                    {acc?.label ?? j.accion}
+                                                    {j.puntos > 0 && <span style={{ color: '#10b981', marginLeft: 4, fontWeight: 700 }}>+{j.puntos}</span>}
+                                                </div>
+                                            </div>
+                                            <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                                                <div style={{ fontSize: '0.45rem', color: '#334155', fontWeight: 700 }}>{j.cuarto ?? ''}</div>
+                                                <div style={{ width: 4, height: 4, borderRadius: '50%', background: esLocal ? '#3b82f6' : '#ef4444', margin: '3px auto 0' }} />
                                             </div>
                                         </div>
-
-                                        {/* Cuarto + marcador momento */}
-                                        <div style={{ textAlign: 'center', flexShrink: 0 }}>
-                                            <div style={{ fontSize: '0.45rem', color: '#334155', fontWeight: 700 }}>{j.cuarto ?? ''}</div>
-                                            <div style={{ width: 4, height: 4, borderRadius: '50%', background: esLocal ? '#3b82f6' : '#ef4444', margin: '3px auto 0' }} />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                                    );
+                                })}
+                            </div>
+                        )
                     )}
+                </div>
 {/* ────────────────────────────────────────────────── */}
                 {/* ── 👥 5 EN CANCHA                                 ── */}
                 {/* ────────────────────────────────────────────────── */}
@@ -734,7 +736,6 @@ const LiveGameViewer: React.FC<{
                     </div>
                 )}
 
-                                </div>
             </div>
         </div>
     );
