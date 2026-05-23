@@ -112,6 +112,8 @@ const LiveGameViewer: React.FC<{
 
     // ── Mesa estado en tiempo real (5 en cancha) ──
     const [mesaEstado, setMesaEstado] = useState<any>(null);
+    // Box score colapsable por equipo
+    const [collapsedTeams, setCollapsedTeams] = useState<Record<string, boolean>>({});
     useEffect(() => {
         const unsub = onSnapshot(doc(db, 'mesa_estado', partidoId), snap => {
             if (snap.exists()) setMesaEstado(snap.data());
@@ -401,6 +403,24 @@ const LiveGameViewer: React.FC<{
                     })()}
                 </div>
 
+                {/* ── STATS RÁPIDAS EN VIVO ── */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                    {[
+                        { label: '🏀 Dobles', l: statsLocal.dobles ?? 0, v: statsVisita.dobles ?? 0 },
+                        { label: '🔥 Triples', l: statsLocal.triples ?? 0, v: statsVisita.triples ?? 0 },
+                        { label: '🎯 TL', l: statsLocal.tirosLibres ?? 0, v: statsVisita.tirosLibres ?? 0 },
+                        { label: '🖐️ Rebotes', l: statsLocal.rebotes ?? 0, v: statsVisita.rebotes ?? 0 },
+                        { label: '🛡️ Robos', l: statsLocal.robos ?? 0, v: statsVisita.robos ?? 0 },
+                        { label: '🚫 Bloqueos', l: statsLocal.bloqueos ?? 0, v: statsVisita.bloqueos ?? 0 },
+                    ].map(s => (
+                        <div key={s.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '0.62rem', fontWeight: 900, color: '#60a5fa' }}>{s.l}</span>
+                            <span style={{ fontSize: '0.55rem', color: '#475569', fontWeight: 700 }}>{s.label}</span>
+                            <span style={{ fontSize: '0.62rem', fontWeight: 900, color: '#f87171' }}>{s.v}</span>
+                        </div>
+                    ))}
+                </div>
+
                 {/* ────────────────────────────────────────────────── */}
                 {/* ── 🔥 HOT STREAK (NBA Jam style)                  ── */}
                 {/* ────────────────────────────────────────────────── */}
@@ -427,201 +447,6 @@ const LiveGameViewer: React.FC<{
                             </div>
                         </div>
                         <div style={{ fontSize: '2rem', flexShrink: 0, filter: 'drop-shadow(0 0 8px #fef08a)' }}>🔥</div>
-                    </div>
-                )}
-
-                {/* ────────────────────────────────────────────────── */}
-                {/* ── 🏆 TOP PERFORMERS                              ── */}
-                {/* ────────────────────────────────────────────────── */}
-                {(topScorer && topScorer.pts > 0) && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-                        {[
-                            { label: 'GOLEADOR', icon: '🏀', stat: topScorer.pts,      unit: 'PTS', p: topScorer, color: '#fbbf24' },
-                            { label: 'TRIPLES',  icon: '🔥', stat: topTri?.triples ?? 0, unit: '3PT', p: topTri,    color: '#7c3aed' },
-                            { label: 'REBOTES',  icon: '🖐️', stat: topReb?.reb ?? 0,     unit: 'REB', p: topReb,    color: '#10b981' },
-                            { label: 'ROBOS',    icon: '🛡️', stat: topRob?.rob ?? 0,     unit: 'ROB', p: topRob,    color: '#a855f7' },
-                            { label: 'BLOQUEOS', icon: '🚫', stat: topBlo?.blo ?? 0,     unit: 'BLO', p: topBlo,    color: '#f87171' },
-                        ].filter(c => c.p && c.stat > 0).slice(0, 4).map(c => {
-                            const foto = playerInfo[c.p!.jugadorId]?.fotoUrl || '';
-                            const inicial = (c.p!.nombre || '?').charAt(0).toUpperCase();
-                            return (
-                                <div key={c.label} style={{
-                                    background: 'rgba(255,255,255,0.04)',
-                                    border: `1.5px solid ${c.color}40`,
-                                    borderRadius: 12, padding: '10px 8px', textAlign: 'center',
-                                    boxShadow: `0 4px 14px ${c.color}15`,
-                                }}>
-                                    <div style={{ fontSize: '0.5rem', fontWeight: 900, color: c.color, letterSpacing: '1px', marginBottom: 6 }}>
-                                        {c.icon} {c.label}
-                                    </div>
-                                    {/* Avatar */}
-                                    <div style={{
-                                        width: 42, height: 42, borderRadius: '50%', overflow: 'hidden',
-                                        border: `2px solid ${c.color}`, margin: '0 auto 6px',
-                                        background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    }}>
-                                        {foto ? (
-                                            <img src={foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                        ) : (
-                                            <span style={{ fontSize: '1rem', fontWeight: 900, color: c.color }}>{inicial}</span>
-                                        )}
-                                    </div>
-                                    <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'white', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        #{c.p!.numero} {c.p!.nombre}
-                                    </div>
-                                    <div style={{ marginTop: 4, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 3 }}>
-                                        <span style={{ fontSize: '1.4rem', fontWeight: 900, color: c.color, lineHeight: 1 }}>{c.stat}</span>
-                                        <span style={{ fontSize: '0.5rem', color: '#64748b', fontWeight: 800 }}>{c.unit}</span>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-
-                {/* ────────────────────────────────────────────────── */}
-                {/* ── 👥 5 EN CANCHA                                 ── */}
-                {/* ────────────────────────────────────────────────── */}
-                {mesaEstado && (mesaEstado.onCourtLocal?.length || mesaEstado.onCourtVisitante?.length) ? (
-                    <div style={{
-                        background: '#0a0f1e', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)',
-                        padding: '10px 14px', marginBottom: 14,
-                    }}>
-                        <div style={{ fontSize: '0.55rem', fontWeight: 900, color: '#94a3b8', letterSpacing: '1.5px', marginBottom: 10, textAlign: 'center' }}>
-                            👥 EN CANCHA AHORA
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                            {[
-                                { equipo: 'local',     team: partido.equipoLocalNombre,     squad: mesaEstado.onCourtLocal     || [], color: '#3b82f6' },
-                                { equipo: 'visitante', team: partido.equipoVisitanteNombre, squad: mesaEstado.onCourtVisitante || [], color: '#ef4444' },
-                            ].map(s => (
-                                <div key={s.equipo}>
-                                    <div style={{ fontSize: '0.5rem', fontWeight: 900, color: s.color, letterSpacing: '1px', marginBottom: 6, textAlign: 'center', textTransform: 'uppercase' }}>
-                                        {s.team}
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'center', gap: 4, flexWrap: 'wrap' }}>
-                                        {s.squad.slice(0, 5).map((j: any, idx: number) => {
-                                            // Aceptar j como string (ID) o como objeto
-                                            const jId    = typeof j === 'string' ? j : (j?.id || j?.jugadorId || '');
-                                            const fromObj: any = typeof j === 'object' && j !== null ? j : {};
-                                            const fromMap = playerInfo[jId] || { nombre: '', numero: '', fotoUrl: '' };
-
-                                            const foto   = fromObj.fotoUrl || fromMap.fotoUrl || '';
-                                            const num    = String(fromObj.numero ?? fromObj.dorsal ?? fromMap.numero ?? '').trim();
-                                            const nombre = (fromObj.nombre || fromMap.nombre || '').trim();
-
-                                            return (
-                                                <div key={jId || idx} title={`${num ? '#' + num + ' ' : ''}${nombre}`} style={{ textAlign: 'center', width: 40 }}>
-                                                    <div style={{
-                                                        width: 34, height: 34, borderRadius: '50%', overflow: 'hidden',
-                                                        border: `1.5px solid ${s.color}`, background: '#1e293b',
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        margin: '0 auto',
-                                                    }}>
-                                                        {foto ? (
-                                                            <img src={foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                                        ) : (
-                                                            <span style={{ fontSize: '0.65rem', fontWeight: 900, color: s.color }}>
-                                                                {num || '·'}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {num && (
-                                                        <div style={{ fontSize: '0.45rem', color: '#94a3b8', fontWeight: 700, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                            #{num}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                ) : null}
-
-                {/* ────────────────────────────────────────────────── */}
-                {/* ── 📊 BOX SCORE (tabla de jugadores)              ── */}
-                {/* ────────────────────────────────────────────────── */}
-                {(boxLocal.length > 0 || boxVisita.length > 0) && (
-                    <div style={{
-                        background: '#0a0f1e', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)',
-                        marginBottom: 14, overflow: 'hidden',
-                    }}>
-                        <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <span style={{ fontSize: '0.62rem', fontWeight: 900, color: '#94a3b8', letterSpacing: '1.5px' }}>📊 BOX SCORE</span>
-                        </div>
-                        {[
-                            { team: partido.equipoLocalNombre,     rows: boxLocal,    color: '#3b82f6' },
-                            { team: partido.equipoVisitanteNombre, rows: boxVisita,   color: '#ef4444' },
-                        ].map(t => (
-                            <div key={t.team}>
-                                <div style={{ padding: '6px 14px', background: `${t.color}15`, fontSize: '0.55rem', fontWeight: 900, color: t.color, letterSpacing: '1px', textTransform: 'uppercase' }}>
-                                    {t.team}
-                                </div>
-                                <div style={{ overflowX: 'auto' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.6rem' }}>
-                                        <thead>
-                                            <tr style={{ background: 'rgba(0,0,0,0.3)' }}>
-                                                <th style={{ padding: '6px 8px', textAlign: 'left', color: '#64748b', fontWeight: 800, letterSpacing: '0.5px' }}>JUGADOR</th>
-                                                <th style={{ padding: '6px 4px', color: '#fbbf24', fontWeight: 900 }}>PTS</th>
-                                                <th style={{ padding: '6px 4px', color: '#10b981', fontWeight: 900 }}>REB</th>
-                                                <th style={{ padding: '6px 4px', color: '#a855f7', fontWeight: 900 }}>ROB</th>
-                                                <th style={{ padding: '6px 4px', color: '#f87171', fontWeight: 900 }}>BLO</th>
-                                                <th style={{ padding: '6px 4px', color: '#7c3aed', fontWeight: 900 }}>3P</th>
-                                                <th style={{ padding: '6px 4px', color: '#1e40af', fontWeight: 900 }}>2P</th>
-                                                <th style={{ padding: '6px 4px', color: '#475569', fontWeight: 900 }}>TL</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {t.rows.map(r => (
-                                                <tr key={r.jugadorId} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                                                    <td style={{ padding: '6px 8px', color: 'white', fontWeight: 700, whiteSpace: 'nowrap', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        <span style={{ color: t.color, marginRight: 4 }}>#{r.numero}</span>{r.nombre}
-                                                    </td>
-                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: '#fbbf24', fontWeight: 900 }}>{r.pts}</td>
-                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.reb}</td>
-                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.rob}</td>
-                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.blo}</td>
-                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.triples}</td>
-                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.dobles}</td>
-                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.tl}</td>
-                                                </tr>
-                                            ))}
-                                            {t.rows.length === 0 && (
-                                                <tr><td colSpan={8} style={{ padding: 14, textAlign: 'center', color: '#475569', fontSize: '0.6rem' }}>Sin jugadas aún</td></tr>
-                                            )}
-                                            {t.rows.length > 0 && (() => {
-                                                const sum = t.rows.reduce((acc, r) => ({
-                                                    pts: acc.pts + r.pts,
-                                                    reb: acc.reb + r.reb,
-                                                    rob: acc.rob + r.rob,
-                                                    blo: acc.blo + r.blo,
-                                                    triples: acc.triples + r.triples,
-                                                    dobles: acc.dobles + r.dobles,
-                                                    tl: acc.tl + r.tl,
-                                                }), { pts: 0, reb: 0, rob: 0, blo: 0, triples: 0, dobles: 0, tl: 0 });
-                                                return (
-                                                    <tr style={{ borderTop: `2px solid ${t.color}40`, background: `${t.color}10` }}>
-                                                        <td style={{ padding: '8px', color: t.color, fontWeight: 900, letterSpacing: '1px', fontSize: '0.62rem' }}>TOTAL</td>
-                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: '#fbbf24', fontWeight: 900 }}>{sum.pts}</td>
-                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: 'white', fontWeight: 900 }}>{sum.reb}</td>
-                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: 'white', fontWeight: 900 }}>{sum.rob}</td>
-                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: 'white', fontWeight: 900 }}>{sum.blo}</td>
-                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: 'white', fontWeight: 900 }}>{sum.triples}</td>
-                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: 'white', fontWeight: 900 }}>{sum.dobles}</td>
-                                                        <td style={{ padding: '8px 4px', textAlign: 'center', color: 'white', fontWeight: 900 }}>{sum.tl}</td>
-                                                    </tr>
-                                                );
-                                            })()}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        ))}
                     </div>
                 )}
 
@@ -701,7 +526,215 @@ const LiveGameViewer: React.FC<{
                             })}
                         </div>
                     )}
-                </div>
+{/* ────────────────────────────────────────────────── */}
+                {/* ── 👥 5 EN CANCHA                                 ── */}
+                {/* ────────────────────────────────────────────────── */}
+                {mesaEstado && (mesaEstado.onCourtLocal?.length || mesaEstado.onCourtVisitante?.length) ? (
+                    <div style={{
+                        background: '#0a0f1e', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)',
+                        padding: '10px 14px', marginBottom: 14,
+                    }}>
+                        <div style={{ fontSize: '0.55rem', fontWeight: 900, color: '#94a3b8', letterSpacing: '1.5px', marginBottom: 10, textAlign: 'center' }}>
+                            👥 EN CANCHA AHORA
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            {[
+                                { equipo: 'local',     team: partido.equipoLocalNombre,     squad: mesaEstado.onCourtLocal     || [], color: '#3b82f6' },
+                                { equipo: 'visitante', team: partido.equipoVisitanteNombre, squad: mesaEstado.onCourtVisitante || [], color: '#ef4444' },
+                            ].map(s => (
+                                <div key={s.equipo}>
+                                    <div style={{ fontSize: '0.5rem', fontWeight: 900, color: s.color, letterSpacing: '1px', marginBottom: 6, textAlign: 'center', textTransform: 'uppercase' }}>
+                                        {s.team}
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'center', gap: 4, flexWrap: 'wrap' }}>
+                                        {s.squad.slice(0, 5).map((j: any, idx: number) => {
+                                            // Aceptar j como string (ID) o como objeto
+                                            const jId    = typeof j === 'string' ? j : (j?.id || j?.jugadorId || '');
+                                            const fromObj: any = typeof j === 'object' && j !== null ? j : {};
+                                            const fromMap = playerInfo[jId] || { nombre: '', numero: '', fotoUrl: '' };
+
+                                            const foto   = fromObj.fotoUrl || fromMap.fotoUrl || '';
+                                            const num    = String(fromObj.numero ?? fromObj.dorsal ?? fromMap.numero ?? '').trim();
+                                            const nombre = (fromObj.nombre || fromMap.nombre || '').trim();
+
+                                            return (
+                                                <div key={jId || idx} title={`${num ? '#' + num + ' ' : ''}${nombre}`} style={{ textAlign: 'center', width: 40 }}>
+                                                    <div style={{
+                                                        width: 34, height: 34, borderRadius: '50%', overflow: 'hidden',
+                                                        border: `1.5px solid ${s.color}`, background: '#1e293b',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        margin: '0 auto',
+                                                    }}>
+                                                        {foto ? (
+                                                            <img src={foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                                        ) : (
+                                                            <span style={{ fontSize: '0.65rem', fontWeight: 900, color: s.color }}>
+                                                                {num || '·'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {num && (
+                                                        <div style={{ fontSize: '0.45rem', color: '#94a3b8', fontWeight: 700, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            #{num}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
+
+                {/* ────────────────────────────────────────────────── */}
+                {/* ── 📊 BOX SCORE (tabla de jugadores)              ── */}
+                {/* ────────────────────────────────────────────────── */}
+                {(boxLocal.length > 0 || boxVisita.length > 0) && (
+                    <div style={{
+                        background: '#0a0f1e', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)',
+                        marginBottom: 14, overflow: 'hidden',
+                    }}>
+                        <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <span style={{ fontSize: '0.62rem', fontWeight: 900, color: '#94a3b8', letterSpacing: '1.5px' }}>📊 BOX SCORE</span>
+                        </div>
+                        {[
+                            { team: partido.equipoLocalNombre,     rows: boxLocal,    color: '#3b82f6' },
+                            { team: partido.equipoVisitanteNombre, rows: boxVisita,   color: '#ef4444' },
+                        ].map(t => {
+                            const isCollapsed = !!collapsedTeams[t.team];
+                            const totals = t.rows.reduce((acc, r) => ({
+                                pts: acc.pts + r.pts, reb: acc.reb + r.reb,
+                                rob: acc.rob + r.rob, blo: acc.blo + r.blo,
+                                triples: acc.triples + r.triples, dobles: acc.dobles + r.dobles, tl: acc.tl + r.tl,
+                            }), { pts: 0, reb: 0, rob: 0, blo: 0, triples: 0, dobles: 0, tl: 0 });
+                            return (
+                            <div key={t.team}>
+                                {/* Header clickeable: muestra totales en línea, expande/colapsa la tabla */}
+                                <div onClick={() => setCollapsedTeams(prev => ({ ...prev, [t.team]: !prev[t.team] }))}
+                                    style={{
+                                        padding: '9px 14px', background: `${t.color}15`, cursor: 'pointer',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                        userSelect: 'none', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                    }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                                        <span style={{
+                                            fontSize: '0.5rem', color: t.color, fontWeight: 900,
+                                            display: 'inline-block',
+                                            transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                                            transition: 'transform 0.2s',
+                                        }}>▼</span>
+                                        <span style={{ fontSize: '0.58rem', fontWeight: 900, color: t.color, letterSpacing: '1px', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {t.team}
+                                        </span>
+                                    </div>
+                                    {t.rows.length > 0 && (
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexShrink: 0 }}>
+                                            <span style={{ fontSize: '1.05rem', fontWeight: 900, color: '#fbbf24', lineHeight: 1 }}>{totals.pts}</span>
+                                            <span style={{ fontSize: '0.5rem', color: '#94a3b8', fontWeight: 800, letterSpacing: '0.5px' }}>PTS</span>
+                                            <span style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.75)', fontWeight: 700, marginLeft: 4 }}>
+                                                {totals.reb}R · {totals.rob}S · {totals.blo}B
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {!isCollapsed && (
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.6rem' }}>
+                                        <thead>
+                                            <tr style={{ background: 'rgba(0,0,0,0.3)' }}>
+                                                <th style={{ padding: '6px 8px', textAlign: 'left', color: '#64748b', fontWeight: 800, letterSpacing: '0.5px' }}>JUGADOR</th>
+                                                <th style={{ padding: '6px 4px', color: '#fbbf24', fontWeight: 900 }}>PTS</th>
+                                                <th style={{ padding: '6px 4px', color: '#10b981', fontWeight: 900 }}>REB</th>
+                                                <th style={{ padding: '6px 4px', color: '#a855f7', fontWeight: 900 }}>ROB</th>
+                                                <th style={{ padding: '6px 4px', color: '#f87171', fontWeight: 900 }}>BLO</th>
+                                                <th style={{ padding: '6px 4px', color: '#7c3aed', fontWeight: 900 }}>3P</th>
+                                                <th style={{ padding: '6px 4px', color: '#1e40af', fontWeight: 900 }}>2P</th>
+                                                <th style={{ padding: '6px 4px', color: '#475569', fontWeight: 900 }}>TL</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {t.rows.map(r => (
+                                                <tr key={r.jugadorId} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                                                    <td style={{ padding: '6px 8px', color: 'white', fontWeight: 700, whiteSpace: 'nowrap', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        <span style={{ color: t.color, marginRight: 4 }}>#{r.numero}</span>{r.nombre}
+                                                    </td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: '#fbbf24', fontWeight: 900 }}>{r.pts}</td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.reb}</td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.rob}</td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.blo}</td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.triples}</td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.dobles}</td>
+                                                    <td style={{ padding: '6px 4px', textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>{r.tl}</td>
+                                                </tr>
+                                            ))}
+                                            {t.rows.length === 0 && (
+                                                <tr><td colSpan={8} style={{ padding: 14, textAlign: 'center', color: '#475569', fontSize: '0.6rem' }}>Sin jugadas aún</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                )}
+                            </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* ────────────────────────────────────────────────── */}
+                {/* ── 🏆 TOP PERFORMERS                              ── */}
+                {/* ────────────────────────────────────────────────── */}
+                {(topScorer && topScorer.pts > 0) && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+                        {[
+                            { label: 'GOLEADOR', icon: '🏀', stat: topScorer.pts,      unit: 'PTS', p: topScorer, color: '#fbbf24' },
+                            { label: 'TRIPLES',  icon: '🔥', stat: topTri?.triples ?? 0, unit: '3PT', p: topTri,    color: '#7c3aed' },
+                            { label: 'REBOTES',  icon: '🖐️', stat: topReb?.reb ?? 0,     unit: 'REB', p: topReb,    color: '#10b981' },
+                            { label: 'ROBOS',    icon: '🛡️', stat: topRob?.rob ?? 0,     unit: 'ROB', p: topRob,    color: '#a855f7' },
+                            { label: 'BLOQUEOS', icon: '🚫', stat: topBlo?.blo ?? 0,     unit: 'BLO', p: topBlo,    color: '#f87171' },
+                        ].filter(c => c.p && c.stat > 0).slice(0, 4).map(c => {
+                            const foto = playerInfo[c.p!.jugadorId]?.fotoUrl || '';
+                            const inicial = (c.p!.nombre || '?').charAt(0).toUpperCase();
+                            return (
+                                <div key={c.label} style={{
+                                    background: 'rgba(255,255,255,0.04)',
+                                    border: `1.5px solid ${c.color}40`,
+                                    borderRadius: 12, padding: '10px 8px', textAlign: 'center',
+                                    boxShadow: `0 4px 14px ${c.color}15`,
+                                }}>
+                                    <div style={{ fontSize: '0.5rem', fontWeight: 900, color: c.color, letterSpacing: '1px', marginBottom: 6 }}>
+                                        {c.icon} {c.label}
+                                    </div>
+                                    {/* Avatar */}
+                                    <div style={{
+                                        width: 42, height: 42, borderRadius: '50%', overflow: 'hidden',
+                                        border: `2px solid ${c.color}`, margin: '0 auto 6px',
+                                        background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    }}>
+                                        {foto ? (
+                                            <img src={foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                        ) : (
+                                            <span style={{ fontSize: '1rem', fontWeight: 900, color: c.color }}>{inicial}</span>
+                                        )}
+                                    </div>
+                                    <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'white', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        #{c.p!.numero} {c.p!.nombre}
+                                    </div>
+                                    <div style={{ marginTop: 4, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 3 }}>
+                                        <span style={{ fontSize: '1.4rem', fontWeight: 900, color: c.color, lineHeight: 1 }}>{c.stat}</span>
+                                        <span style={{ fontSize: '0.5rem', color: '#64748b', fontWeight: 800 }}>{c.unit}</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                                </div>
             </div>
         </div>
     );
