@@ -228,16 +228,24 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
         if (!newPlayerName.trim() || !newPlayerCedula.trim() || !newPlayerNumber.trim())
             return alert('Faltan datos (Nombre, Cédula o Número)');
         if (players.length >= 15) return alert('Nómina llena (Máx 15)');
-        if (players.some(p => p.cedula === newPlayerCedula))
-            return alert('Cédula repetida en este equipo.');
-        if (players.some(p => p.numero === parseInt(newPlayerNumber)))
-            return alert(`El número ${newPlayerNumber} ya está en uso.`);
+
+        const numero = parseInt(newPlayerNumber);
+
+        const conflictoCedula = players.find(p => p.cedula === newPlayerCedula);
+        if (conflictoCedula) {
+            return alert(`❌ La cédula ${newPlayerCedula} ya está en uso por ${conflictoCedula.nombre}.`);
+        }
+
+        const conflictoNumero = players.find(p => p.numero === numero);
+        if (conflictoNumero) {
+            return alert(`❌ El número ${numero} ya está en uso por ${conflictoNumero.nombre}.`);
+        }
 
         try {
             const playerDoc = {
                 nombre:       newPlayerName.toUpperCase(),
                 cedula:       newPlayerCedula,
-                numero:       parseInt(newPlayerNumber),
+                numero:       numero,
                 equipoId:     selectedTeam!.id,
                 equipoNombre: selectedTeam!.nombre,
                 categoria,
@@ -275,11 +283,30 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
     const handleUpdatePlayer = async (playerId: string) => {
         if (!editName.trim() || !editCedula.trim() || !editNumber.trim())
             return alert('Faltan datos');
+
+        const numero = parseInt(editNumber);
+
+        // Validar número duplicado (excluyendo al propio jugador que se está editando)
+        const conflictoNumero = players.find(
+            p => p.id !== playerId && p.numero === numero
+        );
+        if (conflictoNumero) {
+            return alert(`❌ El número ${numero} ya está en uso por ${conflictoNumero.nombre}.`);
+        }
+
+        // Validar cédula duplicada (excluyendo al propio jugador)
+        const conflictoCedula = players.find(
+            p => p.id !== playerId && p.cedula === editCedula
+        );
+        if (conflictoCedula) {
+            return alert(`❌ La cédula ${editCedula} ya está en uso por ${conflictoCedula.nombre}.`);
+        }
+
         try {
             const updated = {
                 nombre: editName.toUpperCase(),
                 cedula: editCedula,
-                numero: parseInt(editNumber),
+                numero,
             };
             await updateDoc(doc(db, colJugadores, playerId), updated);
             setPlayers(prev =>

@@ -22,6 +22,7 @@ import LiveGameViewer, { LiveGameSelector } from './LiveGameViewer';
 import { useNotifications } from './useNotifications';
 import ResetTemporada from './ResetTemporada';
 import ConfigTorneo from './ConfigTorneo';
+import FixStatsTool from './FixStatsTool';
 
 // ─────────────────────────────────────────────
 // CONSTANTES
@@ -191,6 +192,7 @@ function App() {
     const [activeView, setActiveView]               = useState('dashboard');
     const [showReset, setShowReset]                 = useState(false);
     const [showConfig, setShowConfig]               = useState(false);
+    const [showFix, setShowFix]                     = useState(false);
     const [liveGameId, setLiveGameId]               = useState<string | null>(null);
     const [showLiveSelector, setShowLiveSelector]   = useState(false);
     const [hasLiveGame, setHasLiveGame]             = useState(false);
@@ -1022,6 +1024,7 @@ function App() {
                                     <button onClick={() => setActiveView('adminVideos')} style={adminBtnStyle}>🎥 VIDEOS</button>
                                     <button onClick={() => setShowConfig(true)} style={{ ...adminBtnStyle, background: 'rgba(99,102,241,0.25)', border: '1px solid #6366f1', color: '#c7d2fe' }}>⚙️ CONFIG</button>
                                     <button onClick={() => setShowReset(true)} style={{ ...adminBtnStyle, background: 'rgba(239,68,68,0.25)', border: '1px solid #ef4444', color: '#fca5a5' }}>☢️ RESET</button>
+                                    <button onClick={() => setShowFix(true)} style={{ ...adminBtnStyle, background: 'rgba(251,191,36,0.18)', border: '1px solid #fbbf24', color: '#fde68a' }}>🔧 FIX STATS</button>
                                 </div>
                                 <button onClick={() => signOut(auth)} style={{ marginTop: 10, background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: '0.5rem', fontWeight: 'bold', cursor: 'pointer' }}>
                                     SALIR ADMIN
@@ -1135,6 +1138,7 @@ function App() {
                     <ConfigTorneo onClose={() => setShowConfig(false)} />
                 </div>
             )}
+            {showFix && <FixStatsTool onClose={() => setShowFix(false)} />}
 
             <style>{`
                 .no-scrollbar::-webkit-scrollbar { display: none; }

@@ -627,17 +627,22 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     // PANTALLA 2: Check-in de asistencia
     // ─────────────────────────────────────────────
     if (!checkInDone) {
-        const PlayerCheckItem = ({ p, present, setPresent, color }: any) => (
+        const isPartidoIniciado = !!matchData?.inicioPartidoTs;
+        const PlayerCheckItem = ({ p, present, setPresent, color, disabled }: any) => (
             <div
-                onClick={() => setPresent((prev: string[]) =>
-                    prev.includes(p.id) ? prev.filter((id: string) => id !== p.id) : [...prev, p.id]
-                )}
+                onClick={() => {
+                    if (disabled) return;
+                    setPresent((prev: string[]) =>
+                        prev.includes(p.id) ? prev.filter((id: string) => id !== p.id) : [...prev, p.id]
+                    );
+                }}
                 style={{
                     padding: '12px 14px', marginBottom: 6, borderRadius: 8, fontSize: '0.82rem',
                     background: present.includes(p.id) ? color : '#1a1a1a',
                     border: `1px solid ${present.includes(p.id) ? color : '#2d2d2d'}`,
-                    cursor: 'pointer', fontWeight: 600,
+                    cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 600,
                     display: 'flex', alignItems: 'center', gap: 10,
+                    opacity: disabled ? 0.5 : 1,
                 }}
             >
                 <span style={{ opacity: present.includes(p.id) ? 1 : 0.4 }}>
@@ -652,6 +657,15 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 <h3 style={{ textAlign: 'center', color: '#60a5fa', marginBottom: 16, fontWeight: 900 }}>
                     REGISTRO DE ASISTENCIA
                 </h3>
+                {isPartidoIniciado && (
+                    <div style={{
+                        background: '#dc2626', color: 'white', padding: '10px 14px',
+                        borderRadius: 8, marginBottom: 12, textAlign: 'center',
+                        fontSize: '0.75rem', fontWeight: 800,
+                    }}>
+                        🔒 PARTIDO EN CURSO — Forma 5 bloqueada
+                    </div>
+                )}
                 <div style={{ flex: 1, display: 'flex', gap: 10, overflow: 'hidden' }}>
                     {/* Local */}
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -660,7 +674,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                         </div>
                         <div style={{ overflowY: 'auto', flex: 1 }}>
                             {playersLocal.map(p => (
-                                <PlayerCheckItem key={p.id} p={p} present={presentLocal} setPresent={setPresentLocal} color="#3b82f6" />
+                                <PlayerCheckItem key={p.id} p={p} present={presentLocal} setPresent={setPresentLocal} color="#3b82f6" disabled={isPartidoIniciado} />
                             ))}
                         </div>
                     </div>
@@ -671,7 +685,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                         </div>
                         <div style={{ overflowY: 'auto', flex: 1 }}>
                             {playersVisitante.map(p => (
-                                <PlayerCheckItem key={p.id} p={p} present={presentVisitante} setPresent={setPresentVisitante} color="#ef4444" />
+                                <PlayerCheckItem key={p.id} p={p} present={presentVisitante} setPresent={setPresentVisitante} color="#ef4444" disabled={isPartidoIniciado} />
                             ))}
                         </div>
                     </div>
@@ -681,16 +695,20 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                         setCheckInDone(true);
                         saveEstado({ presentLocal, presentVisitante, checkInDone: true });
                     }}
-                    disabled={presentLocal.length < 5 || presentVisitante.length < 5}
+                    disabled={isPartidoIniciado || presentLocal.length < 5 || presentVisitante.length < 5}
                     style={{
                         padding: 16, marginTop: 12, borderRadius: 12, border: 'none',
-                        background: presentLocal.length >= 5 && presentVisitante.length >= 5 ? '#10b981' : '#1e293b',
-                        color: 'white', fontWeight: 900, fontSize: '0.85rem', cursor: 'pointer',
+                        background: !isPartidoIniciado && presentLocal.length >= 5 && presentVisitante.length >= 5 ? '#10b981' : '#1e293b',
+                        color: 'white', fontWeight: 900, fontSize: '0.85rem',
+                        cursor: isPartidoIniciado ? 'not-allowed' : 'pointer',
+                        opacity: isPartidoIniciado ? 0.5 : 1,
                     }}
                 >
-                    {presentLocal.length >= 5 && presentVisitante.length >= 5
-                        ? 'CONTINUAR → ABRIDORES'
-                        : `Selecciona al menos 5 por equipo (${presentLocal.length}/${presentVisitante.length})`}
+                    {isPartidoIniciado
+                        ? '🔒 BLOQUEADO'
+                        : presentLocal.length >= 5 && presentVisitante.length >= 5
+                            ? 'CONTINUAR → ABRIDORES'
+                            : `Selecciona al menos 5 por equipo (${presentLocal.length}/${presentVisitante.length})`}
                 </button>
             </div>
         );
@@ -700,19 +718,24 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     // PANTALLA 3: Selección de 5 abridores
     // ─────────────────────────────────────────────
     if (!startersDone) {
-        const StarterItem = ({ p, onCourt, setOnCourt, color }: any) => (
+        const isPartidoIniciado = !!matchData?.inicioPartidoTs;
+        const StarterItem = ({ p, onCourt, setOnCourt, color, disabled }: any) => (
             <div
-                onClick={() => setOnCourt((prev: string[]) =>
-                    prev.includes(p.id)
-                        ? prev.filter((id: string) => id !== p.id)
-                        : prev.length < 5 ? [...prev, p.id] : prev
-                )}
+                onClick={() => {
+                    if (disabled) return;
+                    setOnCourt((prev: string[]) =>
+                        prev.includes(p.id)
+                            ? prev.filter((id: string) => id !== p.id)
+                            : prev.length < 5 ? [...prev, p.id] : prev
+                    );
+                }}
                 style={{
                     padding: '12px 14px', marginBottom: 6, borderRadius: 8, fontSize: '0.82rem',
                     background: onCourt.includes(p.id) ? color : '#1a1a1a',
                     border: `1px solid ${onCourt.includes(p.id) ? color : '#2d2d2d'}`,
-                    cursor: 'pointer', fontWeight: 600,
+                    cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 600,
                     display: 'flex', alignItems: 'center', gap: 10,
+                    opacity: disabled ? 0.5 : 1,
                 }}
             >
                 <span style={{ opacity: onCourt.includes(p.id) ? 1 : 0.3 }}>
@@ -724,9 +747,37 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
 
         return (
             <div style={{ background: '#000', minHeight: '100vh', color: 'white', padding: 15, display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{ textAlign: 'center', color: '#a78bfa', fontWeight: 900, marginBottom: 16 }}>
+                <h3 style={{ textAlign: 'center', color: '#a78bfa', fontWeight: 900, marginBottom: 12 }}>
                     SELECCIONAR 5 ABRIDORES
                 </h3>
+
+                {/* Botón Editar Forma 5 (volver a check-in) */}
+                {!isPartidoIniciado && (
+                    <button
+                        onClick={() => {
+                            setCheckInDone(false);
+                            saveEstado({ checkInDone: false });
+                        }}
+                        style={{
+                            padding: '8px 14px', marginBottom: 12, borderRadius: 8,
+                            background: 'rgba(96,165,250,0.15)', border: '1px solid #60a5fa',
+                            color: '#93c5fd', fontWeight: 800, fontSize: '0.7rem', cursor: 'pointer',
+                        }}
+                    >
+                        ← EDITAR FORMA 5 (12 jugadores)
+                    </button>
+                )}
+
+                {isPartidoIniciado && (
+                    <div style={{
+                        background: '#dc2626', color: 'white', padding: '10px 14px',
+                        borderRadius: 8, marginBottom: 12, textAlign: 'center',
+                        fontSize: '0.75rem', fontWeight: 800,
+                    }}>
+                        🔒 PARTIDO EN CURSO — Abridores bloqueados
+                    </div>
+                )}
+
                 <div style={{ flex: 1, display: 'flex', gap: 10, overflow: 'hidden' }}>
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                         <div style={{ background: '#1e3a8a', padding: '6px 10px', fontSize: '0.65rem', fontWeight: 900, textAlign: 'center', borderRadius: 6, marginBottom: 8 }}>
@@ -734,7 +785,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                         </div>
                         <div style={{ overflowY: 'auto', flex: 1 }}>
                             {playersLocal.filter(p => presentLocal.includes(p.id)).map(p => (
-                                <StarterItem key={p.id} p={p} onCourt={onCourtLocal} setOnCourt={setOnCourtLocal} color="#3b82f6" />
+                                <StarterItem key={p.id} p={p} onCourt={onCourtLocal} setOnCourt={setOnCourtLocal} color="#3b82f6" disabled={isPartidoIniciado} />
                             ))}
                         </div>
                     </div>
@@ -744,7 +795,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                         </div>
                         <div style={{ overflowY: 'auto', flex: 1 }}>
                             {playersVisitante.filter(p => presentVisitante.includes(p.id)).map(p => (
-                                <StarterItem key={p.id} p={p} onCourt={onCourtVisitante} setOnCourt={setOnCourtVisitante} color="#ef4444" />
+                                <StarterItem key={p.id} p={p} onCourt={onCourtVisitante} setOnCourt={setOnCourtVisitante} color="#ef4444" disabled={isPartidoIniciado} />
                             ))}
                         </div>
                     </div>
@@ -757,16 +808,22 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                             onCourtLocal, onCourtVisitante,
                             checkInDone: true, startersDone: true,
                         });
-                        try { await updateDoc(doc(db, colCal, selectedMatchId!), { enVivo: true }); } catch(_) {}
+                        try { await updateDoc(doc(db, colCal, selectedMatchId!), { enVivo: true, inicioPartidoTs: serverTimestamp() }); } catch(_) {}
                     }}
-                    disabled={onCourtLocal.length !== 5 || onCourtVisitante.length !== 5}
+                    disabled={isPartidoIniciado || onCourtLocal.length !== 5 || onCourtVisitante.length !== 5}
                     style={{
                         padding: 16, marginTop: 12, borderRadius: 12, border: 'none',
-                        background: onCourtLocal.length === 5 && onCourtVisitante.length === 5 ? '#7c3aed' : '#1e293b',
-                        color: 'white', fontWeight: 900, fontSize: '0.85rem', cursor: 'pointer',
+                        background: !isPartidoIniciado && onCourtLocal.length === 5 && onCourtVisitante.length === 5 ? '#7c3aed' : '#1e293b',
+                        color: 'white', fontWeight: 900, fontSize: '0.85rem',
+                        cursor: isPartidoIniciado ? 'not-allowed' : 'pointer',
+                        opacity: isPartidoIniciado ? 0.5 : 1,
                     }}
                 >
-                    {onCourtLocal.length === 5 && onCourtVisitante.length === 5 ? '🏀 INICIAR PARTIDO' : `Selecciona 5 por equipo`}
+                    {isPartidoIniciado
+                        ? '🔒 BLOQUEADO'
+                        : onCourtLocal.length === 5 && onCourtVisitante.length === 5
+                            ? '🏀 INICIAR PARTIDO'
+                            : `Selecciona 5 por equipo`}
                 </button>
             </div>
         );
