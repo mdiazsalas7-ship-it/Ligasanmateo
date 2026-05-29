@@ -23,6 +23,7 @@ interface Match {
     equipoVisitanteNombre: string;
     marcadorLocal?: number;
     marcadorVisitante?: number;
+    enVivo?: boolean;
 }
 
 interface Equipo {
@@ -1469,7 +1470,7 @@ const DateDivider = ({ fecha, isToday, isFuture }: { fecha: string; isToday: boo
 // ─────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────
-type FilterType = 'TODOS' | 'A' | 'B' | 'PLAYOFFS' | 'PENDIENTES' | 'FINALIZADOS';
+type FilterType = 'TODOS' | 'A' | 'B' | 'PLAYOFFS' | 'PENDIENTES' | 'FINALIZADOS' | 'ENVIVO';
 
 const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: string }> = ({
     rol, onClose, categoria,
@@ -1480,6 +1481,7 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
     const [showMatchForm, setShowMatchForm]   = useState(false);
     const [selectedBoxScore, setSelectedBoxScore] = useState<Match | null>(null);
     const [activeFilter, setActiveFilter]     = useState<FilterType>('TODOS');
+    const [searchTerm, setSearchTerm]         = useState('');
     const [matchToEdit, setMatchToEdit]       = useState<Match | null>(null);
 
     const today = new Date().toISOString().split('T')[0];
@@ -1539,23 +1541,36 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
     };
 
     const filtered = useMemo(() => {
+        const q = searchTerm.trim().toLowerCase();
         return matches.filter(m => {
+            // Filtro de pestaña
+            let passFilter = true;
             switch (activeFilter) {
-                case 'TODOS':       return true;
-                case 'PLAYOFFS':    return esFasePlayoff(m.fase);
-                case 'PENDIENTES':  return m.estatus !== 'finalizado';
-                case 'FINALIZADOS': return m.estatus === 'finalizado';
-                case 'A':           return m.grupo?.toUpperCase() === 'A';
-                case 'B':           return m.grupo?.toUpperCase() === 'B';
-                default:            return true;
+                case 'TODOS':       passFilter = true; break;
+                case 'PLAYOFFS':    passFilter = esFasePlayoff(m.fase); break;
+                case 'PENDIENTES':  passFilter = m.estatus !== 'finalizado'; break;
+                case 'FINALIZADOS': passFilter = m.estatus === 'finalizado'; break;
+                case 'ENVIVO':      passFilter = m.enVivo === true && m.estatus !== 'finalizado'; break;
+                case 'A':           passFilter = m.grupo?.toUpperCase() === 'A'; break;
+                case 'B':           passFilter = m.grupo?.toUpperCase() === 'B'; break;
             }
+            if (!passFilter) return false;
+
+            // Búsqueda por nombre de equipo
+            if (q) {
+                const l = (m.equipoLocalNombre     || '').toLowerCase();
+                const v = (m.equipoVisitanteNombre || '').toLowerCase();
+                if (!l.includes(q) && !v.includes(q)) return false;
+            }
+            return true;
         });
-    }, [matches, activeFilter]);
+    }, [matches, activeFilter, searchTerm]);
 
     const grupos = useMemo(() => agruparPorFecha(filtered), [filtered]);
 
     const filters: { id: FilterType; label: string }[] = [
         { id: 'TODOS',       label: 'Todos' },
+        { id: 'ENVIVO',      label: '🔴 En vivo' },
         { id: 'PENDIENTES',  label: 'Próximos' },
         { id: 'FINALIZADOS', label: 'Resultados' },
         { id: 'PLAYOFFS',    label: '🔥 Playoffs' },
@@ -1590,17 +1605,76 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
 
             {/* Filtros */}
             <div className="no-scrollbar" style={{ background: '#fff', padding: '10px 16px', display: 'flex', gap: 8, overflowX: 'auto', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
-                {filters.map(f => (
-                    <button key={f.id} onClick={() => setActiveFilter(f.id)} style={{
-                        padding: '6px 14px', borderRadius: 20, whiteSpace: 'nowrap',
-                        border: activeFilter === f.id ? '1px solid #1e3a8a' : '1px solid #e2e8f0',
-                        background: activeFilter === f.id ? '#1e3a8a' : '#fff',
-                        color: activeFilter === f.id ? '#fff' : '#64748b',
-                        fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
-                    }}>
-                        {f.label}
-                    </button>
-                ))}
+                {filters.map(f => {
+                    const isActive = activeFilter === f.id;
+                    const isLive   = f.id === 'ENVIVO';
+                    const liveCount = matches.filter(m => m.enVivo === true && m.estatus !== 'finalizado').length;
+                    return (
+                        <button key={f.id} onClick={() => setActiveFilter(f.id)} style={{
+                            padding: '6px 14px', borderRadius: 20, whiteSpace: 'nowrap',
+                            border: isActive
+                                ? (isLive ? '1px solid #ef4444' : '1px solid #1e3a8a')
+                                : (isLive && liveCount > 0 ? '1px solid #fca5a5' : '1px solid #e2e8f0'),
+                            background: isActive
+                                ? (isLive ? '#ef4444' : '#1e3a8a')
+                                : (isLive && liveCount > 0 ? '#fef2f2' : '#fff'),
+                            color: isActive ? '#fff' : (isLive && liveCount > 0 ? '#ef4444' : '#64748b'),
+                            fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
+                            display: 'flex', alignItems: 'center', gap: 5,
+                        }}>
+                            {f.label}
+                            {isLive && liveCount > 0 && (
+                                <span style={{
+                                    background: isActive ? 'rgba(255,255,255,0.25)' : '#ef4444',
+                                    color: isActive ? '#fff' : '#fff',
+                                    padding: '1px 6px', borderRadius: 10,
+                                    fontSize: '0.55rem', fontWeight: 900,
+                                }}>
+                                    {liveCount}
+                                </span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Buscador */}
+            <div style={{ background: '#fff', padding: '8px 16px 12px', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+                <div style={{ position: 'relative', maxWidth: 680, margin: '0 auto' }}>
+                    <span style={{
+                        position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+                        color: '#94a3b8', fontSize: '0.85rem', pointerEvents: 'none',
+                    }}>🔍</span>
+                    <input
+                        type="text"
+                        placeholder="Buscar por equipo..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        style={{
+                            width: '100%', boxSizing: 'border-box',
+                            padding: '8px 36px 8px 34px',
+                            border: '1px solid #e2e8f0', borderRadius: 8,
+                            fontSize: '0.78rem', color: '#1e293b',
+                            background: '#f8fafc',
+                            outline: 'none',
+                        }}
+                        onFocus={e => { e.currentTarget.style.borderColor = '#1e3a8a'; e.currentTarget.style.background = '#fff'; }}
+                        onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
+                    />
+                    {searchTerm && (
+                        <button
+                            onClick={() => setSearchTerm('')}
+                            style={{
+                                position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                                background: '#e2e8f0', border: 'none', color: '#64748b',
+                                width: 22, height: 22, borderRadius: '50%', cursor: 'pointer',
+                                fontSize: '0.7rem', fontWeight: 900,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}
+                            aria-label="Limpiar búsqueda"
+                        >×</button>
+                    )}
+                </div>
             </div>
 
             {/* Lista */}
