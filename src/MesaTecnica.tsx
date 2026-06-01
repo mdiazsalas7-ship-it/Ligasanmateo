@@ -547,7 +547,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     }, [matchData, colCal, colTeams, colPlayers, onClose, showToast]);
 
     // ── Sustitución ──
-    const executeSwap = useCallback((newPlayerId: string) => {
+    const executeSwap = useCallback(async (newPlayerId: string) => {
         const { team, replacingId } = subModal;
         if (!replacingId) return;
 
@@ -564,9 +564,36 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 return updated;
             });
         }
+
+        // Registrar la sustitución como jugada para que aparezca en el play-by-play
+        try {
+            const players = team === 'local' ? playersLocal : playersVisitante;
+            const playerEntra = players.find(p => p.id === newPlayerId);
+            const playerSale  = players.find(p => p.id === replacingId);
+            if (matchData && playerEntra && playerSale) {
+                await addDoc(collection(db, 'jugadas_partido'), {
+                    partidoId:        matchData.id,
+                    categoria,
+                    equipo:           team,
+                    accion:           'sustitucion',
+                    puntos:           0,
+                    cuarto:           cuartoActual,
+                    timestamp:        serverTimestamp(),
+                    // jugadorId = el que ENTRA (criterio para que las stats individuales no cuenten)
+                    jugadorId:        playerEntra.id,
+                    jugadorNombre:    playerEntra.nombre,
+                    jugadorNumero:    String(playerEntra.numero),
+                    // datos extra para mostrar "SALE X · ENTRA Y"
+                    jugadorSaleId:    playerSale.id,
+                    jugadorSaleNombre: playerSale.nombre,
+                    jugadorSaleNumero: String(playerSale.numero),
+                });
+            }
+        } catch (e) { console.error('[swap] no se pudo registrar jugada de sustitución', e); }
+
         setSubModal(s => ({ ...s, isOpen: false, replacingId: null }));
         showToast('🔄 Cambio realizado', '#8b5cf6');
-    }, [subModal, showToast, saveEstado]);
+    }, [subModal, showToast, saveEstado, playersLocal, playersVisitante, matchData, categoria, cuartoActual]);
 
     // ─────────────────────────────────────────────
     // PANTALLA 1: Selección de partido

@@ -42,6 +42,7 @@ const ACCIONES: Record<string, { label: string; icon: string; color: string }> =
     rebotes:     { label: 'Rebote',      icon: '🖐️', color: '#047857' },
     robos:       { label: 'Robo',        icon: '🛡️', color: '#b45309' },
     bloqueos:    { label: 'Bloqueo',     icon: '🚫', color: '#991b1b' },
+    sustitucion: { label: 'Cambio',      icon: '🔄', color: '#8b5cf6' },
 };
 
 const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/166/166344.png';
@@ -248,26 +249,46 @@ const LiveGameViewer: React.FC<{
             `}</style>
 
             {/* ── HEADER ── */}
-            <div style={{ background: 'rgba(255,255,255,0.04)', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', animation: 'pulse 1.5s infinite' }} />
-                    <span style={{ fontSize: '0.7rem', fontWeight: 900, color: '#ef4444', letterSpacing: '1.5px' }}>EN VIVO</span>
-                    <span style={{ fontSize: '0.6rem', color: '#475569', marginLeft: 4 }}>{partido.categoria?.toUpperCase() ?? categoria}</span>
-                </div>
-                <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 700 }}>
-                    ✕ CERRAR
-                </button>
-            </div>
+            {(() => {
+                const isFinalizado = partido.estatus === 'finalizado' || partido.enVivo === false;
+                return (
+                    <div style={{ background: 'rgba(255,255,255,0.04)', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {isFinalizado ? (
+                                <>
+                                    <span style={{ fontSize: '0.85rem' }}>🏁</span>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 900, color: '#10b981', letterSpacing: '1.5px' }}>FINAL</span>
+                                </>
+                            ) : (
+                                <>
+                                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', animation: 'pulse 1.5s infinite' }} />
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 900, color: '#ef4444', letterSpacing: '1.5px' }}>EN VIVO</span>
+                                </>
+                            )}
+                            <span style={{ fontSize: '0.6rem', color: '#475569', marginLeft: 4 }}>{partido.categoria?.toUpperCase() ?? categoria}</span>
+                        </div>
+                        <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 700 }}>
+                            ✕ CERRAR
+                        </button>
+                    </div>
+                );
+            })()}
 
             {/* ── SCOREBOARD ── */}
             <div style={{ padding: '20px 16px 0' }}>
                 <div style={{ background: 'linear-gradient(135deg, #0f172a, #1e293b)', borderRadius: 20, padding: '20px 16px', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 16 }}>
 
-                    {/* Cuarto actual */}
+                    {/* Cuarto actual / FINAL */}
                     <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                        <span style={{ background: '#3b82f6', color: 'white', padding: '3px 14px', borderRadius: 20, fontSize: '0.65rem', fontWeight: 900 }}>
-                            {cuartoActual}
-                        </span>
+                        {(partido.estatus === 'finalizado' || partido.enVivo === false) ? (
+                            <span style={{ background: '#10b981', color: 'white', padding: '3px 14px', borderRadius: 20, fontSize: '0.65rem', fontWeight: 900, letterSpacing: '1px' }}>
+                                FINAL
+                            </span>
+                        ) : (
+                            <span style={{ background: '#3b82f6', color: 'white', padding: '3px 14px', borderRadius: 20, fontSize: '0.65rem', fontWeight: 900 }}>
+                                {cuartoActual}
+                            </span>
+                        )}
                     </div>
 
                     {/* Equipos y marcador */}
@@ -445,14 +466,27 @@ const LiveGameViewer: React.FC<{
                     }}>
                         <span style={{ fontSize: '1.4rem' }}>{ACCIONES[lastJugada.accion]?.icon ?? '🏀'}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '0.72rem', fontWeight: 900, color: 'white' }}>
-                                #{lastJugada.jugadorNumero} {lastJugada.jugadorNombre}
-                            </div>
-                            <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>
-                                {ACCIONES[lastJugada.accion]?.label ?? lastJugada.accion}
-                                {lastJugada.puntos > 0 && <span style={{ color: '#10b981', fontWeight: 700 }}> +{lastJugada.puntos} pts</span>}
-                                {lastJugada.cuarto && <span style={{ marginLeft: 6, color: '#475569' }}>· {lastJugada.cuarto}</span>}
-                            </div>
+                            {lastJugada.accion === 'sustitucion' ? (
+                                <>
+                                    <div style={{ fontSize: '0.6rem', fontWeight: 900, color: '#8b5cf6', letterSpacing: '0.5px', marginBottom: 2 }}>CAMBIO</div>
+                                    <div style={{ fontSize: '0.62rem', lineHeight: 1.4 }}>
+                                        <span style={{ color: '#ef4444' }}>↓ #{(lastJugada as any).jugadorSaleNumero} {(lastJugada as any).jugadorSaleNombre}</span>
+                                        <span style={{ margin: '0 6px', color: '#475569' }}>·</span>
+                                        <span style={{ color: '#10b981' }}>↑ #{lastJugada.jugadorNumero} {lastJugada.jugadorNombre}</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 900, color: 'white' }}>
+                                        #{lastJugada.jugadorNumero} {lastJugada.jugadorNombre}
+                                    </div>
+                                    <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>
+                                        {ACCIONES[lastJugada.accion]?.label ?? lastJugada.accion}
+                                        {lastJugada.puntos > 0 && <span style={{ color: '#10b981', fontWeight: 700 }}> +{lastJugada.puntos} pts</span>}
+                                        {lastJugada.cuarto && <span style={{ marginLeft: 6, color: '#475569' }}>· {lastJugada.cuarto}</span>}
+                                    </div>
+                                </>
+                            )}
                         </div>
                         <span style={{ fontSize: '0.55rem', background: lastJugada.equipo === 'local' ? '#1e3a8a' : '#7f1d1d', color: 'white', padding: '2px 8px', borderRadius: 20, fontWeight: 700, flexShrink: 0 }}>
                             {lastJugada.equipo === 'local' ? partido.equipoLocalNombre : partido.equipoVisitanteNombre}
@@ -497,6 +531,7 @@ const LiveGameViewer: React.FC<{
                                 {jugadas.map((j, idx) => {
                                     const acc = ACCIONES[j.accion];
                                     const esLocal = j.equipo === 'local';
+                                    const esSub = j.accion === 'sustitucion';
                                     return (
                                         <div key={j.id} style={{
                                             display: 'flex', alignItems: 'center', gap: 10,
@@ -509,13 +544,26 @@ const LiveGameViewer: React.FC<{
                                                 {acc?.icon ?? '🏀'}
                                             </div>
                                             <div style={{ flex: 1, minWidth: 0, textAlign: esLocal ? 'left' : 'right' }}>
-                                                <div style={{ fontSize: '0.68rem', fontWeight: 700, color: idx === 0 ? 'white' : 'rgba(255,255,255,0.75)' }}>
-                                                    #{j.jugadorNumero} {j.jugadorNombre}
-                                                </div>
-                                                <div style={{ fontSize: '0.55rem', color: '#64748b' }}>
-                                                    {acc?.label ?? j.accion}
-                                                    {j.puntos > 0 && <span style={{ color: '#10b981', marginLeft: 4, fontWeight: 700 }}>+{j.puntos}</span>}
-                                                </div>
+                                                {esSub ? (
+                                                    <>
+                                                        <div style={{ fontSize: '0.6rem', fontWeight: 800, color: '#8b5cf6', letterSpacing: '0.5px', marginBottom: 2 }}>CAMBIO</div>
+                                                        <div style={{ fontSize: '0.62rem', color: '#94a3b8', lineHeight: 1.4 }}>
+                                                            <span style={{ color: '#ef4444' }}>↓ #{(j as any).jugadorSaleNumero} {(j as any).jugadorSaleNombre}</span>
+                                                            <br/>
+                                                            <span style={{ color: '#10b981' }}>↑ #{j.jugadorNumero} {j.jugadorNombre}</span>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: idx === 0 ? 'white' : 'rgba(255,255,255,0.75)' }}>
+                                                            #{j.jugadorNumero} {j.jugadorNombre}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.55rem', color: '#64748b' }}>
+                                                            {acc?.label ?? j.accion}
+                                                            {j.puntos > 0 && <span style={{ color: '#10b981', marginLeft: 4, fontWeight: 700 }}>+{j.puntos}</span>}
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                             <div style={{ textAlign: 'center', flexShrink: 0 }}>
                                                 <div style={{ fontSize: '0.45rem', color: '#334155', fontWeight: 700 }}>{j.cuarto ?? ''}</div>
