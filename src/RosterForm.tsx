@@ -67,6 +67,14 @@ const RosterForm: React.FC<{ forma21Id: string, nombreEquipo: string, onSuccess:
             alert("⚠️ Has alcanzado el límite máximo de 15 jugadores.");
             return;
         }
+
+        // Validar número de camiseta único
+        const numeroParseado = parseInt(numero);
+        if (players.some(p => p.numero === numeroParseado)) {
+            const conflicto = players.find(p => p.numero === numeroParseado);
+            alert(`⚠️ El número #${numeroParseado} ya está en uso por ${conflicto?.nombre}. Cada jugador debe tener un número único.`);
+            return;
+        }
         
         setLoading(true);
         try {
