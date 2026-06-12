@@ -570,7 +570,11 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
             const players = team === 'local' ? playersLocal : playersVisitante;
             const playerEntra = players.find(p => p.id === newPlayerId);
             const playerSale  = players.find(p => p.id === replacingId);
-            if (matchData && playerEntra && playerSale) {
+            if (!matchData) {
+                showToast('⚠️ Cambio hecho pero no registrado (sin datos del partido)', '#f59e0b');
+            } else if (!playerEntra || !playerSale) {
+                showToast('⚠️ Cambio hecho pero no registrado (jugador no encontrado)', '#f59e0b');
+            } else {
                 await addDoc(collection(db, 'jugadas_partido'), {
                     partidoId:        matchData.id,
                     categoria,
@@ -589,7 +593,10 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     jugadorSaleNumero: String(playerSale.numero),
                 });
             }
-        } catch (e) { console.error('[swap] no se pudo registrar jugada de sustitución', e); }
+        } catch (e: any) {
+            console.error('[swap] no se pudo registrar jugada de sustitución', e);
+            showToast(`⚠️ Cambio hecho pero no salió en play-by-play: ${e?.code || e?.message || 'error'}`, '#ef4444');
+        }
 
         setSubModal(s => ({ ...s, isOpen: false, replacingId: null }));
         showToast('🔄 Cambio realizado', '#8b5cf6');
