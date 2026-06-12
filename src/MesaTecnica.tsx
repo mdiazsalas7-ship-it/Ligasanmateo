@@ -592,6 +592,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     jugadorSaleNombre: playerSale.nombre,
                     jugadorSaleNumero: String(playerSale.numero),
                 });
+                showToast('🔄 Cambio realizado', '#8b5cf6');
             }
         } catch (e: any) {
             console.error('[swap] no se pudo registrar jugada de sustitución', e);
@@ -599,7 +600,6 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         }
 
         setSubModal(s => ({ ...s, isOpen: false, replacingId: null }));
-        showToast('🔄 Cambio realizado', '#8b5cf6');
     }, [subModal, showToast, saveEstado, playersLocal, playersVisitante, matchData, categoria, cuartoActual]);
 
     // ─────────────────────────────────────────────
