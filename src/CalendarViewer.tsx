@@ -286,6 +286,8 @@ const MatchForm: React.FC<{
                             {[
                                 { v: 'REGULAR',    l: 'Regular'        },
                                 { v: 'PLAYIN',     l: '⚡ Play-In'     },
+                                { v: 'OCTAVOS',    l: 'Octavos'        },
+                                { v: 'CUARTOS',    l: 'Cuartos'        },
                                 { v: 'SEMIFINAL',  l: 'Semifinal'      },
                                 { v: '3ER LUGAR',  l: '3er Lugar'      },
                                 { v: 'FINAL',      l: 'Final'          },

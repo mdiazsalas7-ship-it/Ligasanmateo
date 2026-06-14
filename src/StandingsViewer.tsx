@@ -315,7 +315,7 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
     }, [equipos, partidosRegular]);
 
     // Cargar config del torneo para saber cuántos equipos clasifican
-    const [tourneyConfig, setTourneyConfig] = useState<{ numGrupos: number; usaPlayIn: boolean; fasesPlayoff: string[] } | null>(null);
+    const [tourneyConfig, setTourneyConfig] = useState<{ numGrupos: number; usaPlayIn: boolean; clasificanPorGrupo: number; fasesPlayoff: string[] } | null>(null);
 
     useEffect(() => {
         const cat = (categoria ?? '').trim().toUpperCase();
@@ -326,26 +326,19 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
                 setTourneyConfig({
                     numGrupos: d.numGrupos ?? 2,
                     usaPlayIn: d.usaPlayIn ?? false,
+                    clasificanPorGrupo: d.clasificanPorGrupo ?? 4,
                     fasesPlayoff: d.fasesPlayoff ?? [],
                 });
             } else {
-                setTourneyConfig({ numGrupos: 2, usaPlayIn: true, fasesPlayoff: ['PLAYIN','SEMIFINAL','FINAL','GRAN FINAL'] });
+                setTourneyConfig({ numGrupos: 2, usaPlayIn: true, clasificanPorGrupo: 4, fasesPlayoff: ['PLAYIN','SEMIFINAL','FINAL','GRAN FINAL'] });
             }
-        }).catch(() => setTourneyConfig({ numGrupos: 2, usaPlayIn: true, fasesPlayoff: ['PLAYIN','SEMIFINAL','FINAL','GRAN FINAL'] }));
+        }).catch(() => setTourneyConfig({ numGrupos: 2, usaPlayIn: true, clasificanPorGrupo: 4, fasesPlayoff: ['PLAYIN','SEMIFINAL','FINAL','GRAN FINAL'] }));
     }, [categoria]);
 
-    // Equipos que clasifican a playoff, según config:
-    //  - Play-In activo → 6 equipos clasifican por grupo/conferencia
-    //  - Semis con 1 grupo → 4 (1vs4, 2vs3)
-    //  - Semis con 2 grupos → 2 por grupo (cruces A1-B2, B1-A2)
-    //  - Solo final → 1 por grupo (cara a cara)
+    // Cuántos equipos clasifican por grupo: viene directo de la config de temporada.
     const getPlayoffSpots = (): number => {
         if (!tourneyConfig) return 4;
-        const fases = tourneyConfig.fasesPlayoff.map(f => f.toUpperCase());
-        if (fases.includes('PLAYIN') && tourneyConfig.usaPlayIn) return 6;
-        if (fases.includes('SEMIFINAL')) return tourneyConfig.numGrupos === 1 ? 4 : 2;
-        if (fases.includes('FINAL')) return 1;
-        return 4;
+        return tourneyConfig.clasificanPorGrupo ?? 4;
     };
 
     const grupoA = useMemo(() => {

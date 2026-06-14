@@ -18,6 +18,7 @@ export interface ConfigCategoria {
     nombreGrupoB: string;  // solo si numGrupos === 2
     usaPlayIn: boolean;    // Conf. Este usa Play-In
     equiposPorGrupo: number; // cuántos equipos por grupo
+    clasificanPorGrupo: number; // cuántos clasifican a playoff por cada grupo
     fasesPlayoff: string[]; // fases habilitadas
 }
 
@@ -27,6 +28,7 @@ export const CONFIG_DEFAULT: ConfigCategoria = {
     nombreGrupoB: 'CONF. OESTE',
     usaPlayIn: true,
     equiposPorGrupo: 6,
+    clasificanPorGrupo: 4,
     fasesPlayoff: ['PLAYIN', 'SEMIFINAL', 'FINAL', 'GRAN FINAL'],
 };
 
@@ -256,6 +258,28 @@ const ConfigTorneo: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 ))}
                             </div>
                         </div>
+
+                        {/* Clasifican por grupo a playoff */}
+                        <div style={{ marginTop: 12 }}>
+                            <label style={labelStyle}>Clasifican a playoff {config.numGrupos === 2 ? 'por grupo' : 'en total'}</label>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                {[1, 2, 3, 4, 5, 6, 8].map(n => (
+                                    <button key={n} onClick={() => setConfig(prev => ({ ...prev, clasificanPorGrupo: n }))}
+                                        style={{
+                                            padding: '6px 14px', borderRadius: 20, border: '1.5px solid',
+                                            borderColor: config.clasificanPorGrupo === n ? '#10b981' : '#e2e8f0',
+                                            background: config.clasificanPorGrupo === n ? '#10b981' : 'white',
+                                            color: config.clasificanPorGrupo === n ? 'white' : '#64748b',
+                                            fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer',
+                                        }}>
+                                        {n}
+                                    </button>
+                                ))}
+                            </div>
+                            <div style={{ fontSize: '0.58rem', color: '#94a3b8', marginTop: 6 }}>
+                                Los {config.clasificanPorGrupo} primeros de cada {config.numGrupos === 2 ? 'grupo' : 'tabla'} quedan sombreados como clasificados.
+                            </div>
+                        </div>
                     </div>
 
                     {/* ── PLAYOFF ── */}
@@ -417,6 +441,7 @@ const ConfigTorneo: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 ['Grupo A', config.nombreGrupoA],
                                 ...(config.numGrupos === 2 ? [['Grupo B', config.nombreGrupoB]] as const : []),
                                 ['Play-In', config.numGrupos === 2 && config.usaPlayIn ? '✅ Activo (Grupo A)' : '❌ Sin Play-In'],
+                                ['Clasifican', config.numGrupos === 2 ? `${config.clasificanPorGrupo} por grupo` : `${config.clasificanPorGrupo} en total`],
                                 ['Fases playoff', config.fasesPlayoff.join(' → ')],
                             ].map(([k, v]) => (
                                 <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem' }}>

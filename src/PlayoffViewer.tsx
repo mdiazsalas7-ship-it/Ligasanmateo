@@ -134,6 +134,71 @@ const PlayInCard: React.FC<{ partido: Partido; label: string }> = ({ partido, la
     <GameCard partido={partido} label={`PLAY-IN · ${label}`} icon="⚡" badgeColor="#818cf8" showAvanza />
 );
 
+// ── RoundHeader — título de cada ronda ────────────────────────────────────
+const RoundHeader: React.FC<{ icon: string; titulo: string; color: string }> = ({ icon, titulo, color }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <div style={{ flex: 1, height: 1, background: `${color}44` }} />
+        <span style={{ fontSize: '0.62rem', fontWeight: 900, color, letterSpacing: '2px' }}>{icon} {titulo}</span>
+        <div style={{ flex: 1, height: 1, background: `${color}44` }} />
+    </div>
+);
+
+// ── DownArrow — flecha entre rondas ───────────────────────────────────────
+const DownArrow: React.FC = () => (
+    <div style={{ textAlign: 'center', margin: '2px 0 18px', color: 'rgba(255,255,255,0.25)', fontSize: '1rem' }}>↓</div>
+);
+
+// ── BracketRow — tarjeta de partido a todo el ancho ───────────────────────
+const BracketRow: React.FC<{
+    partido: Partido; categoria: string; label: string; accent?: string; isFinal?: boolean;
+}> = ({ partido: m, categoria, label, accent = '#3b82f6', isFinal = false }) => {
+    const { editMode, setEditScore, handleSaveScore } = useEditCtx();
+    const fin = m.estatus === 'finalizado';
+    const lG  = fin && (m.marcadorLocal ?? -1) > (m.marcadorVisitante ?? -1);
+    const vG  = fin && (m.marcadorVisitante ?? -1) > (m.marcadorLocal ?? -1);
+
+    const row = (nombre: string | undefined, marcador: number | undefined, gana: boolean, field: 'l' | 'v', borderBottom: boolean) => (
+        <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+            background: gana ? `${accent}14` : 'transparent',
+            borderBottom: borderBottom ? '1px solid rgba(255,255,255,0.06)' : 'none',
+        }}>
+            <TeamLogo teamName={nombre ?? ''} categoria={categoria} size={26} />
+            <span style={{ flex: 1, fontSize: '0.8rem', fontWeight: gana ? 900 : 600, color: gana ? accent : 'rgba(255,255,255,0.9)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {nombre ?? 'Por definir'}
+            </span>
+            {gana && <span style={{ fontSize: '0.6rem' }}>🏆</span>}
+            {editMode
+                ? <input type="number" defaultValue={marcador ?? 0} onChange={e => setEditScore(m.id, field, Number(e.target.value))}
+                    style={{ width: 38, textAlign: 'center', background: '#0f172a', color: 'white', border: `1px solid ${accent}`, borderRadius: 5, fontSize: '0.8rem', padding: '3px 0' }} />
+                : <span style={{ fontSize: '1.15rem', fontWeight: 900, color: gana ? accent : !fin ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)', minWidth: 26, textAlign: 'right' }}>
+                    {!fin ? '–' : marcador}
+                </span>
+            }
+        </div>
+    );
+
+    return (
+        <div style={{
+            background: 'rgba(15,23,42,0.92)',
+            borderRadius: 12,
+            border: `1.5px solid ${accent}${fin ? '88' : '3a'}`,
+            overflow: 'hidden',
+            boxShadow: isFinal ? `0 8px 30px ${accent}40` : '0 3px 12px rgba(0,0,0,0.4)',
+        }}>
+            {(label !== '' || fin) && (
+                <div style={{ background: `${accent}18`, padding: '5px 14px', borderBottom: `1px solid ${accent}2a`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.52rem', fontWeight: 900, color: accent, letterSpacing: '1.5px', textTransform: 'uppercase' }}>{label || (isFinal ? 'GRAN FINAL' : '')}</span>
+                    {fin && <span style={{ fontSize: '0.5rem', color: '#10b981', fontWeight: 700 }}>✓ FINALIZADO</span>}
+                </div>
+            )}
+            {row(m.equipoLocalNombre, m.marcadorLocal, lG, 'l', true)}
+            {row(m.equipoVisitanteNombre, m.marcadorVisitante, vG, 'v', false)}
+            {editMode && <button onClick={() => handleSaveScore(m)} style={{ width: '100%', padding: '6px 0', background: 'rgba(16,185,129,0.9)', color: 'white', border: 'none', fontSize: '0.6rem', fontWeight: 900, cursor: 'pointer', letterSpacing: '1px' }}>GUARDAR RESULTADO</button>}
+        </div>
+    );
+};
+
 // ── SimpleBracket (Semis → Final) — ahora usa GameCard ────────────────
 const SimpleBracket: React.FC<{ semis: Partido[]; final: Partido[]; tercero: Partido[]; title: string; accentColor: string }> = ({ semis, final, tercero, title, accentColor }) => {
     if (semis.length === 0 && final.length === 0) return null;
@@ -194,7 +259,6 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
     const [editMode, setEditMode]     = useState(false);
     const [editScores, setEditScores] = useState<Record<string, EditScore>>({});
     const [toast, setToast]           = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
-    const [tab, setTab]               = useState<'este' | 'oeste'>('este');
 
     const colName = categoria.trim().toUpperCase() === 'MASTER40'
         ? 'calendario' : `calendario_${categoria.trim().toUpperCase()}`;
@@ -240,36 +304,22 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
     };
 
     // ── Filtros por conferencia y fase ──────────────────────────────────
-    const byConf = (conf: 'A' | 'B' | 'GRAND') =>
-        partidos.filter(m => (m.grupo ?? '').toUpperCase() === conf);
+    const byFase = (...fases: string[]) =>
+        partidos.filter(m => fases.some(f => m.fase?.toUpperCase() === f.toUpperCase()));
 
-    const byFase = (list: Partido[], ...fases: string[]) =>
-        list.filter(m => fases.some(f => m.fase?.toUpperCase() === f.toUpperCase()));
-
-    // CONF. ESTE (grupo A)
-    const esteAll     = byConf('A');
-    const estePlayIn  = byFase(esteAll, 'PLAYIN', 'PLAY-IN', 'PLAY_IN');
-    const esteSemis   = byFase(esteAll, 'SEMIS', 'SEMIFINAL');
-    const esteFinal   = byFase(esteAll, 'FINAL', 'GRAN FINAL');
-    const esteTercero = byFase(esteAll, '3ER LUGAR', 'TERCER LUGAR');
-
-    // CONF. OESTE (grupo B)
-    const oesteAll     = byConf('B');
-    const oesteSemis   = byFase(oesteAll, 'SEMIS', 'SEMIFINAL');
-    const oesteFinal   = byFase(oesteAll, 'FINAL', 'GRAN FINAL');
-    const oesteTercero = byFase(oesteAll, '3ER LUGAR', 'TERCER LUGAR');
-
-    // Grand Final (sin grupo, o grupo GRAND)
-    const grandFinal = byFase(byConf('GRAND'), 'FINAL', 'GRAN FINAL')
-        .concat(byFase(partidos.filter(m => !m.grupo || m.grupo.toUpperCase() === 'GRAND'), 'GRAN FINAL', 'GRAND FINAL'));
+    // Partidos por fase (ya vienen ordenados por fechaAsignada del query).
+    const cuartos = byFase('CUARTOS', 'CUARTOS DE FINAL');
+    const semis   = byFase('SEMIS', 'SEMIFINAL');
+    const final   = byFase('FINAL', 'GRAN FINAL', 'GRAND FINAL');
 
     const hayDatos = partidos.length > 0;
+    const hayBracket = cuartos.length > 0 || semis.length > 0 || final.length > 0;
 
     const editCtx: EditContextType = { editMode, editScores, setEditScore, handleSaveScore, categoria, colName };
 
     return (
         <EditContext.Provider value={editCtx}>
-            <div style={{ position: 'relative', minHeight: '100vh', background: 'radial-gradient(ellipse at 50% 0%, #0f1f3d 0%, #020617 70%)', color: 'white', fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+            <div style={{ position: 'relative', minHeight: '100vh', background: '#0b0f1a', color: 'white', fontFamily: "'Inter','Segoe UI',sans-serif" }}>
                 <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes fadeUp { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`}</style>
 
                 {/* Header */}
@@ -288,139 +338,70 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
                     </div>
                 </div>
 
-                {/* Tabs */}
-                <div style={{ display: 'flex', background: 'rgba(0,0,0,0.4)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                    {([['este', '🔵 CONF. ESTE', '#3b82f6'], ['oeste', '🟠 CONF. OESTE', '#f97316']] as const).map(([id, label, color]) => (
-                        <button key={id} onClick={() => setTab(id)} style={{ flex: 1, padding: '10px 0', background: tab === id ? `${color}22` : 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${color}` : '2px solid transparent', color: tab === id ? color : 'rgba(255,255,255,0.4)', fontSize: '0.65rem', fontWeight: 900, cursor: 'pointer', letterSpacing: '1px' }}>
-                            {label}
-                        </button>
-                    ))}
-                </div>
-
                 {loading ? (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16, flexDirection: 'column' }}>
                         <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid rgba(251,191,36,0.2)', borderTop: '3px solid #fbbf24', animation: 'spin 0.8s linear infinite' }} />
                         <p style={{ color: '#475569', fontSize: '0.85rem' }}>Cargando llaves...</p>
                     </div>
-                ) : !hayDatos ? (
+                ) : !hayDatos || !hayBracket ? (
                     <div style={{ textAlign: 'center', padding: '80px 20px' }}>
                         <div style={{ fontSize: '3rem', marginBottom: 16 }}>🏆</div>
                         <p style={{ fontWeight: 700, color: '#64748b' }}>Los playoffs aún no han comenzado</p>
+                        <p style={{ fontSize: '0.7rem', color: '#475569', marginTop: 8 }}>
+                            Creá los partidos de Cuartos / Semifinal / Final en el calendario.
+                        </p>
                     </div>
                 ) : (
-                    <main style={{ padding: '16px 12px 100px', maxWidth: 500, margin: '0 auto' }}>
+                    <main style={{ padding: '20px 14px 110px', maxWidth: 460, margin: '0 auto' }}>
+                        {/* BRACKET VERTICAL — rondas apiladas, prolijo en pantallas angostas */}
 
-                        {/* ── CONF. ESTE ── */}
-                        {tab === 'este' && (
-                            <>
-                                {/* PLAY-IN */}
-                                {estePlayIn.length > 0 && (
-                                    <div style={{ marginBottom: 24 }}>
-                                        {/* Header Play-In */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                                            <div style={{ flex: 1, height: 1, background: 'rgba(99,102,241,0.4)' }} />
-                                            <div style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)', borderRadius: 20, padding: '4px 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <span style={{ fontSize: '0.55rem', fontWeight: 900, color: '#818cf8', letterSpacing: '2px' }}>⚡ PLAY-IN CONFERENCIA ESTE</span>
-                                            </div>
-                                            <div style={{ flex: 1, height: 1, background: 'rgba(99,102,241,0.4)' }} />
-                                        </div>
-
-                                        {/* Explicación */}
-                                        <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 12, fontSize: '0.55rem', color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>
-                                            🏅 <b style={{ color: '#818cf8' }}>1° y 2°</b> pasan directo a Semis&nbsp;&nbsp;·&nbsp;&nbsp;
-                                            🎯 <b style={{ color: '#818cf8' }}>3°-6°</b> disputan Play-In — los ganadores avanzan a Semis
-                                        </div>
-
-                                        {/* Matches Play-In */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                                            {(() => {
-                                                // Ordenar: 3v6 primero, 4v5 segundo (por hora/fecha o índice)
-                                                const sorted = [...estePlayIn].sort((a, b) =>
-                                                    (a.fechaAsignada ?? '').localeCompare(b.fechaAsignada ?? '') ||
-                                                    (a.equipoLocalNombre ?? '').localeCompare(b.equipoLocalNombre ?? '')
-                                                );
-                                                const labels = ['3° vs 6°', '4° vs 5°'];
-                                                return sorted.map((m, i) => (
-                                                    <PlayInCard key={m.id} partido={m} label={labels[i] ?? `Partido ${i + 1}`} />
-                                                ));
-                                            })()}
-                                        </div>
-
-                                        {/* Flecha indicando que los ganadores van a Semis */}
-                                        {estePlayIn.length > 0 && esteSemis.length > 0 && (
-                                            <div style={{ textAlign: 'center', margin: '10px 0 0', fontSize: '0.5rem', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                                <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-                                                <span style={{ color: '#6366f1' }}>↓ ganadores pasan a Semis</span>
-                                                <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* BRACKET ESTE */}
-                                {(esteSemis.length > 0 || esteFinal.length > 0) && (
-                                    <SimpleBracket
-                                        semis={esteSemis}
-                                        final={esteFinal}
-                                        tercero={esteTercero}
-                                        title="🔵 Bracket Conferencia Este"
-                                        accentColor="#3b82f6"
-                                    />
-                                )}
-
-                                {estePlayIn.length === 0 && esteSemis.length === 0 && esteFinal.length === 0 && (
-                                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#475569' }}>
-                                        <div style={{ fontSize: '2rem', marginBottom: 10 }}>🔵</div>
-                                        <p style={{ fontSize: '0.8rem' }}>No hay partidos de Conf. Este programados aún</p>
-                                    </div>
-                                )}
-                            </>
-                        )}
-
-                        {/* ── CONF. OESTE ── */}
-                        {tab === 'oeste' && (
-                            <>
-                                {/* Info directas */}
-                                {oesteSemis.length > 0 && (
-                                    <div style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 16, fontSize: '0.55rem', color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>
-                                        🏅 Los <b style={{ color: '#fb923c' }}>4 mejores</b> de Conf. Oeste avanzan directo a Semis — sin Play-In
-                                    </div>
-                                )}
-
-                                {/* BRACKET OESTE */}
-                                {(oesteSemis.length > 0 || oesteFinal.length > 0) ? (
-                                    <SimpleBracket
-                                        semis={oesteSemis}
-                                        final={oesteFinal}
-                                        tercero={oesteTercero}
-                                        title="🟠 Bracket Conferencia Oeste"
-                                        accentColor="#f97316"
-                                    />
-                                ) : (
-                                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#475569' }}>
-                                        <div style={{ fontSize: '2rem', marginBottom: 10 }}>🟠</div>
-                                        <p style={{ fontSize: '0.8rem' }}>No hay partidos de Conf. Oeste programados aún</p>
-                                    </div>
-                                )}
-                            </>
-                        )}
-
-                        {/* ── GRAN FINAL ── (visible en ambos tabs si existe) */}
-                        {grandFinal.length > 0 && (
-                            <div style={{ marginTop: 8 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                                    <div style={{ flex: 1, height: 1, background: 'rgba(251,191,36,0.4)' }} />
-                                    <div style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.4)', borderRadius: 20, padding: '5px 16px' }}>
-                                        <span style={{ fontSize: '0.58rem', fontWeight: 900, color: '#fbbf24', letterSpacing: '2px' }}>👑 GRAN FINAL</span>
-                                    </div>
-                                    <div style={{ flex: 1, height: 1, background: 'rgba(251,191,36,0.4)' }} />
+                        {/* ── CUARTOS ── */}
+                        {(cuartos.length > 0) && (
+                            <section style={{ marginBottom: 26 }}>
+                                <RoundHeader icon="🔢" titulo="CUARTOS DE FINAL" color="#3b82f6" />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    {cuartos.map((m, i) => (
+                                        <BracketRow key={m.id} partido={m} categoria={categoria} label={`Llave ${i + 1}`} accent="#3b82f6" />
+                                    ))}
                                 </div>
-                                {grandFinal.map(m => (
-                                    <GameCard key={m.id} partido={m} label="👑 GRAN FINAL" icon="" badgeColor="#fbbf24" />
-                                ))}
-                            </div>
+                            </section>
                         )}
 
+                        {/* flecha hacia abajo */}
+                        {cuartos.length > 0 && semis.length > 0 && <DownArrow />}
+
+                        {/* ── SEMIFINALES ── */}
+                        {(semis.length > 0) && (
+                            <section style={{ marginBottom: 26 }}>
+                                <RoundHeader icon="🏅" titulo="SEMIFINALES" color="#8b5cf6" />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    {semis.map((m, i) => (
+                                        <BracketRow key={m.id} partido={m} categoria={categoria} label={`Semifinal ${i + 1}`} accent="#8b5cf6" />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+
+                        {/* flecha hacia abajo */}
+                        {semis.length > 0 && final.length > 0 && <DownArrow />}
+
+                        {/* ── FINAL ── */}
+                        {(final.length > 0) && (
+                            <section>
+                                <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                                    <div style={{ fontSize: '2rem' }}>🏆</div>
+                                    <div style={{ fontSize: '0.62rem', fontWeight: 900, color: '#fbbf24', letterSpacing: '3px', marginTop: 2 }}>FINAL</div>
+                                </div>
+                                {final.map(m => (
+                                    <BracketRow key={m.id} partido={m} categoria={categoria} label="" accent="#fbbf24" isFinal />
+                                ))}
+                            </section>
+                        )}
+
+                        {/* Leyenda regla de oro */}
+                        <div style={{ textAlign: 'center', marginTop: 28, fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
+                            🥇 Los <b style={{ color: '#fbbf24' }}>1° de cada grupo</b> solo pueden cruzarse en la Final.
+                        </div>
                     </main>
                 )}
 
