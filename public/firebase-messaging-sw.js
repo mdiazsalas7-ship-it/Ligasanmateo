@@ -9,12 +9,12 @@ importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js')
 importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-    apiKey:            'AIzaSyAM1IP1iFrWgxvtaskzu40GdNI6cIP5oS8',
-    authDomain:        'liga-de-san-mateo.firebaseapp.com',
-    projectId:         'liga-de-san-mateo',
-    storageBucket:     'liga-de-san-mateo.firebasestorage.app',
-    messagingSenderId: '71674005364',
-    appId:             '1:71674005364:web:6d6e93746ac430b77c4e21',
+            apiKey:            'AIzaSyAM1IP1iFrWgxvtaskzu40GdNI6cIP5oS8',
+            authDomain:        'liga-de-san-mateo.firebaseapp.com',
+            projectId:         'liga-de-san-mateo',
+            storageBucket:     'liga-de-san-mateo.firebasestorage.app',
+            messagingSenderId: '71674005364',
+            appId:             '1:71674005364:web:6d6e93746ac430b77c4e21',
 });
 
 const messaging = firebase.messaging();

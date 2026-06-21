@@ -31,8 +31,8 @@ const CATEGORIAS_DISPONIBLES = [
     { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL' },
     { id: 'U16_FEMENINO',    label: '👧 U16 FEMENINO'    },
     { id: 'U16M',            label: '👦 U16 MASCULINO'   },
+    { id: 'LIBRE',           label: '🏀 LIGA FLORES'     },
     { id: 'MASTER40',        label: '🍷 MASTER 40'       },
-    { id: 'LIBRE',           label: '🏀 LIBRE'           },
 ];
 
 const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/15568/15568903.png';
