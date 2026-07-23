@@ -56,7 +56,7 @@ const Login: React.FC = () => {
             width: '100vw',
             padding: '20px',
             // --- FONDO DE IMAGEN ---
-            backgroundImage: 'url(https://i.postimg.cc/1R8bFsPZ/Whats_App_Image_2025_12_30_at_3_47_13_PM.jpg)',
+            backgroundImage: 'url(/fondo-login.jpg)',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -70,7 +70,7 @@ const Login: React.FC = () => {
             }}>
                 <div style={{textAlign: 'center', marginBottom: '30px'}}>
                     <img 
-                        src="https://i.postimg.cc/0QgYWZtg/image.png" 
+                        src="/logo-login.png" 
                         alt="Logo" 
                         style={{width: '80px', borderRadius: '10px', marginBottom: '15px'}} 
                     />

@@ -151,7 +151,7 @@ const LeaderSection = ({
             for (let x = 0; x < W; x += 22) for (let y = 0; y < H; y += 22) ctx.fillRect(x, y, 2, 2);
 
             // ── Logo de la liga ──
-            const LIGA_LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+            const LIGA_LOGO = '/logo-liga.jpg';
             const ligaImg = await loadRemoteImg(LIGA_LOGO);
             const lr = 30, lcy = 42;
             ctx.save();

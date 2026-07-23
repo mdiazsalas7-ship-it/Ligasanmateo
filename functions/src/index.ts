@@ -58,7 +58,7 @@ async function sendPush(
                 ...data,
                 title,
                 body,
-                icon: 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg',
+                icon: 'https://estadisticasavanzadas.vercel.app/logo-liga.jpg',
             },
             android: { priority: 'high' },
             apns: {

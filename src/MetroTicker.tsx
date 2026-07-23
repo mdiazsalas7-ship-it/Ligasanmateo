@@ -6,7 +6,7 @@ const getColName = (base: string, cat: string) =>
     cat === 'MASTER40' ? base : `${base}_${cat}`;
 
 const TODAS_CATS  = ['LIBRE', 'INTERINDUSTRIAL', 'U16_FEMENINO', 'U16M', 'MASTER40'];
-const LIGA_LOGO   = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+const LIGA_LOGO   = '/logo-liga.jpg';
 const SPEED       = 0.6; // px por frame
 
 interface TickerItem {

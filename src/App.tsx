@@ -504,7 +504,7 @@ function App() {
                             cursor: 'pointer',
                         }} onClick={() => setActiveView('dashboard')}>
                             <img
-                                src="https://i.postimg.cc/hhF5fTPn/image.png"
+                                src="/logo-header.png"
                                 alt="Logo"
                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                             />
@@ -687,14 +687,14 @@ function App() {
                                                 onClick={e => { e.stopPropagation(); window.open('https://www.youtube.com/@ligametropolitanadelejeeste', '_blank'); }}
                                                 style={{ flex: 1, padding: '8px 6px', borderRadius: 12, border: 'none', background: '#ff0000', color: 'white', fontWeight: 900, fontSize: '0.55rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
                                             >
-                                                <img src="https://i.postimg.cc/XJ6rWrrL/image.png" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
+                                                <img src="/icono-youtube.png" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
                                                 LIGA OFICIAL
                                             </button>
                                             <button
                                                 onClick={e => { e.stopPropagation(); window.open('https://www.tiktok.com/@barbakanzler', '_blank'); }}
                                                 style={{ flex: 1, padding: '8px 6px', borderRadius: 12, border: 'none', background: '#010101', color: 'white', fontWeight: 900, fontSize: '0.55rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
                                             >
-                                                <img src="https://i.postimg.cc/RZ9XnGD5/channels4_profile.jpg" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
+                                                <img src="/icono-tiktok.jpg" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
                                                 @BARBAKANZLER
                                             </button>
                                         </div>

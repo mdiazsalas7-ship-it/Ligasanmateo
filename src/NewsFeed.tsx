@@ -4,7 +4,7 @@ import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestor
 
 interface NewsItem { id: string; titulo: string; cuerpo: string; tipo: 'general' | 'sancion' | 'destacado'; fecha: any; imageUrl?: string; }
 
-const LEAGUE_LOGO = "https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg";
+const LEAGUE_LOGO = "/logo-liga.jpg";
 
 const tipoColor = (tipo: string) => tipo === 'sancion' ? '#ef4444' : tipo === 'destacado' ? '#f59e0b' : '#1e3a8a';
 

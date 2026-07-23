@@ -36,7 +36,7 @@ interface Equipo {
 // ─────────────────────────────────────────────
 const DEFAULT_LOGO    = 'https://cdn-icons-png.flaticon.com/512/166/166344.png';
 const DEFAULT_AVATAR  = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-const LOGO_LIGA       = 'https://i.postimg.cc/hhF5fTPn/image.png';
+const LOGO_LIGA       = '/logo-header.png';
 
 // ─────────────────────────────────────────────
 // COMPONENTE PRINCIPAL

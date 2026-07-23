@@ -603,7 +603,7 @@ const BoxScoreModal = memo(({
             for (let x = 0; x < W; x += 20) for (let y = 0; y < H; y += 20) ctx.fillRect(x, y, 2, 2);
 
             // ── Logo liga (con fallback a emoji) ──
-            const LIGA_LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+            const LIGA_LOGO = '/logo-liga.jpg';
             const ligaImg = await loadRemoteImg(LIGA_LOGO);
             if (ligaImg) {
                 const lr = 38;
@@ -1048,7 +1048,7 @@ const MatchCard = memo(({
             // FONDO: imagen solo para juegos programados (VS)
             // ═══════════════════════════════════════════════════════
             if (!isFinished) {
-                const BG_URL = 'https://i.postimg.cc/HxYTX8D5/DIA-D-30.jpg';
+                const BG_URL = '/fondo-flyer.jpg';
                 const bgImg = await loadImg(BG_URL);
                 if (bgImg) {
                     const ratio = Math.max(W / bgImg.width, H / bgImg.height);
@@ -1099,7 +1099,7 @@ const MatchCard = memo(({
 
             // ── Logo liga: solo en juegos finalizados (el programado lo tiene en su imagen) ──
             if (isFinished) {
-                const LIGA_LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+                const LIGA_LOGO = '/logo-liga.jpg';
                 const ligaImg = await loadImg(LIGA_LOGO);
                 const lr = 52, lcy = 82;
                 if (ligaImg) {

@@ -13,7 +13,7 @@ interface BeforeInstallPromptEvent extends Event {
     userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-const LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+const LOGO = '/logo-liga.jpg';
 
 const InstallPrompt: React.FC = () => {
     const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);

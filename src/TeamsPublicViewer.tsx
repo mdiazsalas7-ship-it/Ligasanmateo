@@ -5,7 +5,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 // ─────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────
-const LEAGUE_LOGO     = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+const LEAGUE_LOGO     = '/logo-liga.jpg';
 const DEFAULT_LOGO    = 'https://cdn-icons-png.flaticon.com/512/451/451716.png';
 const DEFAULT_AVATAR  = '';   // vacío → usa iniciales
 

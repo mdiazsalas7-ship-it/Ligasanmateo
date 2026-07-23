@@ -18,12 +18,12 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
-const LOGO_LIGA = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+const LOGO_LIGA = self.location.origin + '/logo-liga.jpg';
 
 // ─────────────────────────────────────────────────────────────
 // CACHE — App Shell (recursos que funcionan offline)
 // ─────────────────────────────────────────────────────────────
-const CACHE_NAME   = 'limebal-v1';
+const CACHE_NAME   = 'limebal-v2';
 const OFFLINE_URL  = '/offline.html';
 
 // Recursos que se cachean al instalar el SW

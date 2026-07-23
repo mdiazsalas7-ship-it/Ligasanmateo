@@ -16,7 +16,7 @@ import { db, messaging } from './firebase';
 //    → Web push certificates → Generate key pair → copiar clave pública
 const VAPID_KEY = 'BLkExx7QUohS3DljzvySrciQgTLW-oRqye7s1ECl0xd9kh5b2Cqx-V-Oew_pA94x5V8xa4bYlRoKuQ4HoL0WDhE';
 
-const LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+const LOGO = '/logo-liga.jpg';
 
 export function useNotifications(userId?: string) {
     useEffect(() => {

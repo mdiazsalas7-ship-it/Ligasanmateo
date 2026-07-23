@@ -365,7 +365,7 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
     const compartirTabla = useCallback(async () => {
         setSharing(true);
         try {
-            const LIGA_LOGO = 'https://i.postimg.cc/FKgNmFpv/Whats_App_Image_2026_01_25_at_12_07_36_AM.jpg';
+            const LIGA_LOGO = '/logo-liga.jpg';
             const allTeams = [...grupoA, ...grupoB];
             const W = 700;
             const ROW_H = 52;
