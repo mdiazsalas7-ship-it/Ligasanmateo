@@ -251,6 +251,10 @@ function App() {
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, (u) => {
             if (u) {
+                // Refrescar token para recibir el custom claim "admin"
+                // (lo asigna la Cloud Function syncAdminClaim; las reglas
+                // de Firestore validan contra ese claim, no contra la UI)
+                u.getIdToken(true).catch(() => {});
                 onSnapshot(doc(db, 'usuarios', u.uid), (snap) => {
                     const data = snap.data();
                     setUser({

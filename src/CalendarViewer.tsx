@@ -1382,8 +1382,12 @@ const MatchCard = memo(({
                         {m.fase?.toUpperCase()}
                     </span>
                 )}
-                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: isFinished ? '#10b981' : themeColor }}>
-                    {isFinished ? 'FINAL' : (m.hora ?? 'VS')}
+                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: isFinished ? '#10b981' : m.estatus === 'suspendido' ? '#f59e0b' : themeColor }}>
+                    {isFinished
+                        ? 'FINAL'
+                        : m.estatus === 'suspendido'
+                            ? `⏸ SUSPENDIDO ${m.marcadorLocal ?? 0}-${m.marcadorVisitante ?? 0}`
+                            : (m.hora ?? 'VS')}
                 </span>
             </div>
 

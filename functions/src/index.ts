@@ -243,10 +243,99 @@ CALENDARIO_COLS.forEach(colName => {
                 ? 'MASTER40'
                 : colName.split('_').slice(1).join('_') || '';
 
+            // Mensaje distinto si el partido venía de una suspensión
+            const esReanudacion = after.reanudado === true;
+
             await sendPush(
                 `🔴 EN VIVO · ${categoria}`,
-                `${local} vs ${visitante} — ¡Comenzó el juego!`,
+                `${local} vs ${visitante} — ${esReanudacion ? '¡Se reanudó el juego!' : '¡Comenzó el juego!'}`,
                 { type: 'partido_envivo', id: change.after.id, categoria }
             );
         });
 });
+
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 6: Partido SUSPENDIDO (lluvia, falla eléctrica, etc.)
+// Dispara cuando estatus pasa a 'suspendido'
+// ─────────────────────────────────────────────────────────────
+CALENDARIO_COLS.forEach(colName => {
+    const fnName = 'onPartidoSuspendido_' + colName.replace('calendario', 'cal');
+
+    exports[fnName] = functions
+        .region('us-central1')
+        .firestore
+        .document(`${colName}/{partidoId}`)
+        .onUpdate(async (change) => {
+            const before = change.before.data();
+            const after  = change.after.data();
+
+            if (before.estatus === 'suspendido' || after.estatus !== 'suspendido') return;
+
+            const local     = after.equipoLocalNombre     || 'Local';
+            const visitante = after.equipoVisitanteNombre || 'Visitante';
+            const marcL     = after.marcadorLocal          ?? 0;
+            const marcV     = after.marcadorVisitante      ?? 0;
+
+            const categoria = colName === 'calendario'
+                ? 'MASTER40'
+                : colName.split('_').slice(1).join('_') || '';
+
+            await sendPush(
+                `⏸ Partido Suspendido · ${categoria}`,
+                `${local} ${marcL} - ${marcV} ${visitante} — Se reanudará en otra fecha`,
+                { type: 'partido_suspendido', id: change.after.id, categoria }
+            );
+        });
+});
+
+// ─────────────────────────────────────────────────────────────
+// TRIGGER 7: Sincronizar custom claim "admin"
+//
+// Cuando cambia usuarios/{uid}, se pone/quita el claim admin
+// según el campo `rol` (o el email del dueño de la liga).
+// Las reglas de Firestore/Storage validan contra este claim,
+// así que el rol YA NO puede falsificarse desde el cliente.
+//
+// Nota: el usuario debe cerrar sesión y volver a entrar (o el
+// cliente refrescar el token con getIdToken(true)) para que el
+// claim nuevo llegue a su token.
+// ─────────────────────────────────────────────────────────────
+const OWNER_EMAIL = 'mdiazsalas7@gmail.com';
+
+export const syncAdminClaim = functions
+    .region('us-central1')
+    .firestore
+    .document('usuarios/{uid}')
+    .onWrite(async (change, context) => {
+        const uid = context.params.uid;
+
+        // Doc borrado → quitar claim
+        if (!change.after.exists) {
+            try {
+                await admin.auth().setCustomUserClaims(uid, { admin: false });
+            } catch (e) {
+                console.error(`[claims] No se pudo limpiar claim de ${uid}:`, e);
+            }
+            return;
+        }
+
+        const data = change.after.data() || {};
+
+        let email = '';
+        try {
+            const userRecord = await admin.auth().getUser(uid);
+            email = userRecord.email || '';
+        } catch (e) {
+            console.error(`[claims] Usuario Auth no encontrado para ${uid}:`, e);
+            return;
+        }
+
+        const debeSerAdmin = data.rol === 'admin' || email === OWNER_EMAIL;
+
+        try {
+            await admin.auth().setCustomUserClaims(uid, { admin: debeSerAdmin });
+            console.log(`[claims] ${email} (${uid}) → admin: ${debeSerAdmin}`);
+        } catch (e) {
+            console.error(`[claims] Error asignando claim a ${uid}:`, e);
+        }
+    });

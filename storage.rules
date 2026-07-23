@@ -1,0 +1,48 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        request.auth.token.email == 'mdiazsalas7@gmail.com'
+      );
+    }
+
+    // Logos de equipos por categoría (logos_LIBRE, logos_U16M, ...)
+    match /{logosFolder}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Fotos de jugadores
+    match /jugadores_fotos/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Videos de entrevistas + thumbnails
+    match /videos_entrevistas/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.size < 300 * 1024 * 1024
+        && request.resource.contentType.matches('video/.*');
+    }
+    match /videos_thumbnails/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Cualquier otra ruta: lectura pública, escritura solo admin
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

@@ -3,7 +3,7 @@ import { db } from './firebase';
 import {
     doc, updateDoc, onSnapshot, collection, query,
     getDocs, setDoc, increment, where, writeBatch,
-    limit, orderBy, addDoc, deleteDoc, getDoc
+    limit, orderBy, addDoc, deleteDoc, getDoc, serverTimestamp
 } from 'firebase/firestore';
 
 // ─────────────────────────────────────────────
@@ -283,20 +283,47 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         }
     };
 
-    // ── Carga de partidos del día ──
+    // ── Carga de partidos ──
+    // 1) Programados HOY
+    // 2) SUSPENDIDOS (cualquier fecha) → para poder reanudarlos otro día
+    // 3) EN VIVO "colgados" (cualquier fecha) → mesa cerrada sin finalizar
     useEffect(() => {
         const now = new Date();
         const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
             .toISOString().split('T')[0];
-        const q = query(
-            collection(db, colCal),
-            where('fechaAsignada', '==', localDate),
-            where('estatus', '==', 'programado'),
-        );
-        return onSnapshot(q, snap =>
-            setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-        );
-    }, [categoria]);
+
+        const buckets: Record<string, any[]> = { hoy: [], susp: [], live: [] };
+        const emit = () => {
+            const map = new Map<string, any>();
+            [...buckets.hoy, ...buckets.susp, ...buckets.live].forEach(m => map.set(m.id, m));
+            setMatches(Array.from(map.values()));
+        };
+
+        const unsubs = [
+            onSnapshot(
+                query(collection(db, colCal),
+                    where('fechaAsignada', '==', localDate),
+                    where('estatus', '==', 'programado')),
+                snap => { buckets.hoy = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit(); }
+            ),
+            onSnapshot(
+                query(collection(db, colCal),
+                    where('estatus', '==', 'suspendido')),
+                snap => { buckets.susp = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit(); }
+            ),
+            onSnapshot(
+                query(collection(db, colCal),
+                    where('enVivo', '==', true)),
+                snap => {
+                    buckets.live = snap.docs
+                        .map(d => ({ id: d.id, ...d.data() } as any))
+                        .filter((m: any) => m.estatus !== 'finalizado');
+                    emit();
+                }
+            ),
+        ];
+        return () => unsubs.forEach(u => u());
+    }, [categoria, colCal]);
 
     // ── Restaurar estado guardado al seleccionar un partido ──
     useEffect(() => {
@@ -493,6 +520,30 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         handleDeleteJugada(ultima);
     }, [recentPlays, handleDeleteJugada, showToast]);
 
+    // ── Suspender partido (lluvia, falla eléctrica, pleito, etc.) ──
+    // Guarda marcador, cuarto y quintetos tal cual están, apaga el EN VIVO
+    // y marca estatus 'suspendido'. NO toca tablas ni stats acumuladas.
+    // El partido reaparece en el selector de la mesa (cualquier día) para reanudarlo.
+    const handleSuspend = useCallback(() => {
+        if (!matchData) return;
+        showConfirm('⏸ ¿SUSPENDER PARTIDO?\nEl marcador, el cuarto y las estadísticas quedan guardados para reanudarlo otro día.', async () => {
+            try {
+                await updateDoc(doc(db, colCal, matchData.id), {
+                    estatus: 'suspendido',
+                    enVivo: false,
+                    suspendidoEnCuarto: cuartoActual,
+                    suspendidoTs: Date.now(),
+                });
+                // OJO: NO borramos mesa_estado — se necesita para reanudar
+                showToast('⏸ Partido suspendido', '#f59e0b');
+                setTimeout(() => onClose(), 1200);
+            } catch (e) {
+                showToast('Error al suspender ⚠️', '#ef4444');
+                console.error(e);
+            }
+        });
+    }, [matchData, colCal, cuartoActual, onClose, showToast]);
+
     // ── Finalizar partido ──
     const handleFinalize = useCallback(() => {
         if (!matchData) return;
@@ -533,7 +584,10 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     });
                 });
 
-                batch.update(doc(db, colCal, matchData.id), { estatus: 'finalizado', enVivo: false });
+                batch.update(doc(db, colCal, matchData.id), {
+                    estatus: 'finalizado', enVivo: false,
+                    reanudado: false, suspendidoEnCuarto: null,
+                });
                 await batch.commit();
                 // Limpiar estado guardado de la mesa al finalizar
                 try { await deleteDoc(doc(db, 'mesa_estado', matchData.id)); } catch (_) {}
@@ -631,26 +685,74 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
 
             {toast && <Toast msg={toast.msg} color={toast.color} />}
 
+            {confirmModal && (
+                <ConfirmModal
+                    mensaje={confirmModal.msg}
+                    onConfirm={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
+                    onCancel={() => setConfirmModal(null)}
+                />
+            )}
+
             {matches.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40, border: '1px dashed #333', borderRadius: 15 }}>
                     <p style={{ color: '#666', fontSize: '0.85rem' }}>No hay juegos programados hoy.</p>
                 </div>
-            ) : matches.map(m => (
+            ) : matches.map(m => {
+                const isSusp      = m.estatus === 'suspendido';
+                const isStuckLive = !isSusp && m.enVivo === true;
+
+                const handleOpen = () => {
+                    if (isSusp) {
+                        // Reanudar: vuelve a 'programado' y marca reanudado
+                        // (la notificación push dirá "¡Se reanudó el juego!")
+                        showConfirm(
+                            `▶️ ¿REANUDAR ${m.equipoLocalNombre} vs ${m.equipoVisitanteNombre}?\nMarcador guardado: ${m.marcadorLocal ?? 0} - ${m.marcadorVisitante ?? 0}${m.suspendidoEnCuarto ? ` (${m.suspendidoEnCuarto})` : ''}`,
+                            async () => {
+                                try {
+                                    await updateDoc(doc(db, colCal, m.id), {
+                                        estatus: 'programado',
+                                        reanudado: true,
+                                    });
+                                } catch (e) { console.error(e); }
+                                setSelectedMatchId(m.id);
+                            }
+                        );
+                    } else {
+                        setSelectedMatchId(m.id);
+                    }
+                };
+
+                return (
                 <div key={m.id} style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                    <button onClick={() => setSelectedMatchId(m.id)} style={{
-                        flex: 1, padding: 18, background: '#1a1a1a', border: '1px solid #333',
+                    <button onClick={handleOpen} style={{
+                        flex: 1, padding: 18, background: '#1a1a1a',
+                        border: `1px solid ${isSusp ? '#f59e0b' : isStuckLive ? '#ef4444' : '#333'}`,
                         borderRadius: 10, color: 'white',
                         textAlign: 'left', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
                     }}>
                         🏀 {m.equipoLocalNombre} vs {m.equipoVisitanteNombre}
-                        <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 4 }}>{m.hora} — {m.fechaAsignada}</div>
+                        {isSusp && (
+                            <span style={{ marginLeft: 8, background: '#f59e0b', color: '#000', borderRadius: 6, padding: '2px 8px', fontSize: '0.6rem', fontWeight: 900 }}>
+                                ⏸ SUSPENDIDO {m.marcadorLocal ?? 0}-{m.marcadorVisitante ?? 0}
+                            </span>
+                        )}
+                        {isStuckLive && (
+                            <span style={{ marginLeft: 8, background: '#ef4444', color: 'white', borderRadius: 6, padding: '2px 8px', fontSize: '0.6rem', fontWeight: 900 }}>
+                                🔴 EN VIVO — retomar
+                            </span>
+                        )}
+                        <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 4 }}>
+                            {m.hora} — {m.fechaAsignada}
+                            {isSusp && ' · toca para REANUDAR'}
+                        </div>
                     </button>
                     <button onClick={() => setForfaitModal(m)} style={{
                         background: '#7f1d1d', color: 'white', border: 'none', borderRadius: 10,
                         padding: '0 16px', fontWeight: 900, fontSize: '0.75rem', cursor: 'pointer', flexShrink: 0,
                     }}>W.O.</button>
                 </div>
-            ))}
+                );
+            })}
             <button onClick={onClose} style={{ marginTop: 20, padding: 14, width: '100%', background: '#1e293b', color: 'white', border: '1px solid #334155', borderRadius: 10, fontWeight: 700 }}>
                 ← VOLVER
             </button>
@@ -935,6 +1037,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     }} style={actionBtnStyle('#334155')}>SALIR</button>
                     <button onClick={handleUndo} style={actionBtnStyle('#92400e')}>↩️</button>
                     <button onClick={() => setIsHistoryOpen(true)} style={actionBtnStyle('#334155')}>📜</button>
+                    <button onClick={handleSuspend} title="Suspender partido" style={{ ...actionBtnStyle('#b45309'), fontWeight: 900 }}>⏸</button>
                     <button onClick={handleFinalize} style={{ ...actionBtnStyle('#065f46'), fontWeight: 900 }}>✅ FINAL</button>
                 </div>
             </div>
