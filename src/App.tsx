@@ -638,10 +638,11 @@ function App() {
 
             {/* ── METRO NEWS TICKER ── */}
             <MetroTicker />
-            </div>}{/* end sticky wrapper */}
 
-            {/* ── VALLA DE PATROCINADORES (patrón ESPN: bajo la navegación) ── */}
-            {activeView !== 'mesa' && activeView !== 'login' && <SponsorBanner />}
+            {/* ── VALLA DE PATROCINADORES ── */}
+            {/* Va DENTRO del wrapper sticky: se mantiene fija al hacer scroll */}
+            {activeView !== 'login' && <SponsorBanner />}
+            </div>}{/* end sticky wrapper */}
 
             {/* ── INSTALL PROMPT (PWA) ── */}
             <InstallPrompt />
