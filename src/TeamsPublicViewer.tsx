@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import SponsorBanner from './SponsorBanner';
 
 // ─────────────────────────────────────────────
 // CONSTANTES
@@ -583,9 +582,8 @@ const TeamsPublicViewer: React.FC<{
     // ─────────────────────────────────────────────
     return (
         <div style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
+            minHeight: '100vh',
             background: '#f0f4f8',
-            display: 'flex', flexDirection: 'column',
             fontFamily: "'Inter','Segoe UI',sans-serif",
         }}>
             {/* Barajita del jugador */}
@@ -685,11 +683,8 @@ const TeamsPublicViewer: React.FC<{
                 </div>
             </div>
 
-            {/* ── VALLA DE PATROCINADORES (esta vista tapa el header global) ── */}
-            <div style={{ flexShrink: 0 }}><SponsorBanner /></div>
-
             {/* ── Contenido ── */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px 100px' }}>
+            <div style={{ padding: '16px 14px 100px' }}>
 
                 {loading ? (
                     <div style={{ textAlign: 'center', paddingTop: 60, color: '#1e3a8a', fontWeight: 700 }}>
