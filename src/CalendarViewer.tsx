@@ -6,6 +6,7 @@ import {
 } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 import { fetchPatrocinadoresVigentes, appendSponsorStrip } from './sponsors';
+import SponsorBanner from './SponsorBanner';
 
 // ─────────────────────────────────────────────
 // TIPOS
@@ -1617,6 +1618,9 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
                     ← VOLVER
                 </button>
             </div>
+
+            {/* ── VALLA DE PATROCINADORES (esta vista tapa el header global) ── */}
+            <div style={{ flexShrink: 0 }}><SponsorBanner /></div>
 
             {/* Filtros */}
             <div className="no-scrollbar" style={{ background: '#fff', padding: '10px 16px', display: 'flex', gap: 8, overflowX: 'auto', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
