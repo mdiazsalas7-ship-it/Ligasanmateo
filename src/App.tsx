@@ -18,6 +18,8 @@ import NewsFeed from './NewsFeed';
 import PlayoffViewer from './PlayoffViewer';
 import AdminVideos from './AdminVideos';
 import MetroTicker from './MetroTicker';
+import SponsorBanner from './SponsorBanner';
+import AdminPatrocinadores from './AdminPatrocinadores';
 import LiveGameViewer, { LiveGameSelector } from './LiveGameViewer';
 import { useNotifications } from './useNotifications';
 import ResetTemporada from './ResetTemporada';
@@ -638,6 +640,9 @@ function App() {
             <MetroTicker />
             </div>}{/* end sticky wrapper */}
 
+            {/* ── VALLA DE PATROCINADORES (patrón ESPN: bajo la navegación) ── */}
+            {activeView !== 'mesa' && activeView !== 'login' && <SponsorBanner />}
+
             {/* ── INSTALL PROMPT (PWA) ── */}
             <InstallPrompt />
 
@@ -1024,6 +1029,7 @@ function App() {
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
                                     <button onClick={() => setActiveView('adminVideos')} style={adminBtnStyle}>🎥 VIDEOS</button>
+                                    <button onClick={() => setActiveView('patrocinadores')} style={{ ...adminBtnStyle, background: 'rgba(251,191,36,0.2)', border: '1px solid #f59e0b', color: '#fde68a' }}>💼 PATROCINIO</button>
                                     <button onClick={() => setShowConfig(true)} style={{ ...adminBtnStyle, background: 'rgba(99,102,241,0.25)', border: '1px solid #6366f1', color: '#c7d2fe' }}>⚙️ CONFIG</button>
                                     <button onClick={() => setShowReset(true)} style={{ ...adminBtnStyle, background: 'rgba(239,68,68,0.25)', border: '1px solid #ef4444', color: '#fca5a5' }}>☢️ RESET</button>
                                 </div>
@@ -1044,6 +1050,7 @@ function App() {
                         {activeView === 'equipos_pub'  && <TeamsPublicViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'equipos'     && isAdmin && <AdminEquipos categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'adminVideos' && isAdmin && <AdminVideos onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'patrocinadores' && isAdmin && <AdminPatrocinadores onClose={() => setActiveView('dashboard')} />}
                     </>
                 )}
             </main>

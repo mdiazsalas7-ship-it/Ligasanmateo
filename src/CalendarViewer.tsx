@@ -5,6 +5,7 @@ import {
     deleteDoc, doc, getDocs, where, updateDoc, writeBatch, addDoc, setDoc
 } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
+import { fetchPatrocinadoresVigentes, appendSponsorStrip } from './sponsors';
 
 // ─────────────────────────────────────────────
 // TIPOS
@@ -756,8 +757,12 @@ const BoxScoreModal = memo(({
             ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
             ctx.fillText('Liga Metropolitana Eje Este  ·  San Mateo, Aragua', W / 2, H - 14);
 
+            // ── Franja de patrocinadores (oro y plata) ──
+            const patrocinadores = await fetchPatrocinadoresVigentes(['oro', 'plata']);
+            const finalCanvas = await appendSponsorStrip(canvas, patrocinadores);
+
             // ── Compartir / Descargar ──
-            canvas.toBlob(async (blob) => {
+            finalCanvas.toBlob(async (blob) => {
                 if (!blob) return;
                 const file = new File([blob], 'resultado.png', { type: 'image/png' });
                 try {
@@ -1332,8 +1337,12 @@ const MatchCard = memo(({
             ctx.font = '12px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.65)';
             ctx.fillText('San Mateo · Aragua · Venezuela', W/2, panelY + 112);
 
+            // ── Franja de patrocinadores (solo ORO en flyers) ──
+            const patrocinadoresFlyer = await fetchPatrocinadoresVigentes(['oro']);
+            const finalCanvasFlyer = await appendSponsorStrip(canvas, patrocinadoresFlyer);
+
             // ── Compartir ──
-            canvas.toBlob(async blob => {
+            finalCanvasFlyer.toBlob(async blob => {
                 if (!blob) return;
                 const file = new File([blob], 'partido.png', { type: 'image/png' });
                 const title = isFinished
