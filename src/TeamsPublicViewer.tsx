@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
+import SponsorBanner from './SponsorBanner';
 
 // ─────────────────────────────────────────────
 // CONSTANTES
@@ -683,6 +684,9 @@ const TeamsPublicViewer: React.FC<{
                     )}
                 </div>
             </div>
+
+            {/* ── VALLA DE PATROCINADORES (esta vista tapa el header global) ── */}
+            <div style={{ flexShrink: 0 }}><SponsorBanner /></div>
 
             {/* ── Contenido ── */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px 100px' }}>
