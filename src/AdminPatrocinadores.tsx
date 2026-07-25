@@ -81,13 +81,51 @@ const AdminPatrocinadores: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         if (!vencimiento) return alert('Falta la fecha de vencimiento del contrato');
         if (!logoFile) return alert('Falta el logo');
         setSaving(true);
+
+        // ── Etapa 1: comprimir (con respaldo si el formato no se deja) ──
+        let blob: Blob;
+        let contentType = 'image/png';
         try {
-            const blob = await comprimirLogo(logoFile);
+            blob = await comprimirLogo(logoFile);
+        } catch (err) {
+            console.error('[patrocinadores] compresión falló:', err);
+            if (logoFile.type.startsWith('image/') && logoFile.size < 4 * 1024 * 1024) {
+                // El navegador no pudo decodificarla (p. ej. HEIC): subir original
+                blob = logoFile;
+                contentType = logoFile.type;
+            } else {
+                setSaving(false);
+                return alert(
+                    'No se pudo procesar esa imagen ⚠️\n' +
+                    'Usa un logo en JPG o PNG de menos de 4MB.\n' +
+                    `(Formato recibido: ${logoFile.type || 'desconocido'})`
+                );
+            }
+        }
+
+        // ── Etapa 2: subir a Storage ──
+        let logoUrl = '';
+        try {
             const path = `patrocinadores_logos/${Date.now()}_${nombre.trim().replace(/\s+/g, '_')}.png`;
             const storageRef = ref(storage, path);
-            await uploadBytes(storageRef, blob, { contentType: 'image/png' });
-            const logoUrl = await getDownloadURL(storageRef);
+            await uploadBytes(storageRef, blob, { contentType });
+            logoUrl = await getDownloadURL(storageRef);
+        } catch (err: any) {
+            console.error('[patrocinadores] subida a Storage falló:', err);
+            setSaving(false);
+            const code = err?.code || '';
+            if (code.includes('unauthorized') || code.includes('unauthenticated')) {
+                return alert(
+                    'Storage rechazó la subida del logo ⚠️\n' +
+                    'Revisa que las reglas de Storage estén publicadas y que tu cuenta sea admin.\n' +
+                    `(Código: ${code})`
+                );
+            }
+            return alert(`Error subiendo el logo a Storage ⚠️\n(${code || err?.message || 'desconocido'})`);
+        }
 
+        // ── Etapa 3: guardar en Firestore ──
+        try {
             await addDoc(collection(db, 'patrocinadores'), {
                 nombre: nombre.trim(),
                 nivel,
@@ -101,9 +139,19 @@ const AdminPatrocinadores: React.FC<{ onClose: () => void }> = ({ onClose }) => 
             });
             limpiar();
             alert('✅ Patrocinador agregado');
-        } catch (err) {
-            console.error(err);
-            alert('Error al guardar el patrocinador ⚠️');
+        } catch (err: any) {
+            console.error('[patrocinadores] Firestore falló:', err);
+            const code = err?.code || '';
+            if (code.includes('permission')) {
+                alert(
+                    'Firestore rechazó el guardado ⚠️\n' +
+                    'El logo sí subió, pero las reglas no dejaron crear el documento.\n' +
+                    'Revisa que tu cuenta sea admin en las reglas publicadas.\n' +
+                    `(Código: ${code})`
+                );
+            } else {
+                alert(`Error guardando en la base de datos ⚠️\n(${code || err?.message || 'desconocido'})`);
+            }
         }
         setSaving(false);
     };
