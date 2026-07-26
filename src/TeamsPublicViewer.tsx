@@ -79,8 +79,8 @@ const playerColor = (nombre: string) => {
     return palette[nombre.split('').reduce((a,ch) => a + ch.charCodeAt(0), 0) % palette.length];
 };
 
-const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> = ({
-    player, team, onClose,
+const PlayerCard: React.FC<{ player: Player; team: Team; categoria: string; onClose: () => void }> = ({
+    player, team, categoria, onClose,
 }) => {
     const pj   = player.partidosJugados || 1;
     const noPJ = !player.partidosJugados;
@@ -106,192 +106,222 @@ const PlayerCard: React.FC<{ player: Player; team: Team; onClose: () => void }> 
     const compartirBarajita = async () => {
         setSharing(true);
         try {
-            const W = 540, H = 760;
+            // ═══════════════════════════════════════════════════════
+            //  BARAJITA ESTILO UPPER DECK — bordes dorados
+            //  Lienzo 540x820: marco dorado, cabecera con 2 logos,
+            //  foto, placa de nombre dorada, 4 stats, pie de colección.
+            // ═══════════════════════════════════════════════════════
+            const W = 540, H = 820;
             const canvas = document.createElement('canvas');
             canvas.width = W; canvas.height = H;
             const ctx = canvas.getContext('2d')!;
 
-            // ── Fondo oscuro premium ──
-            const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-            bgGrad.addColorStop(0, '#080c18');
-            bgGrad.addColorStop(0.5, '#0f1729');
-            bgGrad.addColorStop(1, '#050a12');
-            ctx.fillStyle = bgGrad;
-            ctx.fillRect(0, 0, W, H);
+            const GOLD       = '#d4af37';
+            const GOLD_LIGHT = '#f0d060';
+            const GOLD_DARK  = '#b8860b';
+            const NAVY       = '#0f1729';
+            const NAVY_DEEP  = '#080c18';
 
-            // Brillo lateral izquierdo
-            const shine = ctx.createLinearGradient(0, 0, W * 0.6, 0);
-            shine.addColorStop(0, accentColor + '18');
-            shine.addColorStop(1, 'transparent');
-            ctx.fillStyle = shine;
-            ctx.fillRect(0, 0, W, H);
+            const rr = (x: number, y: number, w: number, h: number, r: number | number[]) => {
+                ctx.beginPath(); ctx.roundRect(x, y, w, h, r as any);
+            };
 
-            // Patrón diagonal sutil
-            ctx.strokeStyle = 'rgba(255,255,255,0.018)';
-            ctx.lineWidth = 1;
-            for (let i = -H; i < W + H; i += 28) {
-                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + H, H); ctx.stroke();
-            }
+            // ── Marco dorado exterior ──
+            ctx.fillStyle = GOLD_DARK;
+            rr(0, 0, W, H, 26); ctx.fill();
 
-            // ── Franja superior de color ──
-            const topGrad = ctx.createLinearGradient(0, 0, W, 0);
-            topGrad.addColorStop(0, accentColor);
-            topGrad.addColorStop(0.6, accentColor + 'aa');
-            topGrad.addColorStop(1, 'transparent');
-            ctx.fillStyle = topGrad;
-            ctx.fillRect(0, 0, W, 6);
+            // ── Carta interior ──
+            const M = 10;               // grosor del borde dorado
+            const cardX = M, cardY = M, cardW = W - M * 2, cardH = H - M * 2;
+            ctx.fillStyle = NAVY_DEEP;
+            rr(cardX, cardY, cardW, cardH, 18); ctx.fill();
+            ctx.strokeStyle = GOLD_LIGHT; ctx.lineWidth = 2;
+            rr(cardX + 1, cardY + 1, cardW - 2, cardH - 2, 17); ctx.stroke();
 
-            // ── Foto del jugador ──
+            // ── CABECERA ──
+            const headH = 84;
+            ctx.fillStyle = '#0a0f1e';
+            ctx.save();
+            rr(cardX, cardY, cardW, headH + 18, 17); ctx.clip();
+            ctx.fillRect(cardX, cardY, cardW, headH);
+            ctx.restore();
+            // línea dorada bajo la cabecera
+            ctx.strokeStyle = GOLD_DARK; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(cardX, cardY + headH); ctx.lineTo(cardX + cardW, cardY + headH); ctx.stroke();
+
+            // logo redondo con aro dorado
+            const drawLogoCircle = async (url: string | undefined, cx: number, cy: number, r: number, fallbackBg: string, fallbackTxt: string) => {
+                ctx.save();
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fillStyle = fallbackBg; ctx.fill();
+                let drawn = false;
+                if (url) {
+                    try {
+                        const img = await loadImage(url);
+                        ctx.save();
+                        ctx.beginPath(); ctx.arc(cx, cy, r - 3, 0, Math.PI * 2); ctx.clip();
+                        const s = (r - 3) * 2;
+                        const ratio = Math.max(s / img.naturalWidth, s / img.naturalHeight);
+                        const iw = img.naturalWidth * ratio, ih = img.naturalHeight * ratio;
+                        ctx.drawImage(img, cx - iw / 2, cy - ih / 2, iw, ih);
+                        ctx.restore();
+                        drawn = true;
+                    } catch (_) {}
+                }
+                if (!drawn) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+                    ctx.font = `bold ${Math.round(r * 0.7)}px system-ui`;
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillText(fallbackTxt, cx, cy + 1);
+                }
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.strokeStyle = GOLD; ctx.lineWidth = 2.5; ctx.stroke();
+                ctx.restore();
+            };
+
+            const headCY = cardY + headH / 2;
+            const teamInitials = (team.nombre || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 3).toUpperCase();
+            await drawLogoCircle(LEAGUE_LOGO, cardX + 34, headCY, 24, '#f8fafc', 'LM');
+            await drawLogoCircle(team.logoUrl, cardX + cardW - 34, headCY, 24, '#1e3a8a', teamInitials);
+
+            // título centrado
+            ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+            ctx.fillStyle = GOLD_LIGHT;
+            ctx.font = '500 17px system-ui';
+            const espaciar = (t: string, ls: number, y: number, cx: number) => {
+                const widths = t.split('').map(c => ctx.measureText(c).width + ls);
+                const total = widths.reduce((a, b) => a + b, 0) - ls;
+                let x = cx - total / 2;
+                for (let i = 0; i < t.length; i++) {
+                    ctx.fillText(t[i], x + widths[i] / 2 - ls / 2, y);
+                    x += widths[i];
+                }
+            };
+            espaciar('LIGA METROPOLITANA', 3, headCY - 2, cardX + cardW / 2);
+            ctx.fillStyle = '#8a97ad';
+            ctx.font = '400 12px system-ui';
+            espaciar('EJE ESTE', 6, headCY + 18, cardX + cardW / 2);
+
+            // ── ZONA DE FOTO ──
+            const photoY = cardY + headH;
+            const photoH = 330;
+            ctx.save();
+            ctx.beginPath(); ctx.rect(cardX, photoY, cardW, photoH); ctx.clip();
+            ctx.fillStyle = NAVY; ctx.fillRect(cardX, photoY, cardW, photoH);
+
             let photoDrawn = false;
             if (player.fotoUrl) {
                 try {
                     const foto = await loadImage(player.fotoUrl);
-                    // Foto ocupa zona superior, con fade al fondo
-                    const fh = H * 0.58;
+                    const fh = photoH;
                     const fw = (foto.naturalWidth / foto.naturalHeight) * fh;
-                    const fx = (W - fw) / 2;
-                    const fy = 0;
-                    ctx.save();
-                    // Fade bottom de la foto
-                    const fadeGrad = ctx.createLinearGradient(0, fy + fh * 0.5, 0, fy + fh);
-                    fadeGrad.addColorStop(0, 'rgba(8,12,24,0)');
-                    fadeGrad.addColorStop(1, 'rgba(8,12,24,1)');
-                    ctx.drawImage(foto, fx, fy, fw, fh);
-                    ctx.fillStyle = fadeGrad;
-                    ctx.fillRect(0, fy, W, fh);
-                    ctx.restore();
+                    const fx = cardX + (cardW - fw) / 2;
+                    ctx.drawImage(foto, fx, photoY, fw, fh);
                     photoDrawn = true;
-                } catch(_) {}
+                } catch (_) {}
             }
-
             if (!photoDrawn) {
-                // Círculo con inicial si no hay foto
-                const cx = W / 2, cy = 200, r = 120;
-                const circGrad = ctx.createRadialGradient(cx, cy-20, 0, cx, cy, r);
-                circGrad.addColorStop(0, accentColor + 'cc');
-                circGrad.addColorStop(1, accentColor + '33');
-                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-                ctx.fillStyle = circGrad; ctx.fill();
-                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-                ctx.strokeStyle = accentColor + '66'; ctx.lineWidth = 2; ctx.stroke();
-                ctx.font = 'bold 110px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                const cx = cardX + cardW / 2, cy = photoY + photoH * 0.42, r = 96;
+                const g = ctx.createRadialGradient(cx, cy - 16, 0, cx, cy, r);
+                g.addColorStop(0, accentColor + 'cc'); g.addColorStop(1, accentColor + '22');
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+                ctx.font = 'bold 96px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.9)';
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.fillText((player.nombre || '?').charAt(0).toUpperCase(), cx, cy);
             }
+            // fundido inferior de la foto hacia el fondo
+            const fade = ctx.createLinearGradient(0, photoY + photoH * 0.55, 0, photoY + photoH);
+            fade.addColorStop(0, 'rgba(8,12,24,0)');
+            fade.addColorStop(1, NAVY_DEEP);
+            ctx.fillStyle = fade; ctx.fillRect(cardX, photoY, cardW, photoH);
 
-            // ── Número gigante decorativo ──
+            // dorsal gigante en marca de agua
             if (player.numero != null) {
-                ctx.save();
-                ctx.font = `bold 260px system-ui`;
-                ctx.fillStyle = 'rgba(255,255,255,0.04)';
+                ctx.font = 'bold 200px system-ui';
+                ctx.fillStyle = 'rgba(255,255,255,0.06)';
                 ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-                ctx.fillText(String(player.numero), W - 10, H * 0.62 + 20);
-                ctx.restore();
+                ctx.fillText(String(player.numero), cardX + cardW - 12, photoY + photoH - 2);
             }
-
-            // ── Badge dorsal ──
-            const badgeY = H * 0.55;
-            if (player.numero != null) {
-                ctx.save();
-                ctx.shadowColor = accentColor + '88'; ctx.shadowBlur = 18;
-                ctx.beginPath();
-                ctx.roundRect(W/2 - 40, badgeY - 16, 80, 32, 16);
-                ctx.fillStyle = accentColor; ctx.fill();
-                ctx.restore();
-                ctx.font = 'bold 14px system-ui'; ctx.fillStyle = 'white';
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.fillText('#' + String(player.numero), W/2, badgeY);
-            }
-
-            // ── Nombre ──
-            const nameY = H * 0.62;
-            ctx.save();
-            ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 20;
-            ctx.font = 'bold 38px system-ui'; ctx.fillStyle = 'white';
-            ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-            const nombre = player.nombre.toUpperCase();
-            ctx.fillText(nombre, W/2, nameY);
             ctx.restore();
 
-            // ── Equipo ──
-            ctx.font = '600 15px system-ui';
-            ctx.fillStyle = accentColor + 'cc';
-            ctx.fillText(team.nombre.toUpperCase(), W/2, nameY + 24);
+            // ── PLACA DORADA DEL NOMBRE ──
+            const plateY = photoY + photoH;
+            const plateH = 58;
+            ctx.fillStyle = GOLD;
+            ctx.fillRect(cardX, plateY, cardW, plateH);
 
-            // ── Línea divisoria con brillo ──
-            const lineY = nameY + 38;
-            const lineGrad = ctx.createLinearGradient(40, 0, W-40, 0);
-            lineGrad.addColorStop(0, 'transparent');
-            lineGrad.addColorStop(0.3, accentColor + 'aa');
-            lineGrad.addColorStop(0.5, 'white');
-            lineGrad.addColorStop(0.7, accentColor + 'aa');
-            lineGrad.addColorStop(1, 'transparent');
-            ctx.strokeStyle = lineGrad; ctx.lineWidth = 1.5;
-            ctx.beginPath(); ctx.moveTo(40, lineY); ctx.lineTo(W-40, lineY); ctx.stroke();
+            ctx.textBaseline = 'alphabetic';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#231603';
+            ctx.font = '500 24px system-ui';
+            let nombre = (player.nombre || '').toUpperCase();
+            while (ctx.measureText(nombre).width > cardW - 120 && nombre.length > 4) {
+                nombre = nombre.slice(0, -1);
+            }
+            if (nombre !== (player.nombre || '').toUpperCase()) nombre = nombre.trimEnd() + '…';
+            ctx.fillText(nombre, cardX + 18, plateY + 30);
 
-            // ── Panel de stats ──
-            const panelY = lineY + 14;
-            const colW = (W - 40) / 4;
-            const cardH = 118;
+            ctx.fillStyle = '#6b4d10';
+            ctx.font = '500 12px system-ui';
+            const sub = `${team.nombre.toUpperCase()} · ${categoria.toUpperCase()}`;
+            ctx.fillText(sub, cardX + 18, plateY + 48);
 
+            // badge dorsal a la derecha de la placa
+            if (player.numero != null) {
+                const bw = 54, bh = 30, bx = cardX + cardW - bw - 16, by = plateY + plateH / 2 - bh / 2;
+                ctx.fillStyle = '#231603';
+                rr(bx, by, bw, bh, 8); ctx.fill();
+                ctx.fillStyle = GOLD_LIGHT;
+                ctx.font = '500 15px system-ui';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText('#' + player.numero, bx + bw / 2, by + bh / 2 + 1);
+            }
+
+            // ── PANEL DE STATS (4 celdas, borde superior dorado) ──
+            const statsY = plateY + plateH + 14;
+            const pad = 16, gap = 8;
+            const colW = (cardW - pad * 2 - gap * 3) / 4;
+            const cellH = 92;
+            ctx.textAlign = 'center';
             stats.forEach((s, i) => {
-                const cx = 20 + colW * i + colW / 2;
-                const cx2 = 20 + colW * i + 3;
+                const x = cardX + pad + i * (colW + gap);
+                ctx.fillStyle = '#0d1526';
+                rr(x, statsY, colW, cellH, 8); ctx.fill();
+                ctx.strokeStyle = GOLD_DARK + '55'; ctx.lineWidth = 1;
+                rr(x + 0.5, statsY + 0.5, colW - 1, cellH - 1, 8); ctx.stroke();
+                // acento dorado superior
+                ctx.fillStyle = GOLD;
+                rr(x, statsY, colW, 3, [8, 8, 0, 0]); ctx.fill();
 
-                // Card fondo glass
-                ctx.save();
-                ctx.shadowColor = s.color + '33'; ctx.shadowBlur = 12;
-                ctx.beginPath(); ctx.roundRect(cx2, panelY, colW - 6, cardH, 10);
-                ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fill();
-                ctx.strokeStyle = s.color + '44'; ctx.lineWidth = 1;
-                ctx.beginPath(); ctx.roundRect(cx2, panelY, colW - 6, cardH, 10); ctx.stroke();
-                ctx.restore();
-
-                // Acento superior
-                ctx.beginPath(); ctx.roundRect(cx2, panelY, colW - 6, 3, [10,10,0,0]);
-                ctx.fillStyle = s.color; ctx.fill();
-
-                // Icono
-                ctx.font = '18px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.fillText(s.icon, cx, panelY + 22);
-
-                // Total
-                ctx.save();
-                ctx.shadowColor = s.color + '88'; ctx.shadowBlur = 10;
-                ctx.font = 'bold 34px system-ui'; ctx.fillStyle = 'white';
-                ctx.textBaseline = 'alphabetic';
-                ctx.fillText(String(s.total), cx, panelY + 70);
-                ctx.restore();
-
-                // Avg
-                ctx.font = '500 11px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.4)';
-                ctx.fillText(s.avg + '/PJ', cx, panelY + 86);
-
-                // Label
-                ctx.font = 'bold 11px system-ui'; ctx.fillStyle = s.color;
-                ctx.fillText(s.label, cx, panelY + 104);
+                const cx = x + colW / 2;
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '500 26px system-ui'; ctx.textBaseline = 'alphabetic';
+                ctx.fillText(String(s.total), cx, statsY + 42);
+                ctx.fillStyle = '#8a97ad';
+                ctx.font = '400 11px system-ui';
+                ctx.fillText(s.avg === '—' ? '—' : s.avg + '/PJ', cx, statsY + 60);
+                ctx.fillStyle = GOLD_LIGHT;
+                ctx.font = '500 12px system-ui';
+                ctx.fillText(s.label, cx, statsY + 80);
             });
 
-            // ── Logo liga ──
-            const logoY = panelY + cardH + 18;
-            try {
-                const logo = await loadImage(LEAGUE_LOGO);
-                const lr = 26;
-                ctx.save();
-                ctx.beginPath(); ctx.arc(W/2, logoY + lr, lr, 0, Math.PI * 2);
-                ctx.fillStyle = 'white'; ctx.fill(); ctx.clip();
-                const lh = lr * 2;
-                const lw2 = (logo.naturalWidth / logo.naturalHeight) * lh;
-                ctx.drawImage(logo, W/2 - lw2/2, logoY, lw2, lh);
-                ctx.restore();
-                ctx.beginPath(); ctx.arc(W/2, logoY + lr, lr, 0, Math.PI * 2);
-                ctx.strokeStyle = accentColor + '99'; ctx.lineWidth = 1.5; ctx.stroke();
-            } catch(_) {}
+            // ── PIE DE COLECCIÓN ──
+            const footY = statsY + cellH + 22;
+            ctx.strokeStyle = GOLD_DARK + '44'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(cardX + 16, footY - 10); ctx.lineTo(cardX + cardW - 16, footY - 10); ctx.stroke();
 
-            // Watermark
-            ctx.font = '500 11px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.12)';
-            ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-            ctx.fillText('LIGA METROPOLITANA EJE ESTE', W/2, H - 8);
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#5b6b85';
+            ctx.font = '500 11px system-ui';
+            ctx.textAlign = 'left';
+            ctx.save();
+            ctx.letterSpacing = '2px';
+            ctx.fillText('EDICIÓN OFICIAL', cardX + 16, footY);
+            ctx.restore();
+            ctx.textAlign = 'right';
+            ctx.fillStyle = GOLD_LIGHT;
+            const cardNo = 'N° ' + String((player.numero ?? 0)).padStart(3, '0');
+            ctx.fillText(cardNo, cardX + cardW - 16, footY);
 
             // ── Compartir ──
             canvas.toBlob(async (blob) => {
@@ -591,6 +621,7 @@ const TeamsPublicViewer: React.FC<{
                 <PlayerCard
                     player={selectedPlayer}
                     team={selectedTeam}
+                    categoria={categoria}
                     onClose={() => setSelectedPlayer(null)}
                 />
             )}
