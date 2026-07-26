@@ -3,7 +3,7 @@ import { db } from './firebase';
 import {
     doc, updateDoc, onSnapshot, collection, query,
     getDocs, setDoc, increment, where, writeBatch,
-    limit, orderBy, addDoc, deleteDoc, getDoc, serverTimestamp
+    limit, addDoc, deleteDoc, getDoc, serverTimestamp
 } from 'firebase/firestore';
 
 // ─────────────────────────────────────────────
@@ -382,8 +382,21 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         });
 
         const unsubPlays = onSnapshot(
-            query(collection(db, 'jugadas_partido'), where('partidoId', '==', selectedMatchId), orderBy('timestamp', 'desc'), limit(20)),
-            snap => setRecentPlays(snap.docs.map(d => ({ id: d.id, ...d.data() } as Jugada))),
+            query(collection(db, 'jugadas_partido'), where('partidoId', '==', selectedMatchId), limit(30)),
+            snap => {
+                const ms = (t: any): number => {
+                    if (t == null) return 0;
+                    if (typeof t === 'number') return t;
+                    if (typeof t.toMillis === 'function') return t.toMillis();
+                    if (typeof t.seconds === 'number') return t.seconds * 1000;
+                    return 0;
+                };
+                const plays = snap.docs
+                    .map(d => ({ id: d.id, ...d.data() } as Jugada))
+                    .sort((a, b) => ms((b as any).timestamp) - ms((a as any).timestamp))
+                    .slice(0, 20);
+                setRecentPlays(plays);
+            },
         );
 
         const unsubStats = onSnapshot(
