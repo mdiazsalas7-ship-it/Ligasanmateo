@@ -1,4 +1,4 @@
-        // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // /public/firebase-messaging-sw.js
 // Service Worker unificado:
 //   - PWA: caché del app shell para funcionar offline
@@ -23,7 +23,7 @@ const LOGO_LIGA = self.location.origin + '/logo-liga.jpg';
 // ─────────────────────────────────────────────────────────────
 // CACHE — App Shell (recursos que funcionan offline)
 // ─────────────────────────────────────────────────────────────
-const CACHE_NAME   = 'limebal-v2';
+const CACHE_NAME   = 'limebal-v3';
 const OFFLINE_URL  = '/offline.html';
 
 // Recursos que se cachean al instalar el SW
@@ -78,6 +78,13 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
+    // Solo interceptamos GET. Las escrituras (POST, PUT, PATCH, DELETE)
+    // pasan directo a la red: la Cache API no admite cachear POST y,
+    // además, nunca se deben cachear operaciones de escritura.
+    if (event.request.method !== 'GET') {
+        return;
+    }
+
     // Firestore, Storage, FCM → siempre red, nunca caché
     if (
         url.hostname.includes('firestore.googleapis.com') ||
@@ -101,10 +108,10 @@ self.addEventListener('fetch', event => {
     event.respondWith(
         fetch(event.request)
             .then(response => {
-                // Guardar en caché si es exitoso
-                if (response && response.status === 200) {
+                // Guardar en caché si es exitoso (solo GET, ya filtrado arriba)
+                if (response && response.status === 200 && event.request.method === 'GET') {
                     const clone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone)).catch(() => {});
                 }
                 return response;
             })
