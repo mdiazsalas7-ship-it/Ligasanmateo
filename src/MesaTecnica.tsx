@@ -38,6 +38,7 @@ interface Jugada {
     accion: string;
     puntos: number;
     timestamp: number;
+    cuarto?: string;
 }
 
 // ─────────────────────────────────────────────
@@ -488,10 +489,17 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     // 1. Borrar del historial
                     await deleteDoc(doc(db, 'jugadas_partido', jugada.id));
 
-                    // 2. Restar del marcador si tenía puntos
+                    // 2. Restar del marcador Y del cuarto (igual que al anotar)
+                    //    El cuarto se toma de la jugada guardada, no del cuarto
+                    //    actual, para descontar del cuarto donde REALMENTE ocurrió.
                     if (pts > 0) {
+                        const cuartoJugada = jugada.cuarto || cuartoActual;
+                        const cuartoField = jugada.equipo === 'local'
+                            ? `cuartosLocal.${cuartoJugada}`
+                            : `cuartosVisitante.${cuartoJugada}`;
                         await updateDoc(doc(db, colCal, matchData.id), {
                             [jugada.equipo === 'local' ? 'marcadorLocal' : 'marcadorVisitante']: increment(-pts),
+                            [cuartoField]: increment(-pts),
                         });
                     }
 
@@ -636,7 +644,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     accion:           'sustitucion',
                     puntos:           0,
                     cuarto:           cuartoActual,
-                    timestamp:        serverTimestamp(),
+                    timestamp:        Date.now(),
                     // jugadorId = el que ENTRA (criterio para que las stats individuales no cuenten)
                     jugadorId:        playerEntra.id,
                     jugadorNombre:    playerEntra.nombre,
