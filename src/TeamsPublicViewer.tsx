@@ -111,7 +111,7 @@ const PlayerCard: React.FC<{ player: Player; team: Team; categoria: string; onCl
             //  Lienzo 540x820: marco dorado, cabecera con 2 logos,
             //  foto, placa de nombre dorada, 4 stats, pie de colección.
             // ═══════════════════════════════════════════════════════
-            const W = 540, H = 820;
+            const W = 540, H = 760;
             const canvas = document.createElement('canvas');
             canvas.width = W; canvas.height = H;
             const ctx = canvas.getContext('2d')!;
@@ -202,9 +202,14 @@ const PlayerCard: React.FC<{ player: Player; team: Team; categoria: string; onCl
             ctx.font = '400 12px system-ui';
             espaciar('EJE ESTE', 6, headCY + 18, cardX + cardW / 2);
 
-            // ── ZONA DE FOTO ──
+            // ── ZONA DE FOTO (se estira para no dejar hueco) ──
+            // Alto disponible = todo lo que queda entre la cabecera y el
+            // bloque inferior (placa + stats + pie + márgenes).
+            const plateH = 58;
+            const cellH = 92;
+            const bloqueInferior = plateH + 14 + cellH + 22 + 24; // placa + gap + stats + pie + margen
             const photoY = cardY + headH;
-            const photoH = 330;
+            const photoH = cardH - headH - bloqueInferior;
             ctx.save();
             ctx.beginPath(); ctx.rect(cardX, photoY, cardW, photoH); ctx.clip();
             ctx.fillStyle = NAVY; ctx.fillRect(cardX, photoY, cardW, photoH);
@@ -230,7 +235,7 @@ const PlayerCard: React.FC<{ player: Player; team: Team; categoria: string; onCl
                 ctx.fillText((player.nombre || '?').charAt(0).toUpperCase(), cx, cy);
             }
             // fundido inferior de la foto hacia el fondo
-            const fade = ctx.createLinearGradient(0, photoY + photoH * 0.55, 0, photoY + photoH);
+            const fade = ctx.createLinearGradient(0, photoY + photoH * 0.68, 0, photoY + photoH);
             fade.addColorStop(0, 'rgba(8,12,24,0)');
             fade.addColorStop(1, NAVY_DEEP);
             ctx.fillStyle = fade; ctx.fillRect(cardX, photoY, cardW, photoH);
@@ -246,7 +251,6 @@ const PlayerCard: React.FC<{ player: Player; team: Team; categoria: string; onCl
 
             // ── PLACA DORADA DEL NOMBRE ──
             const plateY = photoY + photoH;
-            const plateH = 58;
             ctx.fillStyle = GOLD;
             ctx.fillRect(cardX, plateY, cardW, plateH);
 
@@ -281,7 +285,6 @@ const PlayerCard: React.FC<{ player: Player; team: Team; categoria: string; onCl
             const statsY = plateY + plateH + 14;
             const pad = 16, gap = 8;
             const colW = (cardW - pad * 2 - gap * 3) / 4;
-            const cellH = 92;
             ctx.textAlign = 'center';
             stats.forEach((s, i) => {
                 const x = cardX + pad + i * (colW + gap);
