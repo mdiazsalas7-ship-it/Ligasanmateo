@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { db } from './firebase';
 import {
     collection, query, where, onSnapshot,
-    orderBy, limit, doc, getDocs
+    limit, doc, getDocs
 } from 'firebase/firestore';
 
 // ─────────────────────────────────────────────
@@ -126,14 +126,27 @@ const LiveGameViewer: React.FC<{
 
     // ── Jugadas en tiempo real ──
     useEffect(() => {
+        // Sin orderBy en la consulta: así NO depende de un índice compuesto
+        // de Firestore (partidoId + timestamp). El orden se hace en el cliente,
+        // normalizando el timestamp — sea número (Date.now) u objeto Timestamp
+        // de Firestore (serverTimestamp) de jugadas antiguas. Esto garantiza
+        // que cambios y jugadas queden intercalados en orden real.
         const q = query(
             collection(db, 'jugadas_partido'),
             where('partidoId', '==', partidoId),
-            orderBy('timestamp', 'desc'),
-            limit(200)
+            limit(300)
         );
         const unsub = onSnapshot(q, snap => {
-            const plays = snap.docs.map(d => ({ id: d.id, ...d.data() } as Jugada));
+            const ms = (t: any): number => {
+                if (t == null) return 0;
+                if (typeof t === 'number') return t;
+                if (typeof t.toMillis === 'function') return t.toMillis();   // Firestore Timestamp
+                if (typeof t.seconds === 'number') return t.seconds * 1000;  // {seconds,nanoseconds}
+                return 0;
+            };
+            const plays = snap.docs
+                .map(d => ({ id: d.id, ...d.data() } as Jugada))
+                .sort((a, b) => ms((b as any).timestamp) - ms((a as any).timestamp)); // más reciente primero
             setJugadas(plays);
             if (plays.length > 0) {
                 setLastJugada(plays[0]);
