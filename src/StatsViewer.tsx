@@ -133,124 +133,168 @@ const LeaderSection = ({
     const compartirLider = async () => {
         setSharing(true);
         try {
-            const top3 = sorted.slice(0, 3);
-            const W = 800, H = 600;
+            // ═══════════════════════════════════════════════════════
+            //  LÍDER — imagen épica vertical para WhatsApp (540x960)
+            //  Foto grande, número gigante, número fantasma de fondo,
+            //  color por categoría, y Top 5 (líder + 4 perseguidores).
+            // ═══════════════════════════════════════════════════════
+            const top5 = sorted.slice(0, 5);
+            const W = 540, H = 960;
             const canvas = document.createElement('canvas');
             canvas.width = W; canvas.height = H;
             const ctx = canvas.getContext('2d')!;
 
-            // Fondo
-            ctx.fillStyle = '#080f1f'; ctx.fillRect(0, 0, W, H);
-            // Mancha de color suave en el centro
-            const blob2 = ctx.createRadialGradient(W/2, H*0.4, 0, W/2, H*0.4, 340);
-            blob2.addColorStop(0, cat.color + '55');
-            blob2.addColorStop(1, 'transparent');
-            ctx.fillStyle = blob2; ctx.fillRect(0, 0, W, H);
-            // Textura puntos
-            ctx.fillStyle = 'rgba(255,255,255,0.018)';
-            for (let x = 0; x < W; x += 22) for (let y = 0; y < H; y += 22) ctx.fillRect(x, y, 2, 2);
+            const COL = cat.color;               // color de la categoría
+            const hex = (h: string, a: string) => h + a;
 
-            // ── Logo de la liga ──
-            const LIGA_LOGO = '/logo-liga.jpg';
-            const ligaImg = await loadRemoteImg(LIGA_LOGO);
-            const lr = 30, lcy = 42;
+            // ── Fondo oscuro ──
+            ctx.fillStyle = '#070b16'; ctx.fillRect(0, 0, W, H);
+            // Resplandor superior del color de la categoría
+            const glow = ctx.createRadialGradient(W/2, 300, 0, W/2, 300, 460);
+            glow.addColorStop(0, hex(COL, '55'));
+            glow.addColorStop(1, 'transparent');
+            ctx.fillStyle = glow; ctx.fillRect(0, 0, W, 620);
+            // Textura de puntos
+            ctx.fillStyle = 'rgba(255,255,255,0.02)';
+            for (let x = 0; x < W; x += 20) for (let y = 0; y < H; y += 20) ctx.fillRect(x, y, 2, 2);
+
+            const primaryVal = String(leader[primaryKey] as number);
+
+            // ── Encabezado: logo + liga ──
+            const ligaImg = await loadRemoteImg('/logo-liga.jpg');
+            const lr = 20, lcy = 44;
             ctx.save();
-            ctx.beginPath(); ctx.arc(W/2, lcy, lr, 0, Math.PI*2);
+            ctx.beginPath(); ctx.arc(W/2 - 96, lcy, lr, 0, Math.PI*2);
             ctx.fillStyle = 'white'; ctx.fill(); ctx.clip();
-            if (ligaImg) ctx.drawImage(ligaImg, W/2-lr, lcy-lr, lr*2, lr*2);
+            if (ligaImg) ctx.drawImage(ligaImg, W/2 - 96 - lr, lcy - lr, lr*2, lr*2);
             ctx.restore();
-            ctx.beginPath(); ctx.arc(W/2, lcy, lr, 0, Math.PI*2);
-            ctx.strokeStyle = cat.color; ctx.lineWidth = 2; ctx.stroke();
+            ctx.beginPath(); ctx.arc(W/2 - 96, lcy, lr, 0, Math.PI*2);
+            ctx.strokeStyle = COL; ctx.lineWidth = 1.5; ctx.stroke();
 
-            // ── Encabezado ──
+            ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+            ctx.font = '600 13px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.55)';
+            ctx.fillText('LIGA METROPOLITANA · ' + categoria.toUpperCase(), W/2 - 68, lcy);
+
+            // ── Título de categoría ──
+            ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+            const espaciar = (t: string, ls: number, y: number, cx = W/2) => {
+                const widths = t.split('').map(c => ctx.measureText(c).width + ls);
+                const total = widths.reduce((a, b) => a + b, 0) - ls;
+                let x = cx - total / 2;
+                for (let i = 0; i < t.length; i++) { ctx.fillText(t[i], x + widths[i]/2 - ls/2, y); x += widths[i]; }
+            };
+            ctx.font = '700 15px system-ui'; ctx.fillStyle = COL;
+            const titulo = viewMode === 'promedio' ? 'LÍDER ' + cat.label : 'LÍDER ' + cat.label;
+            espaciar('— ' + titulo + ' —', 4, 108);
+
+            // ── Número fantasma gigante detrás de la foto ──
+            ctx.save();
             ctx.textAlign = 'center';
-            ctx.font = 'bold 13px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
-            ctx.fillText('LIGA METROPOLITANA EJE ESTE  ·  ' + categoria.toUpperCase(), W/2, lcy + lr + 18);
-            ctx.font = 'bold 26px system-ui'; ctx.fillStyle = 'white';
-            ctx.fillText(cat.icon + '  LÍDER EN ' + cat.label, W/2, lcy + lr + 44);
+            ctx.font = '900 300px system-ui';
+            ctx.fillStyle = 'rgba(255,255,255,0.05)';
+            ctx.fillText(primaryVal, W/2, 400);
+            ctx.restore();
 
-            // Línea decorativa
-            const gl = ctx.createLinearGradient(100, 0, W-100, 0);
-            gl.addColorStop(0, 'transparent'); gl.addColorStop(0.4, cat.color);
-            gl.addColorStop(0.6, cat.color);   gl.addColorStop(1, 'transparent');
-            ctx.strokeStyle = gl; ctx.lineWidth = 1.5;
-            const lineY = lcy + lr + 56;
-            ctx.beginPath(); ctx.moveTo(100, lineY); ctx.lineTo(W-100, lineY); ctx.stroke();
-
-            // ── Foto líder ──
-            const photoR = 76, photoCX = W/2, photoCY = lineY + photoR + 16;
+            // ── Foto del líder ──
+            const photoR = 130, photoCX = W/2, photoCY = 300;
             const leaderImg = leader.fotoUrl ? await loadRemoteImg(leader.fotoUrl) : null;
             ctx.save();
             ctx.beginPath(); ctx.arc(photoCX, photoCY, photoR, 0, Math.PI*2);
             if (leaderImg) {
-                ctx.fillStyle = '#fff'; ctx.fill(); ctx.clip();
-                ctx.drawImage(leaderImg, photoCX-photoR, photoCY-photoR, photoR*2, photoR*2);
+                ctx.fillStyle = '#1a2436'; ctx.fill(); ctx.clip();
+                const s = photoR*2, ratio = Math.max(s/leaderImg.naturalWidth, s/leaderImg.naturalHeight);
+                const iw = leaderImg.naturalWidth*ratio, ih = leaderImg.naturalHeight*ratio;
+                ctx.drawImage(leaderImg, photoCX - iw/2, photoCY - ih/2, iw, ih);
             } else {
-                ctx.fillStyle = cat.color + '99'; ctx.fill(); ctx.clip();
-                ctx.font = 'bold 56px system-ui'; ctx.fillStyle = 'white'; ctx.textAlign = 'center';
-                ctx.fillText((leader.nombre||'?').charAt(0).toUpperCase(), photoCX, photoCY+20);
+                ctx.fillStyle = hex(COL, '55'); ctx.fill(); ctx.clip();
+                ctx.font = '900 96px system-ui'; ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText((leader.nombre||'?').charAt(0).toUpperCase(), photoCX, photoCY);
             }
             ctx.restore();
             ctx.beginPath(); ctx.arc(photoCX, photoCY, photoR, 0, Math.PI*2);
-            ctx.strokeStyle = 'white'; ctx.lineWidth = 3; ctx.stroke();
+            ctx.strokeStyle = COL; ctx.lineWidth = 4; ctx.stroke();
             // Badge #1
-            const bx = photoCX + photoR - 10, by = photoCY - photoR + 10;
-            ctx.fillStyle = cat.color;
-            ctx.beginPath(); ctx.arc(bx, by, 18, 0, Math.PI*2); ctx.fill();
-            ctx.font = 'bold 11px system-ui'; ctx.fillStyle = 'white'; ctx.textAlign = 'center';
-            ctx.fillText('#1', bx, by + 4);
+            const bx = photoCX + photoR - 26, by = photoCY - photoR + 26;
+            ctx.beginPath(); ctx.arc(bx, by, 24, 0, Math.PI*2); ctx.fillStyle = COL; ctx.fill();
+            ctx.strokeStyle = '#070b16'; ctx.lineWidth = 3; ctx.stroke();
+            ctx.font = '900 18px system-ui'; ctx.fillStyle = 'white';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('1', bx, by + 1);
 
             // ── Nombre y equipo ──
-            const nameY = photoCY + photoR + 30;
-            ctx.textAlign = 'center';
-            ctx.font = 'bold 28px system-ui'; ctx.fillStyle = 'white';
-            ctx.fillText(leader.nombre.toUpperCase(), W/2, nameY);
-            ctx.font = '13px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.5)';
-            ctx.fillText(leader.equipo.toUpperCase() + '  ·  ' + categoria.toUpperCase(), W/2, nameY + 22);
+            ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
+            let nom = leader.nombre.toUpperCase();
+            ctx.font = '800 34px system-ui';
+            while (ctx.measureText(nom).width > W - 60 && nom.length > 4) nom = nom.slice(0, -1);
+            if (nom !== leader.nombre.toUpperCase()) nom = nom.trimEnd() + '…';
+            ctx.fillStyle = 'white';
+            ctx.fillText(nom, W/2, 478);
+            ctx.font = '600 14px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            espaciar(leader.equipo.toUpperCase(), 2, 502);
 
-            // ── Stat grande — blanco con sombra para que contraste ──
-            const statY = nameY + 90;
+            // ── Número grande con brillo ──
             ctx.save();
-            ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 16;
-            ctx.font = 'bold 88px system-ui'; ctx.fillStyle = 'white';
-            ctx.fillText(String(leader[primaryKey] as number), W/2, statY);
+            ctx.shadowColor = hex(COL, 'aa'); ctx.shadowBlur = 30;
+            ctx.font = '900 130px system-ui'; ctx.fillStyle = 'white'; ctx.textAlign = 'center';
+            ctx.fillText(primaryVal, W/2, 622);
             ctx.restore();
-            // Unidad con color de categoría
-            ctx.font = 'bold 16px system-ui'; ctx.fillStyle = cat.color;
-            ctx.fillText(primaryUnit + (viewMode === 'promedio' ? '  ·  POR PARTIDO' : '  ·  TOTAL'), W/2, statY + 22);
+            ctx.font = '700 18px system-ui'; ctx.fillStyle = COL;
+            espaciar(primaryUnit + (viewMode === 'promedio' ? ' · POR PARTIDO' : ' · EN LA TEMPORADA'), 2, 652);
 
-            // ── Franja Top 3 ──
-            const rowY = H - 118;
-            ctx.fillStyle = 'rgba(0,0,0,0.4)';
-            ctx.beginPath(); ctx.roundRect(36, rowY, W-72, 96, 14); ctx.fill();
-            ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.roundRect(36, rowY, W-72, 96, 14); ctx.stroke();
+            // ── Ranking 2 a 5 ──
+            const listX = 40, listW = W - 80;
+            let ry = 700;
+            ctx.textAlign = 'left';
+            ctx.font = '700 12px system-ui'; ctx.fillStyle = hex(COL, 'cc');
+            ctx.fillText('PERSEGUIDORES', listX + 4, ry);
+            ry += 14;
 
-            const medals = ['🥇','🥈','🥉'];
-            const colW = (W-72)/3;
-            top3.forEach((p, i) => {
-                const rx = 36 + i*colW + colW/2;
+            const rowH = 46;
+            for (let i = 1; i < top5.length; i++) {
+                const p = top5[i];
+                const y = ry + (i - 1) * rowH;
+                // fondo de fila
+                ctx.fillStyle = 'rgba(255,255,255,0.04)';
+                ctx.beginPath(); ctx.roundRect(listX, y, listW, rowH - 8, 10); ctx.fill();
+                // puesto
                 ctx.textAlign = 'center';
-                ctx.font = '13px system-ui'; ctx.fillStyle = 'white';
-                ctx.fillText(medals[i], rx, rowY + 18);
-                ctx.font = 'bold 10px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.7)';
-                let nm = p.nombre.toUpperCase();
-                while (nm.length > 1 && ctx.measureText(nm).width > colW - 16) nm = nm.slice(0,-1);
-                if (nm.length < p.nombre.length) nm += '…';
-                ctx.fillText(nm, rx, rowY + 36);
-                // Número blanco con sombra
+                ctx.font = '900 18px system-ui'; ctx.fillStyle = hex(COL, 'cc');
+                ctx.fillText(String(i + 1), listX + 26, y + (rowH-8)/2 + 6);
+                // mini-foto o inicial
+                const mr = 15, mcx = listX + 60, mcy = y + (rowH-8)/2;
+                const pimg = p.fotoUrl ? await loadRemoteImg(p.fotoUrl) : null;
                 ctx.save();
-                ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 8;
-                ctx.font = 'bold 24px system-ui'; ctx.fillStyle = 'white';
-                ctx.fillText(String(p[primaryKey] as number), rx, rowY + 62);
+                ctx.beginPath(); ctx.arc(mcx, mcy, mr, 0, Math.PI*2);
+                if (pimg) {
+                    ctx.fillStyle = '#1a2436'; ctx.fill(); ctx.clip();
+                    const s = mr*2, r2 = Math.max(s/pimg.naturalWidth, s/pimg.naturalHeight);
+                    ctx.drawImage(pimg, mcx - pimg.naturalWidth*r2/2, mcy - pimg.naturalHeight*r2/2, pimg.naturalWidth*r2, pimg.naturalHeight*r2);
+                } else {
+                    ctx.fillStyle = hex(COL, '44'); ctx.fill(); ctx.clip();
+                    ctx.font = '800 14px system-ui'; ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillText((p.nombre||'?').charAt(0).toUpperCase(), mcx, mcy + 1);
+                }
                 ctx.restore();
-                ctx.font = '10px system-ui'; ctx.fillStyle = cat.color;
-                ctx.fillText(primaryUnit, rx, rowY + 78);
-            });
+                // nombre + equipo
+                ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+                let pn = p.nombre.toUpperCase();
+                ctx.font = '700 15px system-ui';
+                while (ctx.measureText(pn).width > listW - 190 && pn.length > 4) pn = pn.slice(0, -1);
+                if (pn !== p.nombre.toUpperCase()) pn = pn.trimEnd() + '…';
+                ctx.fillStyle = 'white';
+                ctx.fillText(pn, listX + 86, y + (rowH-8)/2 + 1);
+                ctx.font = '500 10px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.fillText(p.equipo.toUpperCase(), listX + 86, y + (rowH-8)/2 + 14);
+                // valor
+                ctx.textAlign = 'right';
+                ctx.font = '900 22px system-ui'; ctx.fillStyle = 'white';
+                ctx.fillText(String(p[primaryKey] as number), listX + listW - 14, y + (rowH-8)/2 + 7);
+            }
 
-            // Footer
-            ctx.textAlign = 'center'; ctx.font = '11px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.12)';
-            ctx.fillText('Liga Metropolitana Eje Este  ·  San Mateo, Aragua', W/2, H - 10);
+            // ── Footer ──
+            ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+            ctx.font = '500 11px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.22)';
+            ctx.fillText('LIGA METROPOLITANA EJE ESTE · SAN MATEO, ARAGUA', W/2, H - 20);
 
             canvas.toBlob(async blob => {
                 if (!blob) return;
