@@ -1125,7 +1125,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     </div>
                 </div>
 
-                {/* Fila 2: Cuartos + Acciones */}
+                {/* Fila 2: Selector de cuarto — su propia fila, nunca compite por espacio */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#0f172a', borderRadius: 8, padding: '4px 6px' }}>
                     {['Q1','Q2','Q3','Q4','TE'].map(q => (
                         <button key={q} onClick={() => { setCuartoActual(q); saveEstado({ cuartoActual: q }); }} style={{
@@ -1135,7 +1135,13 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                             fontWeight: 900, cursor: 'pointer', fontSize: '0.72rem', flexShrink: 0,
                         }}>{q}</button>
                     ))}
-                    <div style={{ flex: 1 }} />
+                </div>
+
+                {/* Fila 3: Acciones — su propia fila, ANCHO GARANTIZADO para FINAL.
+                    flexWrap como red de seguridad extra en pantallas extremadamente
+                    angostas: si aun así no cupieran los 5, pasan a una 2da línea
+                    en vez de recortarse invisibles fuera de la pantalla. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
                     <button onClick={async () => {
                         try { if (matchData) await updateDoc(doc(db, colCal, matchData.id), { enVivo: false }); } catch(_) {}
                         setSelectedMatchId(null);
@@ -1143,7 +1149,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     <button onClick={handleUndo} style={actionBtnStyle('#92400e')}>↩️</button>
                     <button onClick={() => setIsHistoryOpen(true)} style={actionBtnStyle('#334155')}>📜</button>
                     <button onClick={handleSuspend} title="Suspender partido" style={{ ...actionBtnStyle('#b45309'), fontWeight: 900 }}>⏸</button>
-                    <button onClick={handleFinalize} style={{ ...actionBtnStyle('#065f46'), fontWeight: 900 }}>✅ FINAL</button>
+                    <div style={{ flex: 1 }} />
+                    <button onClick={handleFinalize} style={{ ...actionBtnStyle('#065f46'), fontWeight: 900, padding: '8px 18px', fontSize: '0.78rem' }}>✅ FINAL</button>
                 </div>
             </div>
 
