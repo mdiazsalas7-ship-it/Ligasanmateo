@@ -213,6 +213,12 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     const [estadoRestaurado, setEstadoRestaurado] = useState<boolean | null>(null);
     const [cuartoActual, setCuartoActual] = useState<string>('Q1');
 
+    // Estado del botón de "reparar bloqueo" (pantalla de abridores).
+    // Declarado aquí arriba, con el resto de hooks, y NO dentro del bloque
+    // condicional donde se usa — los hooks de React deben llamarse siempre
+    // en el mismo orden, nunca dentro de un `if`.
+    const [reparando, setReparando] = useState(false);
+
     const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/166/166344.png';
 
     const colCal = getColName('calendario', categoria);
@@ -228,6 +234,8 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     }, [startersDone, selectedMatchId, colCal]);
 
     // Persiste el estado de la mesa en mesa_estado/{matchId}
+    // Devuelve true/false según si el guardado tuvo éxito, para que quien
+    // llame pueda reaccionar (avisar al usuario) en vez de fallar en silencio.
     const saveEstado = useCallback(async (payload: Partial<{
         presentLocal: string[];
         presentVisitante: string[];
@@ -236,16 +244,18 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         checkInDone: boolean;
         startersDone: boolean;
         cuartoActual: string;
-    }>) => {
-        if (!selectedMatchId) return;
+    }>): Promise<boolean> => {
+        if (!selectedMatchId) return false;
         try {
             await setDoc(
                 doc(db, 'mesa_estado', selectedMatchId),
                 { ...payload, updatedAt: Date.now() },
                 { merge: true },
             );
+            return true;
         } catch (e) {
             console.error('Error guardando estado mesa:', e);
+            return false;
         }
     }, [selectedMatchId]);
 
@@ -549,6 +559,18 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
         if (!matchData) return;
         showConfirm('⏸ ¿SUSPENDER PARTIDO?\nEl marcador, el cuarto y las estadísticas quedan guardados para reanudarlo otro día.', async () => {
             try {
+                // Antes de suspender, guardamos de nuevo el estado actual de la
+                // mesa (presentes, quintetos, cuarto). Así, si por lo que sea el
+                // guardado original falló, queda una segunda oportunidad justo
+                // antes de apagar el partido — evita el "callejón sin salida"
+                // de reanudar sin datos.
+                await saveEstado({
+                    presentLocal, presentVisitante,
+                    onCourtLocal, onCourtVisitante,
+                    checkInDone: true, startersDone: true,
+                    cuartoActual,
+                });
+
                 await updateDoc(doc(db, colCal, matchData.id), {
                     estatus: 'suspendido',
                     enVivo: false,
@@ -563,7 +585,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                 console.error(e);
             }
         });
-    }, [matchData, colCal, cuartoActual, onClose, showToast]);
+    }, [matchData, colCal, cuartoActual, onClose, showToast, saveEstado, presentLocal, presentVisitante, onCourtLocal, onCourtVisitante]);
 
     // ── Finalizar partido ──
     const handleFinalize = useCallback(() => {
@@ -876,6 +898,28 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     // ─────────────────────────────────────────────
     if (!startersDone) {
         const isPartidoIniciado = !!matchData?.inicioPartidoTs;
+        // ── Detección del "callejón sin salida" ──
+        // Si el partido ya quedó marcado como iniciado (inicioPartidoTs
+        // existe, por eso esta pantalla se bloquea) PERO el restore desde
+        // mesa_estado NO trajo abridores guardados (estadoRestaurado===false,
+        // es decir, nunca llegamos a la rama d.startersDone), estamos ante
+        // exactamente el atasco que vivimos: no hay forma de avanzar por la
+        // vía normal. Mostramos una salida dentro de la misma app.
+        const esCallejonSinSalida = isPartidoIniciado && estadoRestaurado === false;
+
+        const repararBloqueo = async () => {
+            if (!selectedMatchId) return;
+            setReparando(true);
+            try {
+                await updateDoc(doc(db, colCal, selectedMatchId), { inicioPartidoTs: null });
+                showToast('🔓 Desbloqueado — selecciona los abridores', '#10b981');
+            } catch (e) {
+                console.error(e);
+                showToast('No se pudo desbloquear ⚠️', '#ef4444');
+            }
+            setReparando(false);
+        };
+
         const StarterItem = ({ p, onCourt, setOnCourt, color, disabled }: any) => (
             <div
                 onClick={() => {
@@ -925,13 +969,44 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                     </button>
                 )}
 
-                {isPartidoIniciado && (
+                {isPartidoIniciado && !esCallejonSinSalida && (
                     <div style={{
                         background: '#dc2626', color: 'white', padding: '10px 14px',
                         borderRadius: 8, marginBottom: 12, textAlign: 'center',
                         fontSize: '0.75rem', fontWeight: 800,
                     }}>
                         🔒 PARTIDO EN CURSO — Abridores bloqueados
+                    </div>
+                )}
+
+                {/* ── Salida de emergencia: partido marcado como iniciado
+                     pero sin quintetos guardados (p. ej. tras reanudar un
+                     partido suspendido cuya selección de abridores nunca
+                     se guardó). Antes esto era un callejón sin salida que
+                     obligaba a entrar a Firebase Console; ahora se resuelve
+                     con un toque. ── */}
+                {esCallejonSinSalida && (
+                    <div style={{
+                        background: '#78350f', border: '1px solid #d97706', color: '#fde68a',
+                        padding: '14px', borderRadius: 10, marginBottom: 14, fontSize: '0.78rem',
+                    }}>
+                        <p style={{ margin: '0 0 10px', fontWeight: 800 }}>
+                            ⚠️ Este partido quedó marcado como "iniciado" pero no se guardó
+                            quiénes eran los 5 abridores (por ejemplo, tras reanudar un
+                            partido suspendido). El marcador y las estadísticas están a salvo.
+                        </p>
+                        <button
+                            onClick={repararBloqueo}
+                            disabled={reparando}
+                            style={{
+                                width: '100%', padding: 12, borderRadius: 8, border: 'none',
+                                background: '#d97706', color: '#1c1005', fontWeight: 900,
+                                fontSize: '0.78rem', cursor: reparando ? 'not-allowed' : 'pointer',
+                                opacity: reparando ? 0.6 : 1,
+                            }}
+                        >
+                            {reparando ? 'DESBLOQUEANDO…' : '🔓 DESBLOQUEAR Y VOLVER A ELEGIR ABRIDORES'}
+                        </button>
                     </div>
                 )}
 
@@ -942,7 +1017,7 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                         </div>
                         <div style={{ overflowY: 'auto', flex: 1 }}>
                             {playersLocal.filter(p => presentLocal.includes(p.id)).map(p => (
-                                <StarterItem key={p.id} p={p} onCourt={onCourtLocal} setOnCourt={setOnCourtLocal} color="#3b82f6" disabled={isPartidoIniciado} />
+                                <StarterItem key={p.id} p={p} onCourt={onCourtLocal} setOnCourt={setOnCourtLocal} color="#3b82f6" disabled={isPartidoIniciado && !esCallejonSinSalida} />
                             ))}
                         </div>
                     </div>
@@ -952,31 +1027,40 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
                         </div>
                         <div style={{ overflowY: 'auto', flex: 1 }}>
                             {playersVisitante.filter(p => presentVisitante.includes(p.id)).map(p => (
-                                <StarterItem key={p.id} p={p} onCourt={onCourtVisitante} setOnCourt={setOnCourtVisitante} color="#ef4444" disabled={isPartidoIniciado} />
+                                <StarterItem key={p.id} p={p} onCourt={onCourtVisitante} setOnCourt={setOnCourtVisitante} color="#ef4444" disabled={isPartidoIniciado && !esCallejonSinSalida} />
                             ))}
                         </div>
                     </div>
                 </div>
                 <button
                     onClick={async () => {
-                        setStartersDone(true);
-                        saveEstado({
+                        // Guardamos PRIMERO y verificamos que sí se haya guardado
+                        // antes de marcar el partido como iniciado. Si el guardado
+                        // falla, avisamos en vez de fallar en silencio — así nunca
+                        // más queda un partido "iniciado" sin sus abridores guardados.
+                        const ok = await saveEstado({
                             presentLocal, presentVisitante,
                             onCourtLocal, onCourtVisitante,
                             checkInDone: true, startersDone: true,
+                            cuartoActual,
                         });
+                        if (!ok) {
+                            showToast('⚠️ No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.', '#ef4444');
+                            return;
+                        }
+                        setStartersDone(true);
                         try { await updateDoc(doc(db, colCal, selectedMatchId!), { enVivo: true, inicioPartidoTs: serverTimestamp() }); } catch(_) {}
                     }}
-                    disabled={isPartidoIniciado || onCourtLocal.length !== 5 || onCourtVisitante.length !== 5}
+                    disabled={(isPartidoIniciado && !esCallejonSinSalida) || onCourtLocal.length !== 5 || onCourtVisitante.length !== 5}
                     style={{
                         padding: 16, marginTop: 12, borderRadius: 12, border: 'none',
-                        background: !isPartidoIniciado && onCourtLocal.length === 5 && onCourtVisitante.length === 5 ? '#7c3aed' : '#1e293b',
+                        background: (!isPartidoIniciado || esCallejonSinSalida) && onCourtLocal.length === 5 && onCourtVisitante.length === 5 ? '#7c3aed' : '#1e293b',
                         color: 'white', fontWeight: 900, fontSize: '0.85rem',
-                        cursor: isPartidoIniciado ? 'not-allowed' : 'pointer',
-                        opacity: isPartidoIniciado ? 0.5 : 1,
+                        cursor: (isPartidoIniciado && !esCallejonSinSalida) ? 'not-allowed' : 'pointer',
+                        opacity: (isPartidoIniciado && !esCallejonSinSalida) ? 0.5 : 1,
                     }}
                 >
-                    {isPartidoIniciado
+                    {(isPartidoIniciado && !esCallejonSinSalida)
                         ? '🔒 BLOQUEADO'
                         : onCourtLocal.length === 5 && onCourtVisitante.length === 5
                             ? '🏀 INICIAR PARTIDO'
