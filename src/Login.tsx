@@ -79,7 +79,7 @@ const Login: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
                         alt="Logo"
                         style={{ width: '80px', borderRadius: '10px', marginBottom: '15px' }}
                     />
-                    <h2 style={{ color: '#1f2937', margin: '0 0 5px 0' }}>Liga San Mateo</h2>
+                    <h2 style={{ color: '#1f2937', margin: '0 0 5px 0' }}>Liga Metropolitana Eje Este</h2>
                     <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>
                         Acceso de administración
                     </p>

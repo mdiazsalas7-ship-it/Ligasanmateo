@@ -104,7 +104,7 @@ export const onNoticiaCreada = functions
         const titulo = data.titulo || 'Nueva noticia';
 
         await sendPush(
-            '📢 Liga de Baloncesto San Mateo',
+            '📢 Liga Metropolitana Eje Este',
             titulo,
             { type: 'noticia', id: snap.id }
         );
@@ -123,7 +123,7 @@ exports.onVideoPublicado = functions
         const desc   = data.descripcion || data.description || 'Mira el nuevo contenido de la liga';
 
         await sendPush(
-            '🎥 Nuevo Video · San Mateo',
+            '🎥 Nuevo Video · Eje Este',
             `${titulo} — ${desc}`,
             { type: 'video', id: snap.id }
         );

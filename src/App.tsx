@@ -540,7 +540,7 @@ function App() {
                     {/* Título */}
                     <div style={{ textAlign: 'center', flex: 1, padding: '0 8px' }}>
                         <h1 style={{ fontSize: '0.9rem', fontWeight: 900, color: 'white', margin: 0, textTransform: 'uppercase', letterSpacing: '1px', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
-                            Liga de Baloncesto San Mateo
+                            Liga Metropolitana Eje Este
                         </h1>
                         <p style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.65)', margin: '2px 0 0', fontWeight: 700, letterSpacing: '2px' }}>
                             EJE ESTE • 2026

@@ -756,7 +756,7 @@ const BoxScoreModal = memo(({
 
             // ── Footer ──
             ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
-            ctx.fillText('Liga de Baloncesto San Mateo  ·  San Mateo, Aragua', W / 2, H - 14);
+            ctx.fillText('Liga Metropolitana Eje Este  ·  San Mateo, Aragua', W / 2, H - 14);
 
             // ── Franja de patrocinadores (oro y plata) ──
             const patrocinadores = await fetchPatrocinadoresVigentes(['oro', 'plata']);
@@ -1351,7 +1351,7 @@ const MatchCard = memo(({
                     : `${m.equipoLocalNombre} vs ${m.equipoVisitanteNombre} · ${m.fechaAsignada}`;
                 try {
                     if (navigator.canShare?.({ files: [file] })) {
-                        await navigator.share({ files: [file], title, text: '🏀 Liga de Baloncesto San Mateo' });
+                        await navigator.share({ files: [file], title, text: '🏀 Liga Metropolitana Eje Este' });
                     } else {
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a'); a.href = url; a.download = 'partido.png'; a.click();
@@ -1612,7 +1612,7 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
                     <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
                         📅 Calendario {categoria}
                     </h2>
-                    <p style={{ margin: '2px 0 0', fontSize: '0.6rem', color: '#94a3b8' }}>Liga de Baloncesto San Mateo</p>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.6rem', color: '#94a3b8' }}>Liga Metropolitana Eje Este</p>
                 </div>
                 <button onClick={onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>
                     ← VOLVER

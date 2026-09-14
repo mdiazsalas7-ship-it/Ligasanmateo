@@ -514,7 +514,7 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
                                     <img src={LOGO_LIGA} alt="Logo" style={{ height: 75, objectFit: 'contain' }} />
                                     <div style={{ textAlign: 'center' }}>
                                         <h1 style={{ margin: 0, fontSize: '1.4rem', color: '#1e3a8a', textTransform: 'uppercase', fontWeight: 900 }}>
-                                            Liga de Baloncesto San Mateo
+                                            Liga Metropolitana Eje Este
                                         </h1>
                                         <div style={{ background: '#1e3a8a', color: 'white', padding: '4px 15px', borderRadius: 4, fontSize: '0.9rem', fontWeight: 'bold', marginTop: 5, display: 'inline-block' }}>
                                             FORMA 21 - NÓMINA OFICIAL

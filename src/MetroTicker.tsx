@@ -211,7 +211,7 @@ const MetroTicker: React.FC<{ lideres?: LiderTicker[] }> = ({ lideres = [] }) =>
             }
 
             if (result.length === 0)
-                result.push({ type: 'noticia', icon: '🏀', text: 'Bienvenidos a la Liga de Baloncesto San Mateo 2026' });
+                result.push({ type: 'noticia', icon: '🏀', text: 'Bienvenidos a la Liga Metropolitana Eje Este 2026' });
 
             setItems(result);
             setLoaded(true);
