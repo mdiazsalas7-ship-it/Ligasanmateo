@@ -581,54 +581,6 @@ function App() {
                             </div>
                             <span style={{ fontSize: '0.38rem', fontWeight: 900, color: 'white', letterSpacing: '0.8px', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>ÁRBITRO</span>
                         </button>
-
-                        {/* Reglamento Industrial */}
-                        <button
-                            onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FCondiciones_Torneo_Interindustrial.pdf?alt=media&token=baad1c02-31ed-44da-b5ff-0ffead4a7b09', '_blank')}
-                            style={{
-                                background: 'rgba(255,255,255,0.12)',
-                                border: '1px solid rgba(255,255,255,0.25)',
-                                borderRadius: 12, padding: '6px 8px',
-                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                                cursor: 'pointer', transition: 'background 0.2s',
-                                minWidth: 52,
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.22)')}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
-                        >
-                            <div style={{
-                                width: 32, height: 32, borderRadius: '50%',
-                                background: 'rgba(255,255,255,0.15)',
-                                border: '2px solid rgba(255,255,255,0.4)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '1.1rem',
-                            }}>📜</div>
-                            <span style={{ fontSize: '0.38rem', fontWeight: 900, color: 'white', letterSpacing: '0.8px', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>INDUSTRIAL</span>
-                        </button>
-
-                        {/* Reglamento Formativas */}
-                        <button
-                            onClick={() => window.open('https://firebasestorage.googleapis.com/v0/b/liga-de-san-mateo.firebasestorage.app/o/documentos%2FReglamento_Interno_Categorias_Formativas_2026.pdf?alt=media&token=6b80af11-d122-48ce-8069-52e0783620d6', '_blank')}
-                            style={{
-                                background: 'rgba(255,255,255,0.12)',
-                                border: '1px solid rgba(255,255,255,0.25)',
-                                borderRadius: 12, padding: '6px 8px',
-                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                                cursor: 'pointer', transition: 'background 0.2s',
-                                minWidth: 52,
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.22)')}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
-                        >
-                            <div style={{
-                                width: 32, height: 32, borderRadius: '50%',
-                                background: 'rgba(255,255,255,0.15)',
-                                border: '2px solid rgba(255,255,255,0.4)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '1.1rem',
-                            }}>👦</div>
-                            <span style={{ fontSize: '0.38rem', fontWeight: 900, color: 'white', letterSpacing: '0.8px', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>FORMATIVAS</span>
-                        </button>
                     </div>
                 </div> {/* <--- AQUÍ ESTÁ EL </div> QUE FALTABA */}
 

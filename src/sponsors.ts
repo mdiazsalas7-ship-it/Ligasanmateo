@@ -22,6 +22,8 @@ export interface Patrocinador {
     enlace?: string;       // WhatsApp / Instagram / web del negocio
     descripcion?: string;  // tagline corto para la valla
     orden?: number;
+    createdAt?: number;    // timestamp de alta
+    renovadoEn?: number;   // timestamp de la última renovación
 }
 
 export const NIVEL_ORDEN: Record<NivelPatrocinio, number> = { oro: 0, plata: 1, bronce: 2 };

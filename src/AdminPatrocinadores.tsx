@@ -161,6 +161,34 @@ const AdminPatrocinadores: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         catch { alert('Error al actualizar'); }
     };
 
+    // ── Renovar contrato ──
+    // Extiende el vencimiento sin volver a cargar logo/datos. El nuevo
+    // vencimiento cuenta desde HOY (o desde la fecha de vencimiento si
+    // aún no ha pasado, para no "perder" días si renuevas antes). Deja
+    // el patrocinador activo automáticamente.
+    const [renovando, setRenovando] = useState<string | null>(null); // id abierto
+
+    const renovar = async (p: Patrocinador, meses: number) => {
+        try {
+            const hoy = new Date();
+            const desde = (p.vencimiento && new Date(p.vencimiento) > hoy)
+                ? new Date(p.vencimiento)   // aún vigente → sumar al final
+                : hoy;                       // vencido → contar desde hoy
+            const nueva = new Date(desde);
+            nueva.setMonth(nueva.getMonth() + meses);
+            const nuevaISO = nueva.toISOString().slice(0, 10);
+
+            await updateDoc(doc(db, 'patrocinadores', p.id), {
+                vencimiento: nuevaISO,
+                activo: true,               // reactivar si estaba pausado/vencido
+                renovadoEn: Date.now(),
+            });
+            setRenovando(null);
+        } catch {
+            alert('Error al renovar');
+        }
+    };
+
     const eliminar = async (p: Patrocinador) => {
         if (!window.confirm(`¿Eliminar a ${p.nombre}? Esta acción no se deshace.`)) return;
         try { await deleteDoc(doc(db, 'patrocinadores', p.id)); }
@@ -184,6 +212,12 @@ const AdminPatrocinadores: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         width: '100%', padding: '10px 12px', background: '#0f172a',
         border: '1px solid #334155', borderRadius: 8, color: 'white',
         fontSize: '0.8rem', boxSizing: 'border-box',
+    };
+
+    const renovBtn: React.CSSProperties = {
+        flex: 1, padding: '8px 0', borderRadius: 8, cursor: 'pointer',
+        fontSize: '0.65rem', fontWeight: 900, background: '#1e293b',
+        color: '#e2e8f0', border: '1px solid #334155',
     };
 
     return (
@@ -249,41 +283,74 @@ const AdminPatrocinadores: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                 )}
                 {lista.map(p => {
                     const st = estado(p);
+                    // Resaltar renovación cuando está vencido o por vencer
+                    const urge = st.label === 'VENCIDO' || st.label.startsWith('VENCE EN');
+                    const abierto = renovando === p.id;
                     return (
                         <div key={p.id} style={{
-                            background: '#1a1a1a', border: '1px solid #333', borderRadius: 12,
-                            padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10,
+                            background: '#1a1a1a', border: `1px solid ${urge ? '#f59e0b' : '#333'}`, borderRadius: 12,
+                            padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8,
                         }}>
-                            <img src={p.logoUrl} alt={p.nombre} style={{
-                                width: 40, height: 40, borderRadius: 8, objectFit: 'contain',
-                                background: '#f8fafc', flexShrink: 0,
-                            }} />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: '0.75rem', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {p.nombre}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <img src={p.logoUrl} alt={p.nombre} style={{
+                                    width: 40, height: 40, borderRadius: 8, objectFit: 'contain',
+                                    background: '#f8fafc', flexShrink: 0,
+                                }} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {p.nombre}
+                                    </div>
+                                    <div style={{ fontSize: '0.6rem', color: '#64748b' }}>
+                                        {p.nivel.toUpperCase()} · vence {p.vencimiento || '—'}
+                                    </div>
                                 </div>
-                                <div style={{ fontSize: '0.6rem', color: '#64748b' }}>
-                                    {p.nivel.toUpperCase()} · vence {p.vencimiento || '—'}
-                                </div>
+                                <span style={{
+                                    background: st.bg, color: st.fg, fontSize: '0.52rem', fontWeight: 900,
+                                    padding: '3px 8px', borderRadius: 8, flexShrink: 0,
+                                }}>
+                                    {st.label}
+                                </span>
                             </div>
-                            <span style={{
-                                background: st.bg, color: st.fg, fontSize: '0.52rem', fontWeight: 900,
-                                padding: '3px 8px', borderRadius: 8, flexShrink: 0,
-                            }}>
-                                {st.label}
-                            </span>
-                            <button onClick={() => togglePausa(p)} title={p.activo ? 'Pausar' : 'Reactivar'} style={{
-                                background: 'none', border: '1px solid #334155', borderRadius: 8,
-                                color: '#94a3b8', cursor: 'pointer', padding: '4px 8px', fontSize: '0.7rem', flexShrink: 0,
-                            }}>
-                                {p.activo ? '⏸' : '▶️'}
-                            </button>
-                            <button onClick={() => eliminar(p)} title="Eliminar" style={{
-                                background: 'none', border: '1px solid #7f1d1d', borderRadius: 8,
-                                color: '#fca5a5', cursor: 'pointer', padding: '4px 8px', fontSize: '0.7rem', flexShrink: 0,
-                            }}>
-                                🗑
-                            </button>
+
+                            {/* Fila de acciones */}
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                <button onClick={() => setRenovando(abierto ? null : p.id)} title="Renovar contrato" style={{
+                                    background: urge ? '#f59e0b' : 'none',
+                                    border: `1px solid ${urge ? '#f59e0b' : '#334155'}`, borderRadius: 8,
+                                    color: urge ? '#1c1917' : '#94a3b8', cursor: 'pointer',
+                                    padding: '4px 10px', fontSize: '0.62rem', fontWeight: 900,
+                                }}>
+                                    🔄 RENOVAR
+                                </button>
+                                <button onClick={() => togglePausa(p)} title={p.activo ? 'Pausar' : 'Reactivar'} style={{
+                                    background: 'none', border: '1px solid #334155', borderRadius: 8,
+                                    color: '#94a3b8', cursor: 'pointer', padding: '4px 8px', fontSize: '0.7rem',
+                                }}>
+                                    {p.activo ? '⏸' : '▶️'}
+                                </button>
+                                <button onClick={() => eliminar(p)} title="Eliminar" style={{
+                                    background: 'none', border: '1px solid #7f1d1d', borderRadius: 8,
+                                    color: '#fca5a5', cursor: 'pointer', padding: '4px 8px', fontSize: '0.7rem',
+                                }}>
+                                    🗑
+                                </button>
+                            </div>
+
+                            {/* Panel de renovación desplegable */}
+                            {abierto && (
+                                <div style={{
+                                    background: '#0f172a', border: '1px solid #334155', borderRadius: 10,
+                                    padding: 10, display: 'flex', flexDirection: 'column', gap: 8,
+                                }}>
+                                    <div style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700 }}>
+                                        Extender el contrato a partir de {(p.vencimiento && new Date(p.vencimiento) > new Date()) ? `su vencimiento (${p.vencimiento})` : 'hoy'}:
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                        <button onClick={() => renovar(p, 6)} style={renovBtn}>+6 meses</button>
+                                        <button onClick={() => renovar(p, 12)} style={{ ...renovBtn, background: '#f59e0b', color: '#1c1917', border: 'none' }}>+1 año</button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     );
                 })}
