@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
-import { auth, db } from './firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { auth } from './firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
-const Login: React.FC = () => {
-    const [isRegistering, setIsRegistering] = useState(false);
-    const [email, setEmail] = useState('');
+// ─────────────────────────────────────────────────────────────
+// LOGIN — solo administradores
+//
+// La app es de lectura pública: el hincha NO necesita cuenta para
+// ver calendario, tablas, estadísticas ni noticias. Las únicas
+// cuentas que existen son las del admin y la mesa técnica, y se
+// crean a mano desde la consola de Firebase.
+//
+// Por eso se eliminó el auto-registro: antes cualquier persona
+// podía crearse un usuario desde aquí.
+// ─────────────────────────────────────────────────────────────
+
+const Login: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
+    const [email, setEmail]       = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [error, setError]       = useState('');
+    const [loading, setLoading]   = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -16,33 +26,23 @@ const Login: React.FC = () => {
         setLoading(true);
 
         try {
-            if (isRegistering) {
-                // --- REGISTRO NUEVO ---
-                // 1. Crear usuario en Auth
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                const user = userCredential.user;
-
-                // 2. Crear perfil BASE en Firestore (SIN ROL NI EQUIPO AÚN)
-                // Esto disparará la pantalla de selección en App.tsx
-                await setDoc(doc(db, 'usuarios', user.uid), {
-                    email: user.email,
-                    rol: 'pendiente', // <--- CLAVE: Entra como pendiente
-                    createdAt: new Date()
-                });
-            } else {
-                // --- INICIAR SESIÓN ---
-                await signInWithEmailAndPassword(auth, email, password);
-            }
+            await signInWithEmailAndPassword(auth, email.trim(), password);
         } catch (err: any) {
-            console.error(err);
-            if (err.code === 'auth/email-already-in-use') {
-                setError('Este correo ya está registrado.');
-            } else if (err.code === 'auth/wrong-password') {
-                setError('Contraseña incorrecta.');
-            } else if (err.code === 'auth/user-not-found') {
-                setError('Usuario no encontrado.');
-            } else {
-                setError('Error al conectar. Verifica tus datos.');
+            console.error('[Login]', err?.code, err?.message);
+            switch (err?.code) {
+                case 'auth/invalid-credential':
+                case 'auth/wrong-password':
+                case 'auth/user-not-found':
+                    setError('Correo o contraseña incorrectos.');
+                    break;
+                case 'auth/too-many-requests':
+                    setError('Demasiados intentos. Espera unos minutos.');
+                    break;
+                case 'auth/network-request-failed':
+                    setError('Sin conexión. Revisa tu internet.');
+                    break;
+                default:
+                    setError(`No se pudo entrar (${err?.code || 'error desconocido'}).`);
             }
         } finally {
             setLoading(false);
@@ -51,101 +51,103 @@ const Login: React.FC = () => {
 
     return (
         <div style={{
-            display: 'flex', justifyContent: 'center', alignItems: 'center', 
-            height: '100vh', 
-            width: '100vw',
-            padding: '20px',
-            // --- FONDO DE IMAGEN ---
-            backgroundImage: 'url(/fondo-login.jpg)',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-            position: 'fixed',
-            top: 0,
-            left: 0
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            height: '100vh', width: '100vw', padding: '20px',
+            // El archivo /fondo-login.jpg no existe en /public — se usaba
+            // y quedaba el fondo en blanco. Degradado de la marca.
+            background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 55%, #0f172a 100%)',
+            position: 'fixed', top: 0, left: 0, boxSizing: 'border-box',
         }}>
             <div className="animate-fade-in" style={{
-                background: 'white', padding: '40px', borderRadius: '16px', 
-                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', width: '100%', maxWidth: '400px'
+                background: 'white', padding: '40px', borderRadius: '16px',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', width: '100%', maxWidth: '400px',
+                position: 'relative',
             }}>
-                <div style={{textAlign: 'center', marginBottom: '30px'}}>
-                    <img 
-                        src="/logo-login.png" 
-                        alt="Logo" 
-                        style={{width: '80px', borderRadius: '10px', marginBottom: '15px'}} 
+                {onClose && (
+                    <button
+                        onClick={onClose}
+                        style={{
+                            position: 'absolute', top: 12, right: 16, background: 'none',
+                            border: 'none', fontSize: '1.3rem', color: '#94a3b8', cursor: 'pointer',
+                        }}
+                    >✕</button>
+                )}
+
+                <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+                    <img
+                        src="/logo-login.png"
+                        alt="Logo"
+                        style={{ width: '80px', borderRadius: '10px', marginBottom: '15px' }}
                     />
-                    <h2 style={{color: '#1f2937', margin: '0 0 5px 0'}}>Liga San Mateo</h2>
-                    <p style={{color: '#6b7280', fontSize: '0.9rem'}}>
-                        {isRegistering ? 'Crea tu cuenta para comenzar' : 'Inicia sesión en tu cuenta'}
+                    <h2 style={{ color: '#1f2937', margin: '0 0 5px 0' }}>Liga San Mateo</h2>
+                    <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>
+                        Acceso de administración
                     </p>
                 </div>
 
                 {error && (
                     <div style={{
-                        background: '#fee2e2', color: '#991b1b', padding: '10px', 
-                        borderRadius: '6px', marginBottom: '20px', fontSize: '0.9rem', textAlign: 'center'
+                        background: '#fee2e2', color: '#991b1b', padding: '10px',
+                        borderRadius: '6px', marginBottom: '20px', fontSize: '0.9rem', textAlign: 'center',
                     }}>
                         {error}
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                     <div>
-                        <label style={{display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#374151', marginBottom: '5px', textTransform: 'uppercase'}}>
-                            Correo Electrónico
-                        </label>
-                        <input 
-                            type="email" 
-                            required 
+                        <label style={labelStyle}>Correo Electrónico</label>
+                        <input
+                            type="email"
+                            required
+                            autoComplete="username"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            style={{width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '1rem', boxSizing:'border-box'}}
+                            style={inputStyle}
                             placeholder="ejemplo@correo.com"
                         />
                     </div>
 
                     <div>
-                        <label style={{display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#374151', marginBottom: '5px', textTransform: 'uppercase'}}>
-                            Contraseña
-                        </label>
-                        <input 
-                            type="password" 
-                            required 
+                        <label style={labelStyle}>Contraseña</label>
+                        <input
+                            type="password"
+                            required
+                            autoComplete="current-password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            style={{width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '1rem', boxSizing:'border-box'}}
+                            style={inputStyle}
                             placeholder="******"
                         />
                     </div>
 
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         disabled={loading}
                         className="btn"
                         style={{
-                            background: '#2563eb', color: 'white', padding: '12px', borderRadius: '8px', 
-                            fontSize: '1rem', fontWeight: 'bold', border: 'none', cursor: 'pointer', marginTop: '10px'
+                            background: '#2563eb', color: 'white', padding: '12px', borderRadius: '8px',
+                            fontSize: '1rem', fontWeight: 'bold', border: 'none',
+                            cursor: loading ? 'not-allowed' : 'pointer', marginTop: '10px',
+                            opacity: loading ? 0.7 : 1,
                         }}
                     >
-                        {loading ? 'Procesando...' : (isRegistering ? 'Registrarse' : 'Entrar')}
+                        {loading ? 'Entrando...' : 'Entrar'}
                     </button>
                 </form>
-
-                <div style={{textAlign: 'center', marginTop: '20px', fontSize: '0.9rem', color: '#666'}}>
-                    {isRegistering ? '¿Ya tienes cuenta?' : '¿No tienes cuenta?'}
-                    <button 
-                        onClick={() => { setIsRegistering(!isRegistering); setError(''); }}
-                        style={{
-                            background: 'none', border: 'none', color: '#2563eb', fontWeight: 'bold', 
-                            cursor: 'pointer', marginLeft: '5px', textDecoration: 'underline'
-                        }}
-                    >
-                        {isRegistering ? 'Inicia Sesión' : 'Regístrate aquí'}
-                    </button>
-                </div>
             </div>
         </div>
     );
+};
+
+const labelStyle: React.CSSProperties = {
+    display: 'block', fontSize: '0.8rem', fontWeight: 'bold',
+    color: '#374151', marginBottom: '5px', textTransform: 'uppercase',
+};
+
+const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '12px', borderRadius: '8px',
+    border: '1px solid #d1d5db', fontSize: '1rem', boxSizing: 'border-box',
 };
 
 export default Login;

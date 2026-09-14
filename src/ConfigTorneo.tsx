@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc, orderBy, query } from 'firebase/firestore';
+import { getColName, CATEGORIAS } from './ligaConfig';
 
 interface Equipo {
     id: string;
@@ -34,13 +35,7 @@ export const CONFIG_DEFAULT: ConfigCategoria = {
 
 const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/166/166344.png';
 
-const CATEGORIAS = [
-    { id: 'LIBRE',           label: '🏀 LIBRE'           },
-    { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL' },
-    { id: 'U16_FEMENINO',    label: '👧 U16 FEMENINO'    },
-    { id: 'U16M',            label: '👦 U16 MASCULINO'   },
-    { id: 'MASTER40',        label: '🍷 MASTER 40'       },
-];
+
 
 const FASES_DISPONIBLES = [
     { id: 'PLAYIN',     label: '⚡ Play-In'    },
@@ -67,8 +62,7 @@ const ConfigTorneo: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     useEffect(() => {
         setLoading(true);
         setSaved(false);
-        const colEq = catActiva.trim().toUpperCase() === 'MASTER40'
-            ? 'equipos' : `equipos_${catActiva.trim().toUpperCase()}`;
+        const colEq = getColName('equipos', catActiva);
 
         Promise.all([
             getDoc(doc(db, 'config_torneo', catActiva)),
@@ -96,8 +90,7 @@ const ConfigTorneo: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             // Guardar config
             await setDoc(doc(db, 'config_torneo', catActiva), config);
             // Guardar grupo de cada equipo
-            const colEq = catActiva.trim().toUpperCase() === 'MASTER40'
-                ? 'equipos' : `equipos_${catActiva.trim().toUpperCase()}`;
+            const colEq = getColName('equipos', catActiva);
             await Promise.all(
                 equipos.map(eq =>
                     updateDoc(doc(db, colEq, eq.id), {

@@ -4,6 +4,7 @@ import {
     collection, query, onSnapshot, orderBy,
     deleteDoc, doc, getDocs, where, updateDoc, writeBatch, addDoc, setDoc
 } from 'firebase/firestore';
+import { getColName } from './ligaConfig';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 import { fetchPatrocinadoresVigentes, appendSponsorStrip } from './sponsors';
 
@@ -24,7 +25,11 @@ interface Match {
     equipoVisitanteNombre: string;
     marcadorLocal?: number;
     marcadorVisitante?: number;
+    cuartosLocal?: Record<string, number>;
+    cuartosVisitante?: Record<string, number>;
     enVivo?: boolean;
+    esForfait?: boolean;
+    statsAplicadas?: boolean;
 }
 
 interface Equipo {
@@ -56,10 +61,6 @@ interface Stat {
 // ─────────────────────────────────────────────
 const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/451/451716.png';
 
-const getColName = (base: string, categoria: string) => {
-    const cat = categoria.trim().toUpperCase();
-    return (cat === 'MASTER40' || cat === 'MASTER') ? base : `${base}_${cat}`;
-};
 
 const FASES_PLAYOFF = new Set(['FINAL', 'SEMIS', 'SEMIFINAL', 'CUARTOS', 'OCTAVOS', '3ER LUGAR', 'PLAYOFF', 'PLAYOFFS']);
 
@@ -755,7 +756,7 @@ const BoxScoreModal = memo(({
 
             // ── Footer ──
             ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
-            ctx.fillText('Liga Metropolitana Eje Este  ·  San Mateo, Aragua', W / 2, H - 14);
+            ctx.fillText('Liga de Baloncesto San Mateo  ·  San Mateo, Aragua', W / 2, H - 14);
 
             // ── Franja de patrocinadores (oro y plata) ──
             const patrocinadores = await fetchPatrocinadoresVigentes(['oro', 'plata']);
@@ -1350,7 +1351,7 @@ const MatchCard = memo(({
                     : `${m.equipoLocalNombre} vs ${m.equipoVisitanteNombre} · ${m.fechaAsignada}`;
                 try {
                     if (navigator.canShare?.({ files: [file] })) {
-                        await navigator.share({ files: [file], title, text: '🏀 Liga Metropolitana Eje Este' });
+                        await navigator.share({ files: [file], title, text: '🏀 Liga de Baloncesto San Mateo' });
                     } else {
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a'); a.href = url; a.download = 'partido.png'; a.click();
@@ -1611,7 +1612,7 @@ const CalendarViewer: React.FC<{ rol?: string; onClose: () => void; categoria: s
                     <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
                         📅 Calendario {categoria}
                     </h2>
-                    <p style={{ margin: '2px 0 0', fontSize: '0.6rem', color: '#94a3b8' }}>Liga Metropolitana Eje Este</p>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.6rem', color: '#94a3b8' }}>Liga de Baloncesto San Mateo</p>
                 </div>
                 <button onClick={onClose} style={{ background: 'none', color: '#3b82f6', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem' }}>
                     ← VOLVER

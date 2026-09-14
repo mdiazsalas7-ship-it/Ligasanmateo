@@ -4,6 +4,7 @@ import {
     collection, getDocs, doc, updateDoc, deleteDoc,
     addDoc, query, where, orderBy, writeBatch
 } from 'firebase/firestore';
+import { getColName } from './ligaConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // ─────────────────────────────────────────────
@@ -73,8 +74,8 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
     const photoInputRef = useRef<HTMLInputElement>(null);
     const photoTargetId = useRef<string>('');
 
-    const colEquipos   = categoria === 'MASTER40' ? 'equipos'   : `equipos_${categoria}`;
-    const colJugadores = categoria === 'MASTER40' ? 'jugadores' : `jugadores_${categoria}`;
+    const colEquipos   = getColName('equipos',   categoria);
+    const colJugadores = getColName('jugadores', categoria);
 
     // ── Carga de equipos ──
     const fetchEquipos = async () => {
@@ -513,7 +514,7 @@ const AdminEquipos: React.FC<{ onClose: () => void; categoria: string }> = ({
                                     <img src={LOGO_LIGA} alt="Logo" style={{ height: 75, objectFit: 'contain' }} />
                                     <div style={{ textAlign: 'center' }}>
                                         <h1 style={{ margin: 0, fontSize: '1.4rem', color: '#1e3a8a', textTransform: 'uppercase', fontWeight: 900 }}>
-                                            Liga Metropolitana Eje Este
+                                            Liga de Baloncesto San Mateo
                                         </h1>
                                         <div style={{ background: '#1e3a8a', color: 'white', padding: '4px 15px', borderRadius: 4, fontSize: '0.9rem', fontWeight: 'bold', marginTop: 5, display: 'inline-block' }}>
                                             FORMA 21 - NÓMINA OFICIAL

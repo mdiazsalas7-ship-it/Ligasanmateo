@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { db, auth } from './firebase';
+import { esAdminPorEmail } from './ligaConfig';
 import {
     collection, query, onSnapshot, orderBy,
     doc, updateDoc, getDoc, where, getDocs
@@ -264,11 +265,9 @@ const PlayoffViewer: React.FC<PlayoffViewerProps> = ({ categoria, onClose }) => 
         ? 'calendario' : `calendario_${categoria.trim().toUpperCase()}`;
 
     useEffect(() => {
-        const user = auth.currentUser;
-        if (!user) return;
-        getDoc(doc(db, 'usuarios', user.uid))
-            .then(snap => { if (snap.data()?.rol === 'admin') setIsAdmin(true); })
-            .catch(() => {});
+        // Admin = correo autorizado (ligaConfig). Antes leía la colección
+        // `usuarios`, ya eliminada.
+        setIsAdmin(esAdminPorEmail(auth.currentUser?.email));
     }, []);
 
     useEffect(() => {

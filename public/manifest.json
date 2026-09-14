@@ -1,7 +1,7 @@
 {
-  "name": "Liga Metropolitana Eje Este",
-  "short_name": "LIMEBAL",
-  "description": "App oficial de la Liga Metropolitana de Baloncesto Eje Este",
+  "name": "Liga de Baloncesto San Mateo",
+  "short_name": "San Mateo",
+  "description": "App oficial de la Liga de Baloncesto San Mateo",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

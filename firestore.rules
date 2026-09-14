@@ -5,32 +5,21 @@ service cloud.firestore {
     // ─────────────────────────────────────────────
     // HELPER: ¿Es admin?
     //  - Custom claim "admin" (lo asigna la Cloud Function syncAdminClaim)
-    //  - Fallback: email del dueño de la liga (bootstrap, por si el claim
-    //    aún no se ha propagado al token)
+    //  - Fallback: correos autorizados (bootstrap, por si el claim
+    //    aún no se propagó al token, o si las Functions están caídas
+    //    por un corte de facturación)
+    //
+    //  ⚠️ Esta lista debe coincidir con ADMIN_EMAILS en:
+    //       - src/ligaConfig.ts
+    //       - storage.rules
+    //       - functions/src/index.ts
     // ─────────────────────────────────────────────
     function isAdmin() {
       return request.auth != null && (
         request.auth.token.admin == true ||
-        request.auth.token.email == 'mdiazsalas7@gmail.com'
+        request.auth.token.email == 'adminlibasan@gmail.com' ||
+        request.auth.token.email == 'yolfren1985@gmail.com'
       );
-    }
-
-    // ─────────────────────────────────────────────
-    // USUARIOS
-    //  - Cada quien lee su propio perfil; admin lee todos
-    //  - Al registrarse solo puede crearse con rol 'pendiente'
-    //  - Un usuario NO puede cambiar su propio rol
-    //    (solo un admin, vía la regla catch-all de abajo)
-    // ─────────────────────────────────────────────
-    match /usuarios/{uid} {
-      allow read: if isAdmin() || (request.auth != null && request.auth.uid == uid);
-      allow create: if request.auth != null
-                    && request.auth.uid == uid
-                    && request.resource.data.rol == 'pendiente';
-      allow update: if request.auth != null
-                    && request.auth.uid == uid
-                    && request.resource.data.rol == resource.data.rol;
-      allow delete: if false;
     }
 
     // ─────────────────────────────────────────────
@@ -56,29 +45,16 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────
-    // FORMA21S + subcolección jugadores
-    // ─────────────────────────────────────────────
-    match /forma21s/{formaId} {
-      allow read: if true;
-      allow write: if isAdmin();
-
-      match /jugadores/{jugadorId} {
-        allow read: if true;
-        allow write: if isAdmin();
-      }
-    }
-
-    // ─────────────────────────────────────────────
     // CATCH-ALL: todas las demás colecciones
     //  (equipos*, calendario*, jugadores*, noticias, entrevistas,
-    //   stats_partido, jugadas_partido, config_torneo, ...)
+    //   stats_partido, jugadas_partido, config_torneo, categorias, ...)
     //  - Lectura pública (la app muestra todo sin login)
     //  - Escritura: SOLO admin
-    //  Nota: las colecciones sensibles se excluyen de la lectura
-    //  pública porque ya tienen su propio bloque arriba.
+    //
+    //  Ya no existen las colecciones `usuarios` ni `forma21s`.
     // ─────────────────────────────────────────────
     match /{col}/{docId} {
-      allow read: if !(col in ['usuarios', 'fcm_tokens', 'mesa_estado']);
+      allow read: if !(col in ['fcm_tokens', 'mesa_estado']);
       allow write: if isAdmin();
     }
   }

@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { getColName, CATEGORIA_IDS } from './ligaConfig';
 
-const getColName = (base: string, cat: string) =>
-    cat === 'MASTER40' ? base : `${base}_${cat}`;
 
-const TODAS_CATS  = ['LIBRE', 'INTERINDUSTRIAL', 'U16_FEMENINO', 'U16M', 'MASTER40'];
+const TODAS_CATS  = CATEGORIA_IDS;
 const LIGA_LOGO   = '/logo-liga.jpg';
 const SPEED       = 0.6; // px por frame
 
@@ -212,7 +211,7 @@ const MetroTicker: React.FC<{ lideres?: LiderTicker[] }> = ({ lideres = [] }) =>
             }
 
             if (result.length === 0)
-                result.push({ type: 'noticia', icon: '🏀', text: 'Bienvenidos a la Liga Metropolitana Eje Este 2026' });
+                result.push({ type: 'noticia', icon: '🏀', text: 'Bienvenidos a la Liga de Baloncesto San Mateo 2026' });
 
             setItems(result);
             setLoaded(true);

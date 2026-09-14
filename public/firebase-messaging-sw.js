@@ -123,7 +123,7 @@ self.addEventListener('fetch', event => {
 // FCM — Notificaciones en background
 // ─────────────────────────────────────────────────────────────
 messaging.onBackgroundMessage(payload => {
-    const titulo = payload.notification?.title ?? payload.data?.title ?? '🏀 Liga Metropolitana';
+    const titulo = payload.notification?.title ?? payload.data?.title ?? '🏀 Liga de Baloncesto San Mateo';
     const cuerpo = payload.notification?.body  ?? payload.data?.body  ?? 'Hay novedades en la liga';
     const imagen = payload.notification?.image ?? payload.data?.image ?? null;
     const tipo   = payload.data?.type ?? '';

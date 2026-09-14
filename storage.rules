@@ -2,10 +2,13 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
+    // ⚠️ Debe coincidir con ADMIN_EMAILS en src/ligaConfig.ts,
+    //    firestore.rules y functions/src/index.ts
     function isAdmin() {
       return request.auth != null && (
         request.auth.token.admin == true ||
-        request.auth.token.email == 'mdiazsalas7@gmail.com'
+        request.auth.token.email == 'adminlibasan@gmail.com' ||
+        request.auth.token.email == 'yolfren1985@gmail.com'
       );
     }
 

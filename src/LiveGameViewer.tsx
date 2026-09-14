@@ -4,12 +4,14 @@ import {
     collection, query, where, onSnapshot,
     limit, doc, getDocs
 } from 'firebase/firestore';
+import { getColName } from './ligaConfig';
 
 // ─────────────────────────────────────────────
 // TIPOS
 // ─────────────────────────────────────────────
 interface Jugada {
     id: string;
+    jugadorId?: string;
     jugadorNombre: string;
     jugadorNumero: string;
     equipo: 'local' | 'visitante';
@@ -33,6 +35,7 @@ interface PartidoVivo {
     logoVisitante?: string;
     categoria?: string;
     enVivo?: boolean;
+    estatus?: string;
 }
 
 const ACCIONES: Record<string, { label: string; icon: string; color: string }> = {
@@ -60,8 +63,7 @@ const LiveGameViewer: React.FC<{
     const [lastJugada, setLastJugada] = useState<Jugada | null>(null);
     const [flash, setFlash]       = useState(false);
 
-    const colCal = categoria.trim().toUpperCase() === 'MASTER40'
-        ? 'calendario' : `calendario_${categoria.trim().toUpperCase()}`;
+    const colCal = getColName('calendario', categoria);
 
     // ── Partido en tiempo real ──
     useEffect(() => {
@@ -76,8 +78,7 @@ const LiveGameViewer: React.FC<{
 
     useEffect(() => {
         if (!partido) return;
-        const colEq = categoria.trim().toUpperCase() === 'MASTER40'
-            ? 'equipos' : `equipos_${categoria.trim().toUpperCase()}`;
+        const colEq = getColName('equipos', categoria);
         getDocs(collection(db, colEq)).then(snap => {
             const map: Record<string, string> = {};
             snap.docs.forEach(d => {
@@ -95,8 +96,7 @@ const LiveGameViewer: React.FC<{
     // ── Info de jugadores (jugadorId → {nombre, numero, fotoUrl}) ──
     const [playerInfo, setPlayerInfo] = useState<Record<string, { nombre: string; numero: string; fotoUrl: string }>>({});
     useEffect(() => {
-        const cat = categoria.trim().toUpperCase();
-        const colJug = cat === 'MASTER40' ? 'jugadores' : `jugadores_${cat}`;
+        const colJug = getColName('jugadores', categoria);
         getDocs(collection(db, colJug)).then(snap => {
             const map: Record<string, { nombre: string; numero: string; fotoUrl: string }> = {};
             snap.docs.forEach(d => {
@@ -812,8 +812,7 @@ export const LiveGameSelector: React.FC<{
 }> = ({ categoria, onSelect, onClose }) => {
     const [partidos, setPartidos] = useState<any[]>([]);
 
-    const colCal = categoria.trim().toUpperCase() === 'MASTER40'
-        ? 'calendario' : `calendario_${categoria.trim().toUpperCase()}`;
+    const colCal = getColName('calendario', categoria);
 
     useEffect(() => {
         const q = query(

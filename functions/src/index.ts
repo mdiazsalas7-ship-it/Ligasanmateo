@@ -104,7 +104,7 @@ export const onNoticiaCreada = functions
         const titulo = data.titulo || 'Nueva noticia';
 
         await sendPush(
-            '📢 Liga Metropolitana Eje Este',
+            '📢 Liga de Baloncesto San Mateo',
             titulo,
             { type: 'noticia', id: snap.id }
         );
@@ -123,7 +123,7 @@ exports.onVideoPublicado = functions
         const desc   = data.descripcion || data.description || 'Mira el nuevo contenido de la liga';
 
         await sendPush(
-            '🎥 Nuevo Video · Liga Metropolitana',
+            '🎥 Nuevo Video · San Mateo',
             `${titulo} — ${desc}`,
             { type: 'video', id: snap.id }
         );
@@ -289,53 +289,12 @@ CALENDARIO_COLS.forEach(colName => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// TRIGGER 7: Sincronizar custom claim "admin"
+// NOTA: se eliminó la función syncAdminClaim.
+// Dependía de la colección `usuarios`, que ya no existe (la app
+// no tiene registro de usuarios; solo el admin entra y su
+// autoridad se valida por correo en las reglas de Firestore y
+// Storage). Sin `usuarios` no hay nada que sincronizar.
 //
-// Cuando cambia usuarios/{uid}, se pone/quita el claim admin
-// según el campo `rol` (o el email del dueño de la liga).
-// Las reglas de Firestore/Storage validan contra este claim,
-// así que el rol YA NO puede falsificarse desde el cliente.
-//
-// Nota: el usuario debe cerrar sesión y volver a entrar (o el
-// cliente refrescar el token con getIdToken(true)) para que el
-// claim nuevo llegue a su token.
+// ⚠️ Al desplegar, borrar la función vieja en Firebase:
+//     firebase functions:delete syncAdminClaim --region us-central1
 // ─────────────────────────────────────────────────────────────
-const OWNER_EMAIL = 'mdiazsalas7@gmail.com';
-
-export const syncAdminClaim = functions
-    .region('us-central1')
-    .firestore
-    .document('usuarios/{uid}')
-    .onWrite(async (change, context) => {
-        const uid = context.params.uid;
-
-        // Doc borrado → quitar claim
-        if (!change.after.exists) {
-            try {
-                await admin.auth().setCustomUserClaims(uid, { admin: false });
-            } catch (e) {
-                console.error(`[claims] No se pudo limpiar claim de ${uid}:`, e);
-            }
-            return;
-        }
-
-        const data = change.after.data() || {};
-
-        let email = '';
-        try {
-            const userRecord = await admin.auth().getUser(uid);
-            email = userRecord.email || '';
-        } catch (e) {
-            console.error(`[claims] Usuario Auth no encontrado para ${uid}:`, e);
-            return;
-        }
-
-        const debeSerAdmin = data.rol === 'admin' || email === OWNER_EMAIL;
-
-        try {
-            await admin.auth().setCustomUserClaims(uid, { admin: debeSerAdmin });
-            console.log(`[claims] ${email} (${uid}) → admin: ${debeSerAdmin}`);
-        } catch (e) {
-            console.error(`[claims] Error asignando claim a ${uid}:`, e);
-        }
-    });

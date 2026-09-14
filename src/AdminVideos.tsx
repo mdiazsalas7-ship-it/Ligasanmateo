@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { db, storage } from './firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, query } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, listAll } from 'firebase/storage';
 
 const AdminVideos = ({ onClose }: { onClose: () => void }) => {

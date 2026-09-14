@@ -24,23 +24,18 @@ import LiveGameViewer, { LiveGameSelector } from './LiveGameViewer';
 import { useNotifications } from './useNotifications';
 import ResetTemporada from './ResetTemporada';
 import ConfigTorneo from './ConfigTorneo';
+import {
+    CATEGORIAS as CATEGORIAS_DISPONIBLES,
+    CATEGORIA_IDS,
+    getColName,
+    esAdminPorEmail,
+} from './ligaConfig';
 
 // ─────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────
 
-const CATEGORIAS_DISPONIBLES = [
-    { id: 'INTERINDUSTRIAL', label: '🏭 INTERINDUSTRIAL' },
-    { id: 'U16_FEMENINO',    label: '👧 U16 FEMENINO'    },
-    { id: 'U16M',            label: '👦 U16 MASCULINO'   },
-    { id: 'LIBRE',           label: '🏀 LIGA FLORES'     },
-    { id: 'MASTER40',        label: '🍷 MASTER 40'       },
-];
-
 const DEFAULT_LOGO = 'https://cdn-icons-png.flaticon.com/512/15568/15568903.png';
-
-const getColName = (base: string, cat: string) =>
-    cat === 'MASTER40' ? base : `${base}_${cat}`;
 
 // ─────────────────────────────────────────────
 // HELPER: ORDENAMIENTO FIBA CORRECTO
@@ -189,7 +184,7 @@ function App() {
     const [resultadosRecientes, setResultadosRecientes] = useState<any[]>([]);
     const [teamLogos, setTeamLogos]                 = useState<Record<string, string>>({});
     const [allMatchesGlobal, setAllMatchesGlobal]   = useState<any[]>([]);
-    const [loading, setLoading]                     = useState(true);
+    const [, setLoading]                            = useState(true);
     const [activeView, setActiveView]               = useState('dashboard');
     const [showReset, setShowReset]                 = useState(false);
     const [showConfig, setShowConfig]               = useState(false);
@@ -222,11 +217,11 @@ function App() {
 
     // ── Detectar partidos EN VIVO en todas las categorías ──
     useEffect(() => {
-        const categorias = ['LIBRE','INTERINDUSTRIAL','U16_FEMENINO','U16M','MASTER40'];
+        const categorias = CATEGORIA_IDS;
         const unsubs: (() => void)[] = [];
         const counts: Record<string, number> = {};
         categorias.forEach(cat => {
-            const colCal = cat === 'MASTER40' ? 'calendario' : `calendario_${cat}`;
+            const colCal = getColName('calendario', cat);
             const q2 = query(collection(db, colCal), where('enVivo', '==', true));
             const unsub = onSnapshot(q2, snap => {
                 counts[cat] = snap.docs.length;
@@ -253,18 +248,14 @@ function App() {
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, (u) => {
             if (u) {
-                // Refrescar token para recibir el custom claim "admin"
-                // (lo asigna la Cloud Function syncAdminClaim; las reglas
-                // de Firestore validan contra ese claim, no contra la UI)
-                u.getIdToken(true).catch(() => {});
-                onSnapshot(doc(db, 'usuarios', u.uid), (snap) => {
-                    const data = snap.data();
-                    setUser({
-                        uid: u.uid,
-                        email: u.email,
-                        rol: (u.email === 'mdiazsalas7@gmail.com' || data?.rol === 'admin')
-                            ? 'admin' : 'fan',
-                    });
+                // El único criterio de admin es el correo (lista central en
+                // ligaConfig). Las reglas de Firestore validan lo mismo del
+                // lado servidor, así que esto solo decide qué botones se ven.
+                // Ya no se consulta la colección `usuarios` (eliminada).
+                setUser({
+                    uid: u.uid,
+                    email: u.email,
+                    rol: esAdminPorEmail(u.email) ? 'admin' : 'fan',
                 });
             } else {
                 setUser(null);
@@ -352,10 +343,19 @@ function App() {
                 });
 
                 // 4. Ordenamiento FIBA correcto (función separada, sin bug)
-                const grupoA = equiposConStats.filter(e =>
-                    e.grupo?.toUpperCase() === 'A' || e.grupo?.toUpperCase() === 'ÚNICO'
-                );
-                const grupoB = equiposConStats.filter(e => e.grupo?.toUpperCase() === 'B');
+                // Los equipos sin campo `grupo` (p. ej. toda la categoría MASTER40)
+                // antes no caían en ningún grupo y DESAPARECÍAN de la tabla.
+                // Ahora, si no hay ningún equipo marcado como grupo B, se asume
+                // torneo de grupo único y todos entran en la tabla A.
+                const hayGrupoB = equiposConStats.some(e => (e.grupo || '').toUpperCase() === 'B');
+                const grupoA = equiposConStats.filter(e => {
+                    const g = (e.grupo || '').toUpperCase();
+                    if (!hayGrupoB) return true;
+                    return g === 'A' || g === 'ÚNICO' || g === '';
+                });
+                const grupoB = hayGrupoB
+                    ? equiposConStats.filter(e => (e.grupo || '').toUpperCase() === 'B')
+                    : [];
 
                 setEquiposA(resolverEmpate(grupoA, regularFinalizados));
                 setEquiposB(resolverEmpate(grupoB, regularFinalizados));
@@ -520,7 +520,7 @@ function App() {
                     {/* Título */}
                     <div style={{ textAlign: 'center', flex: 1, padding: '0 8px' }}>
                         <h1 style={{ fontSize: '0.9rem', fontWeight: 900, color: 'white', margin: 0, textTransform: 'uppercase', letterSpacing: '1px', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
-                            Liga Metropolitana
+                            Liga de Baloncesto San Mateo
                         </h1>
                         <p style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.65)', margin: '2px 0 0', fontWeight: 700, letterSpacing: '2px' }}>
                             EJE ESTE • 2026
@@ -650,15 +650,7 @@ function App() {
             {/* ── Contenido principal ── */}
             <main style={{ padding: activeView === 'mesa' ? 0 : 15, maxWidth: activeView === 'mesa' ? '100%' : 500, margin: '0 auto' }}>
                 {activeView === 'login' ? (
-                    <div className="fade-in">
-                        <Login />
-                        <button
-                            onClick={() => setActiveView('dashboard')}
-                            style={{ width: '100%', marginTop: 20, background: 'none', border: 'none', color: '#94a3b8', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.7rem' }}
-                        >
-                            ← VOLVER
-                        </button>
-                    </div>
+                    <Login onClose={() => setActiveView('dashboard')} />
                 ) : activeView === 'dashboard' ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 25 }}>
 
@@ -1043,12 +1035,12 @@ function App() {
                 ) : (
                     <>
                         {activeView === 'noticias'    && (isAdmin ? <NewsAdmin onClose={() => setActiveView('dashboard')} /> : <NewsFeed onClose={() => setActiveView('dashboard')} />)}
-                        {activeView === 'stats'       && <StatsViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
-                        {activeView === 'playoff'     && <PlayoffViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
-                        {activeView === 'tabla'       && <StandingsViewer equipos={[...equiposA, ...equiposB]} partidos={allMatchesGlobal} categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
-                        {activeView === 'calendario'  && <CalendarViewer categoria={categoriaActiva} rol={user?.rol} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'stats'       && <StatsViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'playoff'     && <PlayoffViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'tabla'       && <StandingsViewer equipos={[...equiposA, ...equiposB]} partidos={allMatchesGlobal} categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'calendario'  && <CalendarViewer categoria={categoriaActiva} rol={user?.rol} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'mesa'        && isAdmin && <MesaTecnica categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
-                        {activeView === 'equipos_pub'  && <TeamsPublicViewer categoria={categoriaActiva} onCategoriaChange={setCategoriaActiva} onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'equipos_pub'  && <TeamsPublicViewer categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'equipos'     && isAdmin && <AdminEquipos categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'adminVideos' && isAdmin && <AdminVideos onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'patrocinadores' && isAdmin && <AdminPatrocinadores onClose={() => setActiveView('dashboard')} />}

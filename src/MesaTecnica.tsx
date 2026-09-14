@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { db } from './firebase';
 import {
     doc, updateDoc, onSnapshot, collection, query,
-    getDocs, setDoc, increment, where, writeBatch,
+    getDocs, setDoc, increment, where,
     limit, addDoc, deleteDoc, getDoc, serverTimestamp
 } from 'firebase/firestore';
+import { getColName } from './ligaConfig';
 
 // ─────────────────────────────────────────────
 // TIPOS
@@ -44,10 +45,6 @@ interface Jugada {
 // ─────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────
-const getColName = (base: string, categoria: string) => {
-    const cat = categoria.trim().toUpperCase();
-    return (cat === 'MASTER40' || cat === 'MASTER') ? base : `${base}_${cat}`;
-};
 
 const puntosDeAccion = (accion: string) =>
     accion === 'tirosLibres' ? 1 : accion === 'dobles' ? 2 : accion === 'triples' ? 3 : 0;
@@ -272,20 +269,14 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     // ── FORFAIT / W.O. ──
     const executeForfait = async (match: any, faltante: 'local' | 'visitante') => {
         try {
-            const batch = writeBatch(db);
-            const lRef = doc(db, colTeams, match.equipoLocalId);
-            const vRef = doc(db, colTeams, match.equipoVisitanteId);
-            const calRef = doc(db, colCal, match.id);
-            if (faltante === 'visitante') {
-                batch.update(calRef, { estatus: 'finalizado', marcadorLocal: 20, marcadorVisitante: 0, esForfait: true });
-                batch.update(lRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(20) });
-                batch.update(vRef, { derrotas: increment(1), puntos_contra: increment(20) });
-            } else {
-                batch.update(calRef, { estatus: 'finalizado', marcadorLocal: 0, marcadorVisitante: 20, esForfait: true });
-                batch.update(vRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(20) });
-                batch.update(lRef, { derrotas: increment(1), puntos_contra: increment(20) });
-            }
-            await batch.commit();
+            // La tabla de posiciones se calcula SIEMPRE desde el calendario
+            // (App.tsx y StandingsViewer). Por eso aquí solo se marca el
+            // resultado del partido: los campos victorias/puntos/puntos_favor
+            // de los equipos ya no se usan y escribirlos solo desincronizaba.
+            await updateDoc(doc(db, colCal, match.id), faltante === 'visitante'
+                ? { estatus: 'finalizado', enVivo: false, marcadorLocal: 20, marcadorVisitante: 0, esForfait: true, statsAplicadas: true }
+                : { estatus: 'finalizado', enVivo: false, marcadorLocal: 0, marcadorVisitante: 20, esForfait: true, statsAplicadas: true }
+            );
             showToast('✅ W.O. APLICADO', '#10b981');
             setForfaitModal(null);
         } catch (e) {
@@ -588,60 +579,54 @@ const MesaTecnica: React.FC<{ categoria: string; onClose: () => void }> = ({ cat
     }, [matchData, colCal, cuartoActual, onClose, showToast, saveEstado, presentLocal, presentVisitante, onCourtLocal, onCourtVisitante]);
 
     // ── Finalizar partido ──
+    //
+    // Antes esto hacía un writeBatch gigante que actualizaba los
+    // acumulados de CADA jugador y de AMBOS equipos. Tenía dos fallas:
+    //
+    //   1) batch.update() sobre un doc que ya no existe (un jugador
+    //      borrado después de registrarle stats) hacía fallar el batch
+    //      COMPLETO → el partido nunca quedaba finalizado.
+    //   2) Al correrse dos veces, los increment() se aplicaban de nuevo
+    //      y duplicaban todo.
+    //
+    // Además esos acumulados no los lee NADIE: el dashboard, la tabla de
+    // posiciones, los líderes y el perfil del jugador se calculan todos
+    // desde `stats_partido` y desde el calendario. Eran escrituras muertas
+    // que solo podían desincronizarse.
+    //
+    // Ahora finalizar = una sola escritura sobre el partido. Imposible
+    // que falle a medias, e idempotente por diseño.
     const handleFinalize = useCallback(() => {
         if (!matchData) return;
+
+        if (matchData.estatus === 'finalizado') {
+            showToast('Este partido ya está finalizado', '#f59e0b');
+            return;
+        }
+
         showConfirm('¿FINALIZAR PARTIDO Y ACTUALIZAR TABLAS?', async () => {
             try {
-                const batch = writeBatch(db);
-                const localGana = matchData.marcadorLocal > matchData.marcadorVisitante;
-                const visitanteGana = matchData.marcadorVisitante > matchData.marcadorLocal;
-
-                const lRef = doc(db, colTeams, matchData.equipoLocalId);
-                const vRef = doc(db, colTeams, matchData.equipoVisitanteId);
-
-                if (localGana) {
-                    batch.update(lRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
-                    batch.update(vRef, { derrotas: increment(1), puntos: increment(1), puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
-                } else if (visitanteGana) {
-                    batch.update(vRef, { victorias: increment(1), puntos: increment(2), puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
-                    batch.update(lRef, { derrotas: increment(1), puntos: increment(1), puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
-                } else {
-                    // Empate (no debería pasar en basquetbol pero lo manejamos)
-                    batch.update(lRef, { puntos_favor: increment(matchData.marcadorLocal), puntos_contra: increment(matchData.marcadorVisitante) });
-                    batch.update(vRef, { puntos_favor: increment(matchData.marcadorVisitante), puntos_contra: increment(matchData.marcadorLocal) });
-                }
-
-                // Stats por jugador
-                const statsSnap = await getDocs(
-                    query(collection(db, 'stats_partido'), where('partidoId', '==', matchData.id))
-                );
-                statsSnap.forEach(sDoc => {
-                    const s = sDoc.data();
-                    batch.update(doc(db, colPlayers, s.jugadorId), {
-                        puntos: increment(Number(s.puntos) || 0),
-                        triples: increment(Number(s.triples) || 0),
-                        rebotes: increment(Number(s.rebotes) || 0),
-                        robos: increment(Number(s.robos) || 0),
-                        bloqueos: increment(Number(s.bloqueos) || 0),
-                        partidosJugados: increment(1),
-                    });
+                await updateDoc(doc(db, colCal, matchData.id), {
+                    estatus: 'finalizado',
+                    enVivo: false,
+                    reanudado: false,
+                    suspendidoEnCuarto: null,
+                    statsAplicadas: true,
+                    finalizadoEn: Date.now(),
                 });
 
-                batch.update(doc(db, colCal, matchData.id), {
-                    estatus: 'finalizado', enVivo: false,
-                    reanudado: false, suspendidoEnCuarto: null,
-                });
-                await batch.commit();
-                // Limpiar estado guardado de la mesa al finalizar
+                // Limpiar el estado guardado de la mesa
                 try { await deleteDoc(doc(db, 'mesa_estado', matchData.id)); } catch (_) {}
+
                 showToast('✅ Partido finalizado', '#10b981');
                 setTimeout(() => onClose(), 1200);
-            } catch (e) {
-                showToast('Error al finalizar ⚠️', '#ef4444');
-                console.error(e);
+            } catch (e: any) {
+                // Mensaje con la etapa exacta que falló, no un error genérico
+                showToast(`Error al finalizar: ${e?.code || e?.message || 'desconocido'}`, '#ef4444');
+                console.error('[MesaTecnica] handleFinalize:', e);
             }
         });
-    }, [matchData, colCal, colTeams, colPlayers, onClose, showToast]);
+    }, [matchData, colCal, onClose, showToast]);
 
     // ── Sustitución ──
     const executeSwap = useCallback(async (newPlayerId: string) => {

@@ -129,7 +129,7 @@ const InstallPrompt: React.FC = () => {
                 style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover', border: '2px solid #f97316', flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 900, fontSize: '0.85rem', lineHeight: 1.2 }}>
-                    Instalar LIMEBAL
+                    Instalar App
                 </div>
                 <div style={{ fontSize: '0.7rem', color: '#cbd5e1', marginTop: 2 }}>
                     Acceso directo y notificaciones

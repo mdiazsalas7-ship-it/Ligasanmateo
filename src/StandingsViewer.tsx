@@ -551,7 +551,7 @@ const StandingsViewer: React.FC<Props> = ({ equipos = [], partidos = [], onClose
                 const file = new File([blob], `tabla_${categoria}.png`, { type: 'image/png' });
                 try {
                     if (navigator.canShare?.({ files: [file] })) {
-                        await navigator.share({ files: [file], title: `Tabla ${categoria} · Liga Metropolitana` });
+                        await navigator.share({ files: [file], title: `Tabla ${categoria} · Liga de Baloncesto San Mateo` });
                     } else {
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a'); a.href = url; a.download = `tabla_${categoria}.png`; a.click();

@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { db, storage } from './firebase'; 
-import { collection, addDoc, getDocs, deleteDoc, doc, Timestamp, query, orderBy, where, limit } from 'firebase/firestore';
+import { db, storage } from './firebase';
+import { collection, addDoc, getDocs, deleteDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-interface NewsItem { 
-    id: string; titulo: string; cuerpo: string; 
-    tipo: 'general' | 'sancion' | 'destacado'; fecha: any; imageUrl?: string; 
-}
+// ─────────────────────────────────────────────────────────────
+// PANEL DE PRENSA — redacción 100% manual.
+//
+// Se eliminó toda la generación de noticias con IA (OpenRouter):
+//   - La API key estaba escrita en el propio código del cliente,
+//     visible para cualquiera que abriera la app → riesgo de que
+//     un tercero la usara y gastara el crédito.
+//   - La función no estaba en uso.
+// El admin redacta título y cuerpo a mano.
+// ─────────────────────────────────────────────────────────────
 
-interface PartidoFinalizado {
-    id: string; local: string; visitante: string;
-    scoreL: number; scoreV: number; mvp: string;
-    puntosMvp: number; fecha: string; categoria: string;
+interface NewsItem {
+    id: string; titulo: string; cuerpo: string;
+    tipo: 'general' | 'sancion' | 'destacado'; fecha: any; imageUrl?: string;
 }
 
 // ── Toast ──
@@ -40,10 +45,6 @@ const ConfirmModal: React.FC<{ mensaje: string; onConfirm: () => void; onCancel:
     </div>
 );
 
-const CATEGORIAS = ['MASTER40', 'LIBRE', 'INTERINDUSTRIAL', 'U16_FEMENINO', 'U16M'];
-const p1 = "sk-or-v1-09b7a0e6db89101ea9fee4db191b4679";
-const p2 = "9ffbfd8188cc2de82ace935725c78f3b";
-
 const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [news, setNews]           = useState<NewsItem[]>([]);
     const [titulo, setTitulo]       = useState('');
@@ -51,93 +52,12 @@ const NewsAdmin: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [tipo, setTipo]           = useState<'general'|'sancion'|'destacado'>('general');
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [loading, setLoading]     = useState(false);
-    const [showMatchSelector, setShowMatchSelector] = useState(false);
-    const [recentMatches, setRecentMatches] = useState<PartidoFinalizado[]>([]);
-    const [loadingMatches, setLoadingMatches] = useState(false);
     const [toast, setToast]         = useState<{ msg: string; color: string } | null>(null);
     const [confirmId, setConfirmId] = useState<string | null>(null);
 
     const showToast = (msg: string, color = '#10b981') => {
         setToast({ msg, color });
         setTimeout(() => setToast(null), 2500);
-    };
-
-    const redactarConIA = async (matchData?: PartidoFinalizado) => {
-        setLoading(true);
-        const FULL_KEY = p1 + p2;
-        let prompt = "";
-        if (matchData) {
-            const dif = Math.abs(matchData.scoreL - matchData.scoreV);
-            const contexto = dif >= 15 ? "fue una PELA o PALIZA contundente" : dif <= 5 ? "fue un JUEGO CERRADO de INFARTO" : "fue un duelo muy disputado";
-            prompt = `Actúa como cronista deportivo de la Liga Metropolitana de Baloncesto (Categoría ${matchData.categoria}). Redacta una noticia explosiva (máx 130 palabras).
-PARTIDO: ${matchData.local} vs ${matchData.visitante}. SCORE: ${matchData.scoreL} - ${matchData.scoreV} (${contexto}). MVP: ${matchData.mvp} con ${matchData.puntosMvp} puntos.
-REQUISITOS:
-1. TÍTULO EN MAYÚSCULAS: Menciona quién ganó. Si ventaja >15 usa PELA. Si <5 usa INFARTO.
-2. CUERPO: Describe el ambiente. Resalta al MVP.
-3. ESTILO: Baloncesto criollo venezolano, apasionado y profesional.
-IMPORTANTE: Separa el título del cuerpo con la palabra CUERPO:`;
-        } else {
-            prompt = `Mejora este comunicado para la Liga Metropolitana: "${titulo}". Hazlo institucional y profesional. Máximo 100 palabras.`;
-        }
-        try {
-            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${FULL_KEY}`, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    model: "openai/gpt-3.5-turbo",
-                    messages: [
-                        { role: "system", content: "Eres el Jefe de Prensa de la Liga Metropolitana. Tu redacción es técnica, épica y conocedora del basket." },
-                        { role: "user", content: prompt }
-                    ]
-                })
-            });
-            const data = await response.json();
-            const texto = data.choices[0].message.content;
-            if (matchData && texto.includes("CUERPO:")) {
-                const partes = texto.split("CUERPO:");
-                setTitulo(partes[0].replace(/T[ÍI]TULO:/i, '').trim().toUpperCase());
-                setCuerpo(partes[1].trim());
-                setTipo('destacado');
-            } else {
-                setCuerpo(texto);
-            }
-        } catch {
-            showToast('Error con la IA. Revisa la conexión.', '#ef4444');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchRecentMatches = async () => {
-        setLoadingMatches(true);
-        try {
-            let allMatches: PartidoFinalizado[] = [];
-            for (const cat of CATEGORIAS) {
-                const colName = cat === 'MASTER40' ? 'calendario' : `calendario_${cat}`;
-                try {
-                    const q = query(collection(db, colName), where('estatus', '==', 'finalizado'), limit(5));
-                    const snap = await getDocs(q);
-                    const catMatches = await Promise.all(snap.docs.map(async (docSnap) => {
-                        const d = docSnap.data();
-                        let mvpNombre = "Figura destacada", mvpPuntos = 0;
-                        const statsSnap = await getDocs(query(collection(db, 'stats_partido'), where('partidoId', '==', docSnap.id)));
-                        statsSnap.forEach(s => {
-                            const st = s.data();
-                            const pts = (Number(st.tirosLibres)||0) + (Number(st.dobles)||0)*2 + (Number(st.triples)||0)*3;
-                            if (pts > mvpPuntos) { mvpPuntos = pts; mvpNombre = st.nombre || "Jugador"; }
-                        });
-                        return { id: docSnap.id, local: d.equipoLocalNombre, visitante: d.equipoVisitanteNombre, scoreL: d.marcadorLocal, scoreV: d.marcadorVisitante, mvp: mvpNombre, puntosMvp: mvpPuntos, fecha: d.fechaAsignada || '', categoria: cat } as PartidoFinalizado;
-                    }));
-                    allMatches = [...allMatches, ...catMatches];
-                } catch { /* categoría no existe aún */ }
-            }
-            setRecentMatches(allMatches.sort((a, b) => b.fecha.localeCompare(a.fecha)));
-            setShowMatchSelector(true);
-        } catch (e) {
-            showToast('Error al cargar resultados.', '#ef4444');
-        } finally {
-            setLoadingMatches(false);
-        }
     };
 
     const handlePublicar = async (e: React.FormEvent) => {
@@ -154,11 +74,12 @@ IMPORTANTE: Separa el título del cuerpo con la palabra CUERPO:`;
                 titulo: titulo.toUpperCase(), cuerpo, tipo,
                 fecha: Timestamp.now(), imageUrl: imageUrl || null
             });
-            setTitulo(''); setCuerpo(''); setImageFile(null);
+            setTitulo(''); setCuerpo(''); setImageFile(null); setTipo('general');
             fetchNews();
             showToast('✅ Noticia publicada y notificada');
-        } catch {
-            showToast('Error al publicar.', '#ef4444');
+        } catch (err: any) {
+            showToast(`Error al publicar: ${err?.code || 'desconocido'}`, '#ef4444');
+            console.error('[NewsAdmin] publicar:', err);
         } finally {
             setLoading(false);
         }
@@ -196,23 +117,18 @@ IMPORTANTE: Separa el título del cuerpo con la palabra CUERPO:`;
             </div>
 
             <div style={{ padding: 20 }}>
-                <button onClick={fetchRecentMatches} disabled={loadingMatches} style={{ width: '100%', marginBottom: 20, background: 'linear-gradient(45deg, #1e3a8a, #3b82f6)', color: 'white', fontWeight: 900, padding: 15, border: 'none', borderRadius: 12, cursor: 'pointer', boxShadow: '0 4px 12px rgba(30,58,138,0.2)' }}>
-                    {loadingMatches ? 'BUSCANDO BOXSCORES...' : '✨ REDACTAR DESDE RESULTADOS (IA)'}
-                </button>
-
                 <form onSubmit={handlePublicar} style={{ background: '#f8fafc', padding: 20, borderRadius: 15, border: '1px solid #e2e8f0', marginBottom: 30 }}>
                     <div style={{ marginBottom: 15 }}>
                         <label style={{ fontWeight: 900, color: '#1e3a8a', display: 'block', marginBottom: 8, fontSize: '0.75rem' }}>TÍTULO</label>
-                        <input type="text" value={titulo} onChange={e => setTitulo(e.target.value)} required placeholder="Ej: PELA HISTÓRICA EN EL EJE ESTE" style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #cbd5e1', fontWeight: 'bold', boxSizing: 'border-box' }} />
+                        <input type="text" value={titulo} onChange={e => setTitulo(e.target.value)} required placeholder="Ej: GRAN VICTORIA EN LA JORNADA" style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #cbd5e1', fontWeight: 'bold', boxSizing: 'border-box' }} />
                     </div>
                     <div style={{ marginBottom: 15 }}>
                         <label style={{ fontWeight: 900, color: '#1e3a8a', display: 'block', marginBottom: 8, fontSize: '0.75rem' }}>IMAGEN DE PORTADA</label>
                         <input type="file" accept="image/*" onChange={e => { if (e.target.files) setImageFile(e.target.files[0]); }} style={{ width: '100%', background: '#fff', padding: 10, border: '1px dashed #cbd5e1', borderRadius: 8, boxSizing: 'border-box' }} />
                     </div>
-                    <div style={{ marginBottom: 15, position: 'relative' }}>
+                    <div style={{ marginBottom: 15 }}>
                         <label style={{ fontWeight: 900, color: '#1e3a8a', display: 'block', marginBottom: 8, fontSize: '0.75rem' }}>CUERPO DE LA NOTICIA</label>
                         <textarea value={cuerpo} onChange={e => setCuerpo(e.target.value)} required style={{ width: '100%', padding: 15, borderRadius: 8, border: '1px solid #cbd5e1', minHeight: 180, fontFamily: 'inherit', lineHeight: 1.5, fontSize: '0.85rem', boxSizing: 'border-box' }} />
-                        <button type="button" onClick={() => redactarConIA()} style={{ position: 'absolute', bottom: 15, right: 15, background: '#1e3a8a', color: 'white', border: 'none', padding: '6px 12px', borderRadius: 6, fontSize: '0.6rem', cursor: 'pointer', fontWeight: 900 }}>🪄 PULIR TEXTO</button>
                     </div>
                     <div style={{ marginBottom: 15 }}>
                         <label style={{ fontWeight: 900, color: '#1e3a8a', display: 'block', marginBottom: 8, fontSize: '0.75rem' }}>TIPO</label>
@@ -240,28 +156,6 @@ IMPORTANTE: Separa el título del cuerpo con la palabra CUERPO:`;
                     ))}
                 </div>
             </div>
-
-            {showMatchSelector && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', zIndex: 3000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20, backdropFilter: 'blur(3px)' }}>
-                    <div style={{ background: 'white', width: '100%', maxWidth: 400, borderRadius: 20, padding: 20, maxHeight: '80vh', overflowY: 'auto' }}>
-                        <h3 style={{ margin: '0 0 15px 0', color: '#1e3a8a', fontWeight: 900, fontSize: '1rem', textAlign: 'center' }}>SELECCIONA UN RESULTADO</h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                            {recentMatches.map(m => (
-                                <div key={m.id} onClick={() => { setShowMatchSelector(false); redactarConIA(m); }} style={{ border: '2px solid #f1f5f9', padding: 15, borderRadius: 12, cursor: 'pointer', background: '#f8fafc' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                                        <span style={{ fontSize: '0.6rem', color: '#3b82f6', fontWeight: 900 }}>{m.categoria}</span>
-                                        <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>{m.fecha}</span>
-                                    </div>
-                                    <div style={{ fontWeight: 900, color: '#1e3a8a', marginBottom: 5, fontSize: '0.8rem' }}>{m.local} vs {m.visitante}</div>
-                                    <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#111' }}>{m.scoreL} - {m.scoreV}</div>
-                                    <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 5 }}>MVP: {m.mvp} ({m.puntosMvp} pts)</div>
-                                </div>
-                            ))}
-                        </div>
-                        <button onClick={() => setShowMatchSelector(false)} style={{ width: '100%', marginTop: 15, padding: 12, background: '#ef4444', color: 'white', border: 'none', borderRadius: 10, fontWeight: 'bold', fontSize: '0.7rem' }}>CANCELAR</button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

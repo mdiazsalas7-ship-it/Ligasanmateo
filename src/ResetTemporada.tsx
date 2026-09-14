@@ -3,9 +3,8 @@ import { db } from './firebase';
 import {
     collection, getDocs, writeBatch, query, where, doc, deleteDoc
 } from 'firebase/firestore';
+import { getColName } from './ligaConfig';
 
-const getColName = (base: string, cat: string) =>
-    cat === 'MASTER40' ? base : `${base}_${cat}`;
 
 interface Props {
     categoria: string;
