@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { getColName, CATEGORIA_IDS } from './ligaConfig';
+import { getColName, cargarCategorias } from './ligaConfig';
 
 
-const TODAS_CATS  = CATEGORIA_IDS;
 const LIGA_LOGO   = '/logo-liga.jpg';
 const SPEED       = 0.6; // px por frame
 
@@ -63,6 +62,7 @@ const MetroTicker: React.FC<{ lideres?: LiderTicker[] }> = ({ lideres = [] }) =>
 
                 // ── 2. Detectar categorías activas (con partidos programados futuros o EN VIVO) ──
                 // Cacheamos los docs para no repetir queries en el loop siguiente.
+                const TODAS_CATS = (await cargarCategorias(true)).map(c => c.id);
                 const categoriasActivas: Array<{ cat: string; docs: any[] }> = [];
                 for (const cat of TODAS_CATS) {
                     const col = getColName('calendario', cat);

@@ -1,5 +1,5 @@
 import InstallPrompt from './InstallPrompt';
-import { useEffect, useState, useRef, memo } from 'react';
+import { useEffect, useState, useRef, useCallback, memo } from 'react';
 import './App.css';
 import { db, auth } from './firebase';
 import { doc, onSnapshot, collection, query, orderBy, getDocs, limit, where } from 'firebase/firestore';
@@ -24,11 +24,14 @@ import LiveGameViewer, { LiveGameSelector } from './LiveGameViewer';
 import { useNotifications } from './useNotifications';
 import ResetTemporada from './ResetTemporada';
 import ConfigTorneo from './ConfigTorneo';
+import AdminCategorias from './AdminCategorias';
 import {
-    CATEGORIAS as CATEGORIAS_DISPONIBLES,
+    CATEGORIAS_DEFAULT,
     CATEGORIA_IDS,
     getColName,
     esAdminPorEmail,
+    cargarCategorias,
+    type CategoriaLiga,
 } from './ligaConfig';
 
 // ─────────────────────────────────────────────
@@ -186,6 +189,7 @@ function App() {
     const [allMatchesGlobal, setAllMatchesGlobal]   = useState<any[]>([]);
     const [, setLoading]                            = useState(true);
     const [activeView, setActiveView]               = useState('dashboard');
+    const [categoriasLiga, setCategoriasLiga]       = useState<CategoriaLiga[]>(CATEGORIAS_DEFAULT);
     const [showReset, setShowReset]                 = useState(false);
     const [showConfig, setShowConfig]               = useState(false);
     const [liveGameId, setLiveGameId]               = useState<string | null>(null);
@@ -264,6 +268,22 @@ function App() {
         });
         return () => unsub();
     }, []); // ← sin activeView: no re-suscribir al auth en cada cambio de pantalla
+
+    // ── Cargar categorías dinámicas (colección `categorias` de Firestore) ──
+    // Si la colección no existe aún, cargarCategorias devuelve la semilla
+    // por defecto, así que el menú nunca queda vacío.
+    const refrescarCategorias = useCallback(async () => {
+        const lista = await cargarCategorias(true); // solo activas para el menú
+        if (lista.length > 0) {
+            setCategoriasLiga(lista);
+            // Si la categoría activa ya no existe (fue borrada/oculta), saltar a la primera
+            setCategoriaActiva(prev =>
+                lista.some(c => c.id === prev) ? prev : lista[0].id
+            );
+        }
+    }, []);
+
+    useEffect(() => { refrescarCategorias(); }, [refrescarCategorias]);
 
     // ── Carga de datos principal ──
     useEffect(() => {
@@ -614,7 +634,7 @@ function App() {
 
                 {/* Selector de categorías */}
                 <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 12 }} className="no-scrollbar">
-                    {CATEGORIAS_DISPONIBLES.map(cat => (
+                    {categoriasLiga.map(cat => (
                         <button
                             key={cat.id}
                             onClick={() => setCategoriaActiva(cat.id)}
@@ -1023,6 +1043,7 @@ function App() {
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
                                     <button onClick={() => setActiveView('adminVideos')} style={adminBtnStyle}>🎥 VIDEOS</button>
                                     <button onClick={() => setActiveView('patrocinadores')} style={{ ...adminBtnStyle, background: 'rgba(251,191,36,0.2)', border: '1px solid #f59e0b', color: '#fde68a' }}>💼 PATROCINIO</button>
+                                    <button onClick={() => setActiveView('categorias')} style={{ ...adminBtnStyle, background: 'rgba(16,185,129,0.22)', border: '1px solid #10b981', color: '#a7f3d0' }}>🗂️ CATEGORÍAS</button>
                                     <button onClick={() => setShowConfig(true)} style={{ ...adminBtnStyle, background: 'rgba(99,102,241,0.25)', border: '1px solid #6366f1', color: '#c7d2fe' }}>⚙️ CONFIG</button>
                                     <button onClick={() => setShowReset(true)} style={{ ...adminBtnStyle, background: 'rgba(239,68,68,0.25)', border: '1px solid #ef4444', color: '#fca5a5' }}>☢️ RESET</button>
                                 </div>
@@ -1044,6 +1065,7 @@ function App() {
                         {activeView === 'equipos'     && isAdmin && <AdminEquipos categoria={categoriaActiva} onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'adminVideos' && isAdmin && <AdminVideos onClose={() => setActiveView('dashboard')} />}
                         {activeView === 'patrocinadores' && isAdmin && <AdminPatrocinadores onClose={() => setActiveView('dashboard')} />}
+                        {activeView === 'categorias'  && isAdmin && <AdminCategorias onClose={() => { setActiveView('dashboard'); refrescarCategorias(); }} />}
                     </>
                 )}
             </main>

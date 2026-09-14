@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc, orderBy, query } from 'firebase/firestore';
-import { getColName, CATEGORIAS } from './ligaConfig';
+import { getColName, CATEGORIAS_DEFAULT, cargarCategorias } from './ligaConfig';
+import type { CategoriaLiga } from './ligaConfig';
 
 interface Equipo {
     id: string;
@@ -50,6 +51,7 @@ const FASES_DISPONIBLES = [
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────
 const ConfigTorneo: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const [cats, setCats]             = useState<CategoriaLiga[]>(CATEGORIAS_DEFAULT);
     const [catActiva, setCatActiva]   = useState('LIBRE');
     const [config, setConfig]         = useState<ConfigCategoria>({ ...CONFIG_DEFAULT });
     const [loading, setLoading]       = useState(false);
@@ -57,6 +59,16 @@ const ConfigTorneo: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [saved, setSaved]           = useState(false);
     const [equipos, setEquipos]       = useState<Equipo[]>([]);
     const [grupoMap, setGrupoMap]     = useState<Record<string, string>>({});
+
+    // Cargar la lista de categorías (dinámica) al abrir
+    useEffect(() => {
+        cargarCategorias(true).then(lista => {
+            if (lista.length > 0) {
+                setCats(lista);
+                setCatActiva(prev => lista.some(c => c.id === prev) ? prev : lista[0].id);
+            }
+        });
+    }, []);
 
     // Cargar config de Firestore al cambiar categoría
     useEffect(() => {
@@ -151,7 +163,7 @@ const ConfigTorneo: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             {/* Selector de categoría */}
             <div style={{ background: 'white', padding: '10px 16px', display: 'flex', gap: 8, overflowX: 'auto', borderBottom: '1px solid #e5e7eb' }}
                 className="no-scrollbar">
-                {CATEGORIAS.map(cat => (
+                {cats.map(cat => (
                     <button key={cat.id} onClick={() => setCatActiva(cat.id)} style={{
                         padding: '6px 14px', borderRadius: 20, whiteSpace: 'nowrap', border: 'none',
                         background: catActiva === cat.id ? '#1e3a8a' : '#f1f5f9',
